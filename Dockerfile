@@ -15,6 +15,7 @@ RUN pip install --upgrade pip
 # aiortc dev dependencies
 RUN apt-get update -y --fix-missing
 RUN apt-get install -y libavdevice-dev libavfilter-dev libopus-dev libvpx-dev pkg-config
+RUN apt-get install -y libjsoncpp-dev
 
 RUN pip install setuptools
 
@@ -39,6 +40,9 @@ RUN echo 'source /opt/ros/'$ROS_DISTRO'/setup.bash' >> /root/.bashrc
 RUN echo 'test -f "/ros2_ws/install/setup.bash" && source "/ros2_ws/install/setup.bash"' >> /root/.bashrc
 
 WORKDIR $ROS_WS
+
+# allow to read git repo sha/tag without warnings
+RUN git config --system --add safe.directory '*'
 
 # clone and install phntm interfaces
 RUN git clone https://github.com/PhantomCybernetics/phntm_interfaces.git /ros2_ws/src/phntm_interfaces
