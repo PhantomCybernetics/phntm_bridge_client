@@ -4,7 +4,9 @@
       "command": "/usr/bin/c++ -std=c++17 \
                  -DDEFAULT_RMW_IMPLEMENTATION=rmw_fastrtps_cpp -DRCUTILS_ENABLE_FAULT_INJECTION \
                  -I/ros2_ws/src/phntm_bridge/include \
+                 -I/ros2_ws/src/phntm_bridge/sioclient \
                  -isystem /usr/include/jsoncpp \
+                 -isystem /usr/local/include \
                  -isystem /opt/ros/humble/include/rclcpp \
                  -isystem /usr/include/aarch64-linux-gnu/libavcodec \
                  -isystem /opt/ros/humble/include/std_msgs \

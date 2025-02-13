@@ -21,7 +21,7 @@ void PhntmBridge::readGitRepoHead(std::string repo_path) {
 
         // Get the HEAD commit SHA
         std::string head_sha = executeCommand("rev-parse HEAD", repo_path);
-        this->git_head_sha = trim(head_sha);
+        this->config->git_head_sha = trim(head_sha);
 
         // Get all tags pointing to the HEAD commit
         std::string tags = executeCommand("tag --points-at HEAD", repo_path);
@@ -32,7 +32,7 @@ void PhntmBridge::readGitRepoHead(std::string repo_path) {
         if (!tags.empty()) {
             std::istringstream tagStream(tags);
             std::getline(tagStream, latest_tag); // Get the first tag (assuming sorted order)
-            this->latest_git_tag = latest_tag;
+            this->config->latest_git_tag = latest_tag;
         }
 
     } catch (const std::exception& e) {

@@ -1,10 +1,12 @@
 #include "phntm_bridge/const.hpp"
+#include "phntm_bridge/config.hpp"
 #include "phntm_bridge/phntm_bridge.hpp"
 #include <fstream>
 
+
 // 'ClassName https://public.url/file.js'
-std::optional<PhntmBridge::CustomWidgetDef> parseCustomPluginDef(std::string one) {
-    PhntmBridge::CustomWidgetDef def;
+std::optional<CustomWidgetDef> parseCustomPluginDef(std::string one) {
+    CustomWidgetDef def;
     size_t pos = one.find(' '); //split by 1st space
     def.class_name = trim(one.substr(0, pos));
     def.url = trim(one.substr(pos + 1));
@@ -16,8 +18,8 @@ std::optional<PhntmBridge::CustomWidgetDef> parseCustomPluginDef(std::string one
 }
 
 // '/id_service ClassName { "var1" 1, "var2": 2, ... }'
-std::optional<PhntmBridge::ServiceWidgetConfig> parseServiceWidgetConfig(std::string one) {
-    PhntmBridge::ServiceWidgetConfig conf;
+std::optional<ServiceWidgetConfig> parseServiceWidgetConfig(std::string one) {
+    ServiceWidgetConfig conf;
 
     size_t json_start = one.find('{');
     std::string assignment = json_start == std::string::npos ? trim(one) : trim(one.substr(0, json_start));
@@ -42,6 +44,7 @@ std::optional<PhntmBridge::ServiceWidgetConfig> parseServiceWidgetConfig(std::st
 }
 
 void PhntmBridge::loadConfig() {
+
     // Robot ID
     rcl_interfaces::msg::ParameterDescriptor id_robot_descriptor;
     id_robot_descriptor.description = "Robot ID on Phntm Cloud Brudge";
@@ -53,15 +56,15 @@ void PhntmBridge::loadConfig() {
     key_descriptor.description = "Robot auth key on Phntm Cloud Brudge";
     this->declare_parameter("key", "", key_descriptor);
 
-    this->id_robot = this->get_parameter("id_robot").as_string();
-    this->auth_key = this->get_parameter("key").as_string();
+    this->config->id_robot = this->get_parameter("id_robot").as_string();
+    this->config->auth_key = this->get_parameter("key").as_string();
   
-    if (this->id_robot.empty()) {
+    if (this->config->id_robot.empty()) {
         RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Param id_robot not provided!");
         exit(1);
     }
 
-    if (this->auth_key.empty()) {
+    if (this->config->auth_key.empty()) {
         RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Param auth_key not provided!");
         exit(1);
     }
@@ -70,40 +73,42 @@ void PhntmBridge::loadConfig() {
     rcl_interfaces::msg::ParameterDescriptor name_descriptor;
     name_descriptor.description = "Robot name";
     this->declare_parameter("name", "Unnamed Robot", name_descriptor);
-    
+    this->config->robot_name = this->get_parameter("name").as_string();
+
     // Maintainer's email
     rcl_interfaces::msg::ParameterDescriptor email_descriptor;
     email_descriptor.description = "Maintainer e-mail address";
     this->declare_parameter("maintainer_email", "", email_descriptor);
+    this->config->maintainer_email = this->get_parameter("maintainer_email").as_string();
 
     // will check these packages on 1st (container) start
     rcl_interfaces::msg::ParameterDescriptor extra_pkg_descriptor;
     extra_pkg_descriptor.description = "ROS packages to check for on first Bridge run";
     extra_pkg_descriptor.additional_constraints = "Folder path or ROS package name";
     this->declare_parameter("extra_packages", std::vector<std::string>(), extra_pkg_descriptor);
-    this->extra_packages = this->get_parameter("extra_packages").as_string_array();
+    this->config->extra_packages = this->get_parameter("extra_packages").as_string_array();
     
     // webrtc config
     this->declare_parameter("use_cloud_ice_config", true);
-    this->use_cloud_ice_config = this->get_parameter("use_cloud_ice_config").as_bool();
+    this->config->use_cloud_ice_config = this->get_parameter("use_cloud_ice_config").as_bool();
     this->declare_parameter("ice_servers", std::vector<std::string>());
     this->declare_parameter("ice_username", ""); // id_robot if empty
     this->declare_parameter("ice_secret", "");
 
-    this->ice_servers_custom = this->get_parameter("ice_servers").as_string_array(); // these get added to cloud config, or used when use_cloud_ice_config=false
-    if (this->ice_servers_custom.size()) {
+    this->config->ice_servers_custom = this->get_parameter("ice_servers").as_string_array(); // these get added to cloud config, or used when use_cloud_ice_config=false
+    if (this->config->ice_servers_custom.size()) {
         std::cout << "Custom ICE servers: " << std::endl;
-        for (size_t i = 0; i < this->ice_servers_custom.size(); ++i) {
-            std::cout << "\t" << this->ice_servers_custom[i] << std::endl;
+        for (size_t i = 0; i < this->config->ice_servers_custom.size(); ++i) {
+            std::cout << "\t" << this->config->ice_servers_custom[i] << std::endl;
         }
     }
-    std::copy(this->ice_servers_custom.begin(), this->ice_servers_custom.end(), std::back_inserter(this->ice_servers)); // server config gets added here
+    std::copy(this->config->ice_servers_custom.begin(), this->config->ice_servers_custom.end(), std::back_inserter(this->config->ice_servers)); // server config gets added here
     
     // ice credentials
-    this->ice_username = this->get_parameter("ice_username").as_string();
-    if (this->ice_username.empty())
-        this->ice_username = this->id_robot;
-    this->ice_secret = this->get_parameter("ice_secret").as_string();
+    this->config->ice_username = this->get_parameter("ice_username").as_string();
+    if (this->config->ice_username.empty())
+        this->config->ice_username = this->config->id_robot;
+    this->config->ice_secret = this->get_parameter("ice_secret").as_string();
 
     // prevent reading sensitive stuffs
     this->set_parameter(rclcpp::Parameter("key", "*************"));
@@ -135,21 +140,21 @@ void PhntmBridge::loadConfig() {
     
     // blacklist topics from discovery (msg type or full topic id)
     this->declare_parameter("blacklist_topics", std::vector<std::string>());
-    this->blacklist_topics = this->get_parameter("blacklist_topics").as_string_array();
-    if (this->blacklist_topics.size()) {
+    this->config->blacklist_topics = this->get_parameter("blacklist_topics").as_string_array();
+    if (this->config->blacklist_topics.size()) {
         std::cout << "Blacklisted topics: " << std::endl;
-        for (size_t i = 0; i < this->blacklist_topics.size(); ++i) {
-            std::cout << "\t" << this->blacklist_topics[i] << std::endl;
+        for (size_t i = 0; i < this->config->blacklist_topics.size(); ++i) {
+            std::cout << "\t" << this->config->blacklist_topics[i] << std::endl;
         }
     }
     
     // blacklist services from discovery (msg type or full topic id)
     this->declare_parameter("blacklist_services", std::vector<std::string>());
-    this->blacklist_services = this->get_parameter("blacklist_services").as_string_array();
-    if (this->blacklist_services.size()) {
+    this->config->blacklist_services = this->get_parameter("blacklist_services").as_string_array();
+    if (this->config->blacklist_services.size()) {
         std::cout << "Blacklisted services: " << std::endl;
-        for (size_t i = 0; i < this->blacklist_services.size(); ++i) {
-            std::cout << "\t" << this->blacklist_services[i] << std::endl;
+        for (size_t i = 0; i < this->config->blacklist_services.size(); ++i) {
+            std::cout << "\t" << this->config->blacklist_services[i] << std::endl;
         }
     }
 
@@ -157,11 +162,11 @@ void PhntmBridge::loadConfig() {
     // pointcloud and costmap are here until fully suported (until then break browsers with too much unoptimized data)
     std::vector<std::string> default_blacklisted_services { "sensor_msgs/PointCloud", "sensor_msgs/msg/PointCloud2", "cost_map_msgs/CostMap", "nav_msgs/msg/OccupancyGrid" };
     this->declare_parameter("blacklist_msg_types", default_blacklisted_services);
-    this->blacklist_msg_types = this->get_parameter("blacklist_msg_types").as_string_array();
-    if (this->blacklist_services.size()) {
+    this->config->blacklist_msg_types = this->get_parameter("blacklist_msg_types").as_string_array();
+    if (this->config->blacklist_services.size()) {
         std::cout << "Blacklisted message types: " << std::endl;
-        for (size_t i = 0; i < this->blacklist_msg_types.size(); ++i) {
-            std::cout << "\t" << this->blacklist_msg_types[i] << std::endl;
+        for (size_t i = 0; i < this->config->blacklist_msg_types.size(); ++i) {
+            std::cout << "\t" << this->config->blacklist_msg_types[i] << std::endl;
         }
     }
     
@@ -169,35 +174,35 @@ void PhntmBridge::loadConfig() {
     this->declare_parameter("log_sdp", false);
     this->declare_parameter("log_heartbeat", false);
     this->declare_parameter("log_message_every_sec", 10.0f);
-    this->log_message_every_sec = this->get_parameter("log_message_every_sec").as_double();
+    this->config->log_message_every_sec = this->get_parameter("log_message_every_sec").as_double();
 
     // bloud bridge stuffs
-    this->cloud_bridge_address = this->get_parameter("cloud_bridge_address").as_string();
-    this->file_upload_port = this->get_parameter("file_upload_port").as_int();
-    this->sio_port = this->get_parameter("sio_port").as_int();
-    this->sio_path = this->get_parameter("sio_path").as_string();
-    this->sio_ssl_verify = this->get_parameter("sio_ssl_verify").as_bool();
-    this->sio_connection_retry_sec = this->get_parameter("sio_connection_retry_sec").as_double();
-    if (this->cloud_bridge_address.empty()) {
+    this->config->cloud_bridge_address = this->get_parameter("cloud_bridge_address").as_string();
+    this->config->file_upload_port = this->get_parameter("file_upload_port").as_int();
+    this->config->sio_port = this->get_parameter("sio_port").as_int();
+    this->config->sio_path = this->get_parameter("sio_path").as_string();
+    this->config->sio_ssl_verify = this->get_parameter("sio_ssl_verify").as_bool();
+    this->config->sio_connection_retry_sec = this->get_parameter("sio_connection_retry_sec").as_double();
+    if (this->config->cloud_bridge_address.empty()) {
         RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Param cloud_bridge_address not provided!");
         exit(1);
     }
-    this->uploader_address = fmt::format("{}:{}", this->cloud_bridge_address, this->file_upload_port);
+    this->config->uploader_address = fmt::format("{}:{}", this->config->cloud_bridge_address, this->config->file_upload_port);
 
     // conn LED control via topic (blinks when connecting; on when connected; off = bridge not running)
     this->declare_parameter("conn_led_topic", "");
-    this->conn_led_topic = this->get_parameter("conn_led_topic").as_string();
+    this->config->conn_led_topic = this->get_parameter("conn_led_topic").as_string();
     // data LED control via topic (flashes when any data is sent via webrtc; off when not connected)
     this->declare_parameter("data_led_topic", "");
-    this->data_led_topic = this->get_parameter("data_led_topic").as_string();
+    this->config->data_led_topic = this->get_parameter("data_led_topic").as_string();
     
     // conn/data LED control via GPIO
     this->declare_parameter("conn_led_gpio_chip", "/dev/gpiochip4"); // PI5 default (??)
-    this->conn_led_gpio_chip = this->get_parameter("conn_led_gpio_chip").as_string();
+    this->config->conn_led_gpio_chip = this->get_parameter("conn_led_gpio_chip").as_string();
     this->declare_parameter("conn_led_pin", -1); // set GPIO number
-    this->conn_led_pin = this->get_parameter("conn_led_pin").as_int();
+    this->config->conn_led_pin = this->get_parameter("conn_led_pin").as_int();
     this->declare_parameter("data_led_pin", -1); // set GPIO number
-    this->data_led_pin = this->get_parameter("data_led_pin").as_int();
+    this->config->data_led_pin = this->get_parameter("data_led_pin").as_int();
 
     // introspection
     this->declare_parameter("discovery_period_sec", 5.0f);
@@ -211,12 +216,12 @@ void PhntmBridge::loadConfig() {
     this->declare_parameter("ui_battery_topic", "/battery"); // use this in the ui 
     this->declare_parameter("ui_docker_control", true);
     this->declare_parameter("docker_monitor_topic", "/docker_info");
-    this->docker_control_enabled = this->get_parameter("ui_docker_control").as_bool();
+    this->config->docker_control_enabled = this->get_parameter("ui_docker_control").as_bool();
     
     // input configs that get passed to ui
     std::vector<std::string> default_input_drivers { "Joy" };
     this->declare_parameter("input_drivers", default_input_drivers); // empty array to disable input entirely, services are still set up
-    this->input_drivers = this->get_parameter("input_drivers").as_string_array();
+    this->config->input_drivers = this->get_parameter("input_drivers").as_string_array();
 
     // custom input drivers to be injected into the web UI
     // array of 'ClassName https://public.url/file.js'
@@ -229,7 +234,7 @@ void PhntmBridge::loadConfig() {
             RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Invalid custom input driver definition: %s", one.c_str());
             exit(1);
         }
-        this->custom_input_drivers.push_back(def.value());
+        this->config->custom_input_drivers.push_back(def.value());
         std::cout << "Adding custom input driver: " << def.value().class_name << " from " << def.value().url << std::endl;
     }
     
@@ -244,7 +249,7 @@ void PhntmBridge::loadConfig() {
             RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Invalid custom service widget definition: %s", one.c_str());
             exit(1);
         }
-        this->custom_service_widgets.push_back(def.value());
+        this->config->custom_service_widgets.push_back(def.value());
         std::cout << "Adding custom service widget: " << def.value().class_name << " from " << def.value().url << std::endl;
     }
     
@@ -259,7 +264,7 @@ void PhntmBridge::loadConfig() {
             RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Invalid service widget config: %s", one.c_str());
             exit(1);
         }
-        this->service_widgets.push_back(conf.value());
+        this->config->service_widgets.push_back(conf.value());
         std::cout << "Adding service widget mapping: " << conf.value().service << " is " << conf.value().class_name;
         if (!conf.value().data.empty())
             std::cout << "; data=" << conf.value().data;
@@ -272,7 +277,7 @@ void PhntmBridge::loadConfig() {
     if (!input_defaults_file.empty()) {
         Json::Reader reader;
         std::ifstream file(input_defaults_file.c_str());
-        if (!reader.parse(file, this->input_defaults)) {
+        if (!reader.parse(file, this->config->input_defaults)) {
             RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Failed loading input defaults from: %s", input_defaults_file.c_str());
             exit(1);
         }
@@ -284,7 +289,7 @@ void PhntmBridge::loadConfig() {
     if (!service_defaults_file.empty()) {
         Json::Reader reader;
         std::ifstream file(service_defaults_file.c_str());
-        if (!reader.parse(file, this->service_defaults)) {
+        if (!reader.parse(file, this->config->service_defaults)) {
             RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Failed loading service defaults from: %s", service_defaults_file.c_str());
             exit(1);
         }

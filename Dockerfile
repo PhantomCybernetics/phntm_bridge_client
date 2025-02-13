@@ -12,12 +12,36 @@ RUN apt-get install -y ssh \
 # aiorc neeed pip update or fails on cffi version inconsistency
 RUN pip install --upgrade pip
 
-# aiortc dev dependencies
-RUN apt-get update -y --fix-missing
-RUN apt-get install -y libavdevice-dev libavfilter-dev libopus-dev libvpx-dev pkg-config
 RUN apt-get install -y libjsoncpp-dev
 
 RUN pip install setuptools
+
+# socket.io cpp
+# WORKDIR /root
+# RUN git clone --recurse-submodules https://github.com/socketio/socket.io-client-cpp.git
+# WORKDIR /root/socket.io-client-cpp
+# RUN cmake ./
+# RUN make install
+
+RUN apt install -y libwebsocketpp-dev
+
+# wget https://sourceforge.net/projects/asio/files/asio/1.30.2%20%28Stable%29/asio-1.30.2.tar.bz2/download
+# RUN git clone https://github.com/chriskohlhoff/asio.git
+
+WORKDIR /root
+RUN git clone https://github.com/chriskohlhoff/asio.git
+# RUN wget https://phoenixnap.dl.sourceforge.net/project/asio/asio/1.30.2%20%28Stable%29/asio-1.30.2.tar.gz
+# RUN tar -xvzf asio-1.30.2.tar.gz
+# WORKDIR /root/asio-1.30.2
+# RUN ./configure
+# RUN make
+# RUN make install
+
+WORKDIR /root
+RUN git clone --single-branch --branch support-new-asio https://github.com/toonetown/websocketpp.git
+
+# RUN apt install -y libasio-dev
+RUN apt install -y rapidjson-dev
 
 # init workspace
 ENV ROS_WS=/ros2_ws
