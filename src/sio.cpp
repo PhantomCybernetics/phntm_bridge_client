@@ -8,6 +8,7 @@
 
 #include "phntm_bridge/sio.hpp"
 #include "phntm_bridge/const.hpp"
+#include "sio_socket.h"
 
 BridgeSocket::BridgeSocket(std::shared_ptr<BridgeConfig> config) {
     this->config = config;
@@ -15,9 +16,12 @@ BridgeSocket::BridgeSocket(std::shared_ptr<BridgeConfig> config) {
     uint reconnect_ms = this->config->sio_connection_retry_sec * 1000;
     this->client.set_reconnect_delay(reconnect_ms);
     this->client.set_open_listener(std::bind(&BridgeSocket::onConnected, this));
+    this->client.set_disconnect_listener(std::bind(&BridgeSocket::onDisconnected, this));
+    this->client.set_close_listener(std::bind(&BridgeSocket::onClosed, this, std::placeholders::_1));
     this->client.set_fail_listener(std::bind(&BridgeSocket::onFailed, this));
     this->client.set_socket_close_listener(std::bind(&BridgeSocket::onSocketClose, this));
-    this->client.set_logs_verbose();
+    if (this->config->sio_verbose)
+        this->client.set_logs_verbose();
 }
 
 bool BridgeSocket::connect() {
@@ -41,12 +45,18 @@ bool BridgeSocket::connect() {
     this->client.connect(socket_url, auth_data);
     // this->socket = this->client.socket();
     this->client.socket()->on_error(std::bind(&BridgeSocket::onSocketError, this, std::placeholders::_1));
-    // this->client.socket()->on_any(std::bind(&BridgeSocket::onSocketMessage, this, std::placeholders::_1));
+    // this->client.on_disconnect();
+    // this->client.socket()->
+    this->client.socket()->on_any(std::bind(&BridgeSocket::onSocketMessage, this, std::placeholders::_1));
     return true;
 }
 
 void BridgeSocket::onConnected() {
     std::cout << GREEN << "CONNECTED" << CLR << std::endl;
+}
+
+void BridgeSocket::onDisconnected() {
+    std::cout << RED << "DISCONNECTED" << CLR << std::endl;
 }
 
 void BridgeSocket::onSocketError(sio::message::ptr const& message) {
@@ -81,8 +91,12 @@ void BridgeSocket::onSocketError(sio::message::ptr const& message) {
     }
 }
 
-void BridgeSocket::onSocketMessage(sio::message::ptr const& message) {
+void BridgeSocket::onSocketMessage(sio::event const& message) {
+    std::cout << MAGENTA << "MSG: " << message.get_name() << CLR << std::endl;
+}
 
+void BridgeSocket::onClosed(sio::client::close_reason const& reason) {
+    std::cout << RED << "CLOSED (reason " << reason << ")" << CLR << std::endl;
 }
 
 void BridgeSocket::onFailed() {

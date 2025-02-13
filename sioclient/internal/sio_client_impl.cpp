@@ -62,7 +62,6 @@ namespace sio
         m_client.set_fail_handler(std::bind(&client_impl::on_fail,this,_1));
         m_client.set_message_handler(std::bind(&client_impl::on_message,this,_1,_2));
 #if SIO_TLS
-        std::cout << "!! TLS !!" << std::endl;
         m_client.set_tls_init_handler(std::bind(&client_impl::on_tls_init,this,_1));
 #endif
         m_packet_mgr.set_decode_callback(std::bind(&client_impl::on_decode,this,_1));
@@ -460,6 +459,11 @@ namespace sio
         m_con.reset();
         this->clear_timers();
         client::close_reason reason;
+
+        if(m_disconnect_listener)
+        {
+            m_disconnect_listener();
+        }
 
         // If we initiated the close, no matter what the close status was,
         // we'll consider it a normal close. (When using TLS, we can

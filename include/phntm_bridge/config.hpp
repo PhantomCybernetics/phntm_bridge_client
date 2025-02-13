@@ -25,7 +25,7 @@ class BridgeConfig {
 
         std::string cloud_bridge_address, sio_path, uploader_address;
         int file_upload_port, sio_port;
-        bool sio_ssl_verify;
+        bool sio_ssl_verify, sio_verbose;
         double sio_connection_retry_sec;
         
         std::string conn_led_topic, data_led_topic, conn_led_gpio_chip;

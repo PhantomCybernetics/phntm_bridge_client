@@ -500,7 +500,7 @@ namespace sio
             return;
         }
         m_connection_timer.reset();
-        LOG("Connection timeout,close socket."<<std::endl);
+        LOG("Connection timeout, close socket."<<std::endl);
         //Should close socket if no connected message arrive.Otherwise we'll never ask for open again.
         this->on_close();
     }

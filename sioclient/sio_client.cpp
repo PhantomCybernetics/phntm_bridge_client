@@ -34,6 +34,11 @@ namespace sio
         m_impl->set_fail_listener(l);
     }
     
+    void client::set_disconnect_listener(con_listener const& l)
+    {
+        m_impl->set_disconnect_listener(l);
+    }
+
     void client::set_close_listener(close_listener const& l)
     {
         m_impl->set_close_listener(l);

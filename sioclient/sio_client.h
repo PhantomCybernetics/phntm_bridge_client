@@ -46,6 +46,8 @@ namespace sio
         //set listeners and event bindings.
         void set_open_listener(con_listener const& l);
         
+        void set_disconnect_listener(con_listener const& l);
+
         void set_fail_listener(con_listener const& l);
         
         void set_reconnecting_listener(con_listener const& l);

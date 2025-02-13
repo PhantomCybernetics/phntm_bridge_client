@@ -10,9 +10,11 @@ class BridgeSocket
         BridgeSocket(std::shared_ptr<BridgeConfig> config);
         bool connect();
         void onConnected();
+        void onDisconnected();
+        void onClosed(sio::client::close_reason const& reason);
         void onFailed();
         void onSocketError(sio::message::ptr const& message);
-        void onSocketMessage(sio::message::ptr const& message);
+        void onSocketMessage(sio::event const& evt);
         void onSocketClose();
         void disconnect();
         ~BridgeSocket();

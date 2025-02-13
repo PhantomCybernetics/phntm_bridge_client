@@ -77,6 +77,8 @@ namespace sio
 
         SYNTHESIS_SETTER(client::reconnect_listener,reconnect_listener)
 
+        SYNTHESIS_SETTER(client::con_listener,disconnect_listener)
+
         SYNTHESIS_SETTER(client::con_listener,reconnecting_listener)
         
         SYNTHESIS_SETTER(client::close_listener,close_listener)
@@ -91,6 +93,7 @@ namespace sio
         void clear_con_listeners()
         {
             m_open_listener = nullptr;
+            m_disconnect_listener = nullptr;
             m_close_listener = nullptr;
             m_fail_listener = nullptr;
             m_reconnect_listener = nullptr;
@@ -223,6 +226,7 @@ namespace sio
         con_state m_con_state;
         
         client::con_listener m_open_listener;
+        client::con_listener m_disconnect_listener;
         client::con_listener m_fail_listener;
         client::con_listener m_reconnecting_listener;
         client::reconnect_listener m_reconnect_listener;

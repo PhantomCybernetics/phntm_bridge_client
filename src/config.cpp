@@ -124,8 +124,9 @@ void PhntmBridge::loadConfig() {
     // socket.io config
     this->declare_parameter("sio_port", 1337);
     this->declare_parameter("sio_path", "/robot/socket.io");
-    this->declare_parameter("sio_connection_retry_sec", 5.0);
+    this->declare_parameter("sio_connection_retry_sec", 2.0);
     this->declare_parameter("sio_ssl_verify", true);
+    this->declare_parameter("sio_verbose", false);
 
     // services collapsed in the ui menu (still operational, parameneter services by default)
     rcl_interfaces::msg::ParameterDescriptor collapse_services_descriptor;
@@ -182,6 +183,7 @@ void PhntmBridge::loadConfig() {
     this->config->sio_port = this->get_parameter("sio_port").as_int();
     this->config->sio_path = this->get_parameter("sio_path").as_string();
     this->config->sio_ssl_verify = this->get_parameter("sio_ssl_verify").as_bool();
+    this->config->sio_verbose = this->get_parameter("sio_verbose").as_bool();
     this->config->sio_connection_retry_sec = this->get_parameter("sio_connection_retry_sec").as_double();
     if (this->config->cloud_bridge_address.empty()) {
         RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Param cloud_bridge_address not provided!");
