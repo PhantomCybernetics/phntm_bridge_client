@@ -219,7 +219,8 @@ void PhntmBridge::loadConfig() {
     this->declare_parameter("ui_docker_control", true);
     this->declare_parameter("docker_monitor_topic", "/docker_info");
     this->config->docker_control_enabled = this->get_parameter("ui_docker_control").as_bool();
-    
+    this->config->docker_monitor_topic = this->get_parameter("docker_monitor_topic").as_string();
+
     // input configs that get passed to ui
     std::vector<std::string> default_input_drivers { "Joy" };
     this->declare_parameter("input_drivers", default_input_drivers); // empty array to disable input entirely, services are still set up

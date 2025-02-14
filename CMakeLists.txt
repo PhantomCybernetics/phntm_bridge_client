@@ -9,6 +9,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(phntm_interfaces REQUIRED)
 find_package(ffmpeg_image_transport_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
@@ -20,7 +21,7 @@ find_library(OPENSSL_CRYPTO_LIBRARY crypto)
 
 add_definitions(
     -DSIO_TLS
-    -DDEBUG
+    # -DDEBUG
 
     # These will force ASIO to compile without Boost
     # -DBOOST_DATE_TIME_NO_LIB
@@ -58,6 +59,7 @@ add_executable(phntm_bridge
               src/lib.cpp
               src/git.cpp
               src/sio.cpp
+              src/introspection.cpp
               src/services.cpp
               src/phntm_bridge.cpp
               src/config.cpp
@@ -82,6 +84,7 @@ ament_target_dependencies(phntm_bridge
                           sensor_msgs
                           std_srvs
                           ffmpeg_image_transport_msgs
+                          phntm_interfaces
                           )
 
 target_link_libraries(phntm_bridge

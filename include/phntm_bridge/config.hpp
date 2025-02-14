@@ -32,6 +32,7 @@ class BridgeConfig {
         int conn_led_pin, data_led_pin;
 
         bool docker_control_enabled;
+        std::string docker_monitor_topic;
 
         std::vector<std::string> input_drivers;
         std::vector<CustomWidgetDef> custom_input_drivers, custom_service_widgets;

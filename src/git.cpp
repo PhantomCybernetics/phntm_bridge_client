@@ -1,6 +1,8 @@
-#include "phntm_bridge/phntm_bridge.hpp"
+#include "phntm_bridge/git.hpp"
+#include "phntm_bridge/lib.hpp"
+#include "rclcpp/rclcpp.hpp"
 
-std::string executeCommand(const std::string& command, const std::string& repo_path) {
+std::string executeGitCommand(const std::string& command, const std::string& repo_path) {
     std::array<char, 128> buffer;
     std::string result;
 
@@ -16,15 +18,15 @@ std::string executeCommand(const std::string& command, const std::string& repo_p
     return result;
 }
 
-void PhntmBridge::readGitRepoHead(std::string repo_path) {
+void readGitRepoHead(std::string repo_path, std::shared_ptr<BridgeConfig> config) {
    try {
 
         // Get the HEAD commit SHA
-        std::string head_sha = executeCommand("rev-parse HEAD", repo_path);
-        this->config->git_head_sha = trim(head_sha);
+        std::string head_sha = executeGitCommand("rev-parse HEAD", repo_path);
+        config->git_head_sha = trim(head_sha);
 
         // Get all tags pointing to the HEAD commit
-        std::string tags = executeCommand("tag --points-at HEAD", repo_path);
+        std::string tags = executeGitCommand("tag --points-at HEAD", repo_path);
         tags = trim(tags);
 
         // Determine the latest tag (if any)
@@ -32,7 +34,7 @@ void PhntmBridge::readGitRepoHead(std::string repo_path) {
         if (!tags.empty()) {
             std::istringstream tagStream(tags);
             std::getline(tagStream, latest_tag); // Get the first tag (assuming sorted order)
-            this->config->latest_git_tag = latest_tag;
+            config->latest_git_tag = latest_tag;
         }
 
     } catch (const std::exception& e) {

@@ -19,7 +19,7 @@
 class PhntmBridge : public rclcpp::Node
 {
   public:
-    PhntmBridge(std::string node_name);
+    PhntmBridge(std::string node_name, std::shared_ptr<BridgeConfig> config);
     void loadConfig();
     void makeServices();
     void readGitRepoHead(std::string repo_path);
