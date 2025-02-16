@@ -12,7 +12,7 @@ PhntmBridge::PhntmBridge(std::string node_name, std::shared_ptr<BridgeConfig> co
 {   
     this->config = config;
 
-    this->loadConfig();
+    this->loadConfig(this->config);
     this->makeServices();
 
     // this->declare_parameter("topic_prefix", "/picam_ros2/camera_");

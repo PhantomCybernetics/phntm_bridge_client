@@ -23,6 +23,7 @@ class BridgeConfig {
 
         double log_message_every_sec;
         double discovery_period_sec, stop_discovery_after_sec;
+        bool introspection_verbose;
 
         std::string cloud_bridge_address, sio_path, uploader_address;
         int file_upload_port, sio_port;

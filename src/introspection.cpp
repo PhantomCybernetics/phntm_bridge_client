@@ -65,7 +65,8 @@ void Introspection::runIntrospection() {
     }
 
     this->introspection_in_progress = true;
-    std::cout << GRAY << "Introspecting..." << CLR << std::endl;
+    if (this->config->introspection_verbose)
+        std::cout << GRAY << "Introspecting..." << CLR << std::endl;
 
     bool nodes_changed = false;
     bool topics_changed = false;
@@ -423,6 +424,8 @@ void Introspection::reportIDLs() {
     }
 
     std::cout << GRAY << "Reporting " << this->discovered_idls.size() << " IDLs" << CLR << std::endl;
+    if (this->config->introspection_verbose)
+            std::cout << GRAY << BridgeSocket::PrintMessage(msg) << CLR << std::endl;
 
     this->sio->emit("idls", { msg } , nullptr);
 }
@@ -480,8 +483,9 @@ void Introspection::reportNodes() {
     }
     
     if (this->discovered_nodes.size()) {
-        std::cout << GRAY << "Reporting nodes: " << CLR << std::endl;
-        std::cout << GRAY << BridgeSocket::PrintMessage(msg) << CLR << std::endl;
+        std::cout << GRAY << "Reporting " << this->discovered_nodes.size() << " nodes" << CLR << std::endl;
+        if (this->config->introspection_verbose)
+            std::cout << GRAY << BridgeSocket::PrintMessage(msg) << CLR << std::endl;
     } else {
         std::cout << GRAY << "Reporting empty nodes" << CLR << std::endl;
     }
@@ -521,8 +525,9 @@ void Introspection::reportDocker() {
         msg->get_map().emplace(p.first, host_msg);
     }
     if (hosts.size()) {
-        std::cout << GRAY << "Reporting Docker containers for " << join(hosts) << CLR << std::endl;
-        std::cout << GRAY << BridgeSocket::PrintMessage(msg) << CLR << std::endl;
+        std::cout << GRAY << "Reporting " << this->discovered_docker_containers.size() << " Docker containers for " << join(hosts) << CLR << std::endl;
+        if (this->config->introspection_verbose)
+            std::cout << GRAY << BridgeSocket::PrintMessage(msg) << CLR << std::endl;
     } else {
         std::cout << GRAY << "Reporting empty Docker containers" << CLR << std::endl;
     }
