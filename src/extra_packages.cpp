@@ -114,20 +114,23 @@ bool checkPackage(std::string extra_pkg) {
 
 bool installExtraPackages() {
 
-    auto checked_packages_file_path = "/.checked_packages.yaml";
-    auto config_path = "/ros2_ws/phntm_bridge_params.yaml";
-
-    YAML::Node checked_packages_log; // don't re-process, unless forced in config
-    if (std::filesystem::exists(checked_packages_file_path)) {
-        checked_packages_log = YAML::LoadFile(checked_packages_file_path); 
-    }
-
-    if (!std::filesystem::exists(config_path)) {
-        std::cerr << RED << "Config file not found at " << config_path << CLR << std::endl;  
+    // if rebooted after some changes were made, remove the lock and carry on
+    if (std::filesystem::exists(IGNORE_PACKAGES_CHECK_FILE)) {
+        std::filesystem::remove(IGNORE_PACKAGES_CHECK_FILE);
         return false;
     }
 
-    YAML::Node node_config = YAML::LoadFile(config_path);
+    YAML::Node checked_packages_log; // don't re-process, unless forced in config
+    if (std::filesystem::exists(CHECKED_PACKAGES_FILE_PATH)) {
+        checked_packages_log = YAML::LoadFile(CHECKED_PACKAGES_FILE_PATH); 
+    }
+
+    if (!std::filesystem::exists(CONFIG_PATH)) {
+        std::cerr << RED << "Config file not found at " << CONFIG_PATH << CLR << std::endl;  
+        return false;
+    }
+
+    YAML::Node node_config = YAML::LoadFile(CONFIG_PATH);
     auto extra_packages = node_config["/**"]["ros__parameters"]["extra_packages"];
     if (!extra_packages.IsDefined() || !extra_packages.IsSequence()) {
         return false; //nothing to do
@@ -135,15 +138,17 @@ bool installExtraPackages() {
     
     std::cout << MAGENTA << "Checking extra packages..." << CLR << std::endl;
 
+    auto packages_changed= false;
     for (const auto& item : extra_packages) {
 
         auto extra_pkg = item.as<std::string>();
         bool force = false;
-
+        
+        // if package name is followed by :FORCE_CHECK, it will be checked (re-compiled) on every start
         if (extra_pkg.find(':') != std::string::npos) {
             auto parts = split(extra_pkg, ':');
             extra_pkg = parts[0];
-            if (parts.size() > 1 && parts[1] == "rebuild") {
+            if (parts.size() > 1 && parts[1] == "FORCE_CHECK") {
                 force = true;
             }
         }
@@ -168,17 +173,22 @@ bool installExtraPackages() {
 
         std::cout << YELLOW << "Checking package" << (force ? " (FORCE)" : "") << ": '" << extra_pkg << "'..." << CLR << std::endl;
         
-        auto changed = checkPackage(extra_pkg);
+        packages_changed = checkPackage(extra_pkg) || packages_changed;
 
         if (!checked_before)
             checked_packages_log["packages"].push_back(extra_pkg);
     }
 
     if (checked_packages_log["packages"].IsDefined()) {
-        std::ofstream fout(checked_packages_file_path);
+        std::ofstream fout(CHECKED_PACKAGES_FILE_PATH);
         fout << checked_packages_log;
         fout.close();
     }
+
+    if (packages_changed) { // add lock file so that this check is skipped on the next start
+        std::ofstream file(IGNORE_PACKAGES_CHECK_FILE);
+        file.close();
+    }
     
-    return true; // restart
+    return packages_changed; // restart
 }
