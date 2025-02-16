@@ -65,7 +65,7 @@ void Introspection::runIntrospection() {
     }
 
     this->introspection_in_progress = true;
-    std::cout << CYAN << "Introspecting..." << CLR << std::endl;
+    std::cout << GRAY << "Introspecting..." << CLR << std::endl;
 
     bool nodes_changed = false;
     bool topics_changed = false;

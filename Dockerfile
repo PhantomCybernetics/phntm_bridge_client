@@ -24,6 +24,8 @@ RUN pip install setuptools
 # RUN make install
 
 RUN apt install -y libwebsocketpp-dev
+RUN apt install -y libyaml-cpp-dev
+RUN apt install -y libtinyxml2-dev
 
 # wget https://sourceforge.net/projects/asio/files/asio/1.30.2%20%28Stable%29/asio-1.30.2.tar.bz2/download
 # RUN git clone https://github.com/chriskohlhoff/asio.git

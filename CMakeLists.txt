@@ -15,6 +15,8 @@ find_package(sensor_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_library(FMT_LIBRARY fmt)
 find_library(JSONCPP_LIBRARY jsoncpp)
+find_package(yaml-cpp REQUIRED)
+find_library(TINYXML2_LIBRARY tinyxml2)
 # find_package(OpenSSL)
 find_library(OPENSSL_LIBRARY ssl)
 find_library(OPENSSL_CRYPTO_LIBRARY crypto)
@@ -63,6 +65,7 @@ add_executable(phntm_bridge
               src/services.cpp
               src/phntm_bridge.cpp
               src/config.cpp
+              src/extra_packages.cpp
               ${SIOCLIENT_SRC}
               # ${ASIO_SRC}
               )
@@ -74,6 +77,7 @@ target_include_directories(phntm_bridge PUBLIC
   /root/websocketpp/
   # /usr/include/asio/
   /root/asio/asio
+  ${TINYXML2_INCLUDE_DIRS}
   ${OPENSSL_INCLUDE_DIR}
 )
 target_compile_features(phntm_bridge PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
@@ -92,6 +96,8 @@ target_link_libraries(phntm_bridge
   ${JSONCPP_LIBRARY}
   ${OPENSSL_LIBRARY}
   ${OPENSSL_CRYPTO_LIBRARY}
+  ${YAML_CPP_LIBRARIES}
+  ${TINYXML2_LIBRARY}
   # ${WEBSOCKET_LIBRARY}
   # ${ASIO_LIBRARY}
   # ${RAPIDJSON_LIBRARY}

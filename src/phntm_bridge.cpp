@@ -3,6 +3,8 @@
 #include "phntm_bridge/sio.hpp"
 #include "phntm_bridge/git.hpp"
 #include "phntm_bridge/introspection.hpp"
+#include "phntm_bridge/extra_packages.hpp"
+#include <iostream>
 #include <rclcpp/executors.hpp>
 #include <rclcpp/executors/multi_threaded_executor.hpp>
 
@@ -27,7 +29,12 @@ int main(int argc, char ** argv)
   (void) argc;
   (void) argv;
 
-  std::cout << "Launching the Bridge Node" << std::endl;
+  if (installExtraPackages()) {
+    std::cout << MAGENTA << "Restarting..." << CLR << std::endl;
+    return 0;
+  }
+
+  std::cout << LIME << "Launching the Bridge Node" << CLR << std::endl;
 
   rclcpp::init(argc, argv);
 
