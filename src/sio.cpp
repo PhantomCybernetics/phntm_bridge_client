@@ -10,7 +10,7 @@
 #include "phntm_bridge/const.hpp"
 #include "sio_socket.h"
 
-std::string printMessage(const sio::message::ptr& message, bool pretty = true, int indent = 1) {
+std::string BridgeSocket::PrintMessage(const sio::message::ptr & message, bool pretty, int indent) {
     std::string out;
     const int sp = 2;
 
@@ -29,10 +29,10 @@ std::string printMessage(const sio::message::ptr& message, bool pretty = true, i
             out += message->get_bool() ? "true" : "false";
             break;
         case sio::message::flag::flag_integer:
-            out += message->get_int();
+            out += std::to_string(message->get_int());
             break;
         case sio::message::flag::flag_double:
-            out += message->get_double();
+            out += std::to_string(message->get_double());
             break;
         case sio::message::flag::flag_object:
             {
@@ -43,7 +43,7 @@ std::string printMessage(const sio::message::ptr& message, bool pretty = true, i
                 for (auto p : map) {
                     if (pretty)
                         out.append(sp*indent, ' ');
-                    out += p.first + ": " + printMessage(p.second, pretty, indent+1) + ", ";
+                    out += p.first + ": " + PrintMessage(p.second, pretty, indent+1) + ", ";
                     if (pretty)
                         out += '\n';
                 }
@@ -61,7 +61,7 @@ std::string printMessage(const sio::message::ptr& message, bool pretty = true, i
                 for (auto one : map) {
                     if (pretty)
                         out.append(sp*indent, ' ');
-                    out += printMessage(one, pretty, indent+1) + ", ";
+                    out += PrintMessage(one, pretty, indent+1) + ", ";
                     if (pretty)
                         out += '\n';
                 }
@@ -156,17 +156,17 @@ void BridgeSocket::onDisconnected() {
 
 void BridgeSocket::onIceServers(sio::event const& ev) {
     std::cout << CYAN << "ice-servers: " << CLR << std::endl;
-    std::cout << printMessage(ev.get_message()) << std::endl;
+    std::cout << PrintMessage(ev.get_message()) << std::endl;
 }
 
 void BridgeSocket::onPeerConnected(sio::event const& ev) {
     std::cout << GREEN << "peer connected: " << CLR << std::endl;
-    std::cout << printMessage(ev.get_message()) << std::endl;
+    std::cout << PrintMessage(ev.get_message()) << std::endl;
 }
 
 void BridgeSocket::onPeerDisconnected(sio::event const& ev) {
     std::cout << BLUE << "peer disconnected: " << CLR << std::endl;
-    std::cout << printMessage(ev.get_message()) << std::endl;
+    std::cout << PrintMessage(ev.get_message()) << std::endl;
 }
 
 void BridgeSocket::onIntrospection(sio::event const& ev) {
@@ -213,7 +213,7 @@ void BridgeSocket::onOtherSocketMessage(sio::event const& ev) {
         return;
     
     std::cout << MAGENTA << "UNHANDLED SOCKER MSG " << ev.get_name() << ": " << CLR << std::endl;
-    std::cout << printMessage(ev.get_message()) << std::endl;
+    std::cout << PrintMessage(ev.get_message()) << std::endl;
 }
 
 void BridgeSocket::onClosed(sio::client::close_reason const& reason) {

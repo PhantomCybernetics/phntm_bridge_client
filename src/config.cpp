@@ -207,9 +207,11 @@ void PhntmBridge::loadConfig() {
     this->config->data_led_pin = this->get_parameter("data_led_pin").as_int();
 
     // introspection
-    this->declare_parameter("discovery_period_sec", 5.0f);
+    this->declare_parameter("discovery_period_sec", 2.0f);
+    this->config->discovery_period_sec = this->get_parameter("discovery_period_sec").as_double();
     this->declare_parameter("stop_discovery_after_sec", -1.0f); // <0=never
-    
+    this->config->stop_discovery_after_sec = this->get_parameter("stop_discovery_after_sec").as_double();
+
     // wifi monitoring + scan
     this->declare_parameter("ui_wifi_monitor_topic", "/iw_status"); // Agent writes here
     this->declare_parameter("ui_enable_wifi_scan", true); // enables scan without roaming

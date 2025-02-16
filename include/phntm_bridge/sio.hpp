@@ -17,8 +17,10 @@ class BridgeSocket
         void disconnect();
         void emit(std::string const& name, sio::message::list const& msglist, std::function<void (sio::message::list const&)> const& ack);
         ~BridgeSocket();
-
+        
         void setIntrospection(std::shared_ptr<Introspection> introspection) { this->introspection = introspection; };
+
+        static std::string PrintMessage(const sio::message::ptr & message, bool pretty = true, int indent = 1);
 
     private:
         std::shared_ptr<Introspection> introspection;
