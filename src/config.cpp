@@ -209,7 +209,7 @@ void PhntmBridge::loadConfig(std::shared_ptr<BridgeConfig> config) {
     // introspection
     this->declare_parameter("discovery_period_sec", 2.0f);
     config->discovery_period_sec = this->get_parameter("discovery_period_sec").as_double();
-    this->declare_parameter("stop_discovery_after_sec", -1.0f); // <0=never
+    this->declare_parameter("stop_discovery_after_sec", -1.0f); // <0=run indefinitely
     config->stop_discovery_after_sec = this->get_parameter("stop_discovery_after_sec").as_double();
     this->declare_parameter("introspection_verbose", false);
     config->introspection_verbose = this->get_parameter("introspection_verbose").as_bool();

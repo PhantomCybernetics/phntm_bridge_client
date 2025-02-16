@@ -15,8 +15,7 @@ class BridgeConfig {
         std::vector<std::string> extra_packages;
 
         bool use_cloud_ice_config;
-        std::vector<std::string> ice_servers;
-        std::vector<std::string> ice_servers_custom;
+        std::vector<std::string> ice_servers, ice_servers_custom;
         std::string ice_username, ice_secret;
 
         std::vector<std::string> blacklist_topics, blacklist_services, blacklist_msg_types;

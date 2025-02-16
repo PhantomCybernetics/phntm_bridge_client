@@ -155,17 +155,40 @@ void BridgeSocket::onDisconnected() {
 }
 
 void BridgeSocket::onIceServers(sio::event const& ev) {
-    std::cout << CYAN << "ice-servers: " << CLR << std::endl;
-    std::cout << PrintMessage(ev.get_message()) << std::endl;
+    if (!this->config->use_cloud_ice_config) {
+        std::cout << "Got ICE server config (ignoring)" << std::endl;
+        return;
+    }
+
+    std::cout << "Got cloud ICE server config" << std::endl;
+    // std::cout << PrintMessage(ev.get_message()) << std::endl;
+
+    this->config->ice_servers.clear();
+    // first add custom
+    std::copy(this->config->ice_servers_custom.begin(), this->config->ice_servers_custom.end(), std::back_inserter(this->config->ice_servers));
+    // add cloud config
+    for (auto & one : ev.get_message()->get_map().at("servers")->get_vector()) {
+        config->ice_servers.push_back(one->get_string());
+    }
+    // set received secret
+    this->config->ice_secret = ev.get_message()->get_map().at("secret")->get_string();
+
+    std::cout << CYAN << "Complete ICE config: " << CLR << std::endl;
+    std::cout << "  username: " << this->config->ice_username << std::endl;
+    std::cout << "  secret: " << this->config->ice_secret << std::endl;
+    std::cout << "  servers: " << std::endl;
+    for (auto & one : this->config->ice_servers) {
+        std::cout << "    " << one << std::endl;
+    }
 }
 
 void BridgeSocket::onPeerConnected(sio::event const& ev) {
-    std::cout << GREEN << "peer connected: " << CLR << std::endl;
+    std::cout << GREEN << "Peer connected: " << CLR << std::endl;
     std::cout << PrintMessage(ev.get_message()) << std::endl;
 }
 
 void BridgeSocket::onPeerDisconnected(sio::event const& ev) {
-    std::cout << BLUE << "peer disconnected: " << CLR << std::endl;
+    std::cout << BLUE << "Peer disconnected: " << CLR << std::endl;
     std::cout << PrintMessage(ev.get_message()) << std::endl;
 }
 
