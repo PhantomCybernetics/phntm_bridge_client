@@ -4,11 +4,13 @@
 #include <iostream>
 
 #include "../sioclient/sio_message.h"
+#include "sio_socket.h"
 
 #include "phntm_bridge/sio.hpp"
 #include "phntm_bridge/introspection.hpp"
 #include "phntm_bridge/const.hpp"
-#include "sio_socket.h"
+#include "phntm_bridge/wrtc_peer.hpp"
+#include "phntm_bridge/status_leds.hpp"
 
 std::string BridgeSocket::PrintMessage(const sio::message::ptr & message, bool pretty, int indent) {
     std::string out;
@@ -79,6 +81,7 @@ std::string BridgeSocket::PrintMessage(const sio::message::ptr & message, bool p
 BridgeSocket::BridgeSocket(std::shared_ptr<BridgeConfig> config) {
     this->config = config;
     this->connected = false;
+    ConnLED::FastPulse();
 
     uint reconnect_ms = this->config->sio_connection_retry_sec * 1000;
     this->client.set_reconnect_delay(reconnect_ms);
@@ -138,20 +141,21 @@ void BridgeSocket::emit(std::string const& name, sio::message::list const& msgli
 
 // socket connected (before handshale)
 void BridgeSocket::onConnected() {
-    std::cout << CYAN << "Socket.io connection established" << CLR << std::endl;
+    std::cout << "Socket.io connection established" << std::endl;
 }
 
 // auth done, socket ready
 void BridgeSocket::onSocketOpen() {
     std::cout << GREEN << "Socket.io auth successful for #" << this->config->id_robot << CLR << std::endl;
     this->connected = true;
-
+    ConnLED::On();
     this->introspection->report();
 }
 
 void BridgeSocket::onDisconnected() {
     std::cout << RED << "DISCONNECTED" << CLR << std::endl;
     this->connected = false;
+    ConnLED::FastPulse();
 }
 
 void BridgeSocket::onIceServers(sio::event const& ev) {
@@ -182,9 +186,18 @@ void BridgeSocket::onIceServers(sio::event const& ev) {
     }
 }
 
-void BridgeSocket::onPeerConnected(sio::event const& ev) {
-    std::cout << GREEN << "Peer connected: " << CLR << std::endl;
+void BridgeSocket::onPeerConnected(sio::event &ev) {
+    std::cout << "Peer connecttion request: " << std::endl;
     std::cout << PrintMessage(ev.get_message()) << std::endl;
+    auto id_peer = WRTCPeer::GetId(ev.get_message());
+    auto ack = sio::object_message::create();
+    if (id_peer.empty()) {
+        ack->get_map().emplace("err", sio::int_message::create(2));
+        ack->get_map().emplace("msg", sio::string_message::create("No valid peer id provided"));
+    } else {
+        WRTCPeer::OnPeerConnected(id_peer, ev.get_message(), ack);
+    }
+    ev.put_ack_message({ ack });
 }
 
 void BridgeSocket::onPeerDisconnected(sio::event const& ev) {
@@ -256,5 +269,5 @@ void BridgeSocket::disconnect() {
 }
 
 BridgeSocket::~BridgeSocket() {
-    
+    ConnLED::Off();
 }

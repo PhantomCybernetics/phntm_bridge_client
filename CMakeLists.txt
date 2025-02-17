@@ -21,6 +21,9 @@ find_library(TINYXML2_LIBRARY tinyxml2)
 find_library(OPENSSL_LIBRARY ssl)
 find_library(OPENSSL_CRYPTO_LIBRARY crypto)
 
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(GPIOD REQUIRED libgpiodcxx)
+
 add_definitions(
     -DSIO_TLS
     # -DDEBUG
@@ -29,7 +32,6 @@ add_definitions(
     # -DBOOST_DATE_TIME_NO_LIB
     # -DBOOST_REGEX_NO_LIB
     -DASIO_STANDALONE
-
     # These will force sioclient to compile with C++11
     -D_WEBSOCKETPP_CPP11_STL_
     -D_WEBSOCKETPP_CPP11_FUNCTIONAL_
@@ -44,7 +46,7 @@ add_definitions(
 # find_library(RAPIDJSON_LIBRARY RapidJSON)
 
 include_directories(/usr/include/jsoncpp/)
-
+include_directories(${GPIOD_INCLUDE_DIRS})
 
 set(SIOCLIENT_SRC
   "sioclient/sio_client.cpp"
@@ -66,19 +68,24 @@ add_executable(phntm_bridge
               src/phntm_bridge.cpp
               src/config.cpp
               src/extra_packages.cpp
+              src/wrtc_peer.cpp
+              src/status_leds.cpp
               ${SIOCLIENT_SRC}
               # ${ASIO_SRC}
               )
 # target_compile_definitions(phntm_bridge PUBLIC -DSIO_TLS)
 
+
 target_include_directories(phntm_bridge PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
   /root/websocketpp/
+  /usr/include/
   # /usr/include/asio/
   /root/asio/asio
   ${TINYXML2_INCLUDE_DIRS}
   ${OPENSSL_INCLUDE_DIR}
+  ${GPIOD_INCLUDE_DIRS}
 )
 target_compile_features(phntm_bridge PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
 
@@ -98,11 +105,14 @@ target_link_libraries(phntm_bridge
   ${OPENSSL_CRYPTO_LIBRARY}
   ${YAML_CPP_LIBRARIES}
   ${TINYXML2_LIBRARY}
+  ${GPIOD_LIBRARIES}
   # ${WEBSOCKET_LIBRARY}
   # ${ASIO_LIBRARY}
   # ${RAPIDJSON_LIBRARY}
   # ${SIOCLIENT_LIBRARY}
 )
+
+link_directories(${GPIOD_LIBRARY_DIRS})
 
 install(TARGETS phntm_bridge
   DESTINATION lib/${PROJECT_NAME})

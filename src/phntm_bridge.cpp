@@ -4,6 +4,8 @@
 #include "phntm_bridge/git.hpp"
 #include "phntm_bridge/introspection.hpp"
 #include "phntm_bridge/extra_packages.hpp"
+#include "phntm_bridge/status_leds.hpp"
+
 #include <iostream>
 #include <rclcpp/executors.hpp>
 #include <rclcpp/executors/multi_threaded_executor.hpp>
@@ -52,6 +54,8 @@ int main(int argc, char ** argv)
   executor.add_node(base_node);
   // executor.add_node(introspection_node);
 
+  StatusLEDs::Init(config, base_node);
+
   auto sio = std::make_shared<BridgeSocket>(config);
   auto introspection = std::make_shared<Introspection>(base_node, sio, config);
   sio->setIntrospection(introspection);
@@ -63,6 +67,8 @@ int main(int argc, char ** argv)
   executor.spin();
     
   std::cout << BLUE << "Shutting down..." << CLR << std::endl;
+
+  StatusLEDs::Clear();
 
   introspection->stop();
   sio->disconnect();

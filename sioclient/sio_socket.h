@@ -34,7 +34,7 @@ namespace sio
         const std::string m_name;
         const message::list m_messages;
         const bool m_need_ack;
-        message::list m_ack_message;
+        mutable message::list m_ack_message;
         
         friend class event_adapter;
     };
