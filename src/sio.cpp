@@ -2,6 +2,7 @@
 #include <fmt/core.h>
 #include "rclcpp/rclcpp.hpp"
 #include <iostream>
+#include <string>
 
 #include "../sioclient/sio_message.h"
 #include "sio_socket.h"
@@ -12,83 +13,23 @@
 #include "phntm_bridge/wrtc_peer.hpp"
 #include "phntm_bridge/status_leds.hpp"
 
-std::string BridgeSocket::PrintMessage(const sio::message::ptr & message, bool pretty, int indent) {
-    std::string out;
-    const int sp = 2;
-
-    switch (message->get_flag()) {
-        case sio::message::flag::flag_string:
-            out += '"' + message->get_string() + '"';
-            break;
-        case sio::message::flag::flag_null:
-            out += "null";
-            break;
-        case sio::message::flag::flag_binary:
-            out += 'b';
-            out += message->get_binary()->c_str();
-            break;
-        case sio::message::flag::flag_boolean:
-            out += message->get_bool() ? "true" : "false";
-            break;
-        case sio::message::flag::flag_integer:
-            out += std::to_string(message->get_int());
-            break;
-        case sio::message::flag::flag_double:
-            out += std::to_string(message->get_double());
-            break;
-        case sio::message::flag::flag_object:
-            {
-                out += "{";
-                if (pretty)
-                        out += '\n';
-                auto map = message->get_map();
-                for (auto p : map) {
-                    if (pretty)
-                        out.append(sp*indent, ' ');
-                    out += p.first + ": " + PrintMessage(p.second, pretty, indent+1) + ", ";
-                    if (pretty)
-                        out += '\n';
-                }
-                if (pretty)
-                    out.append(sp*(indent-1), ' ');
-                out += "}";
-                break;
-            }
-        case sio::message::flag::flag_array:
-            {
-                out += "[";
-                if (pretty)
-                        out += '\n';
-                auto map = message->get_vector();
-                for (auto one : map) {
-                    if (pretty)
-                        out.append(sp*indent, ' ');
-                    out += PrintMessage(one, pretty, indent+1) + ", ";
-                    if (pretty)
-                        out += '\n';
-                }
-                if (pretty)
-                    out.append(sp*(indent-1), ' ');
-                out += "]";
-                break;
-            }
-        default:
-            break;
-    }
-    return out;
-}
-
 BridgeSocket::BridgeSocket(std::shared_ptr<BridgeConfig> config) {
     this->config = config;
     this->connected = false;
+    this->shutting_down = false;
     ConnLED::FastPulse();
 
     uint reconnect_ms = this->config->sio_connection_retry_sec * 1000;
+    std::cout << "SIO reconenct ms: " << reconnect_ms << std::endl;
     this->client.set_reconnect_delay(reconnect_ms);
+    this->client.set_reconnect_delay_max(reconnect_ms);
+    this->client.set_reconnect_attempts(10000000);
     this->client.set_open_listener(std::bind(&BridgeSocket::onConnected, this));
     this->client.set_disconnect_listener(std::bind(&BridgeSocket::onDisconnected, this));
     this->client.set_close_listener(std::bind(&BridgeSocket::onClosed, this, std::placeholders::_1));
     this->client.set_fail_listener(std::bind(&BridgeSocket::onFailed, this));
+    this->client.set_reconnecting_listener(std::bind(&BridgeSocket::onReconnecting, this));
+    this->client.set_reconnect_listener(std::bind(&BridgeSocket::onReconnect, this, std::placeholders::_1, std::placeholders::_2));
 
     this->client.set_socket_open_listener(std::bind(&BridgeSocket::onSocketOpen, this));
     this->client.set_socket_close_listener(std::bind(&BridgeSocket::onSocketClose, this));
@@ -100,34 +41,28 @@ BridgeSocket::BridgeSocket(std::shared_ptr<BridgeConfig> config) {
 bool BridgeSocket::connect() {
     // self.get_logger().info(f'Socket.io connecting to ')
 
-    std::string socket_url = fmt::format("{}:{}{}", this->config->cloud_bridge_address, this->config->sio_port, this->config->sio_path);
+    this->socket_url = fmt::format("{}:{}{}", this->config->cloud_bridge_address, this->config->sio_port, this->config->sio_path);
 
     RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Socket.io connecting to %s", socket_url.c_str());
 
     std::cout << YELLOW << "Connecting id_robot: " << this->config->id_robot << CLR << std::endl;
 
-    auto auth_data = sio::object_message::create();
-    auth_data->get_map()["id_robot"] = sio::string_message::create(this->config->id_robot);
-    auth_data->get_map()["key"] = sio::string_message::create(this->config->auth_key);
-    auth_data->get_map()["name"] = sio::string_message::create(this->config->robot_name);
-    auth_data->get_map()["maintainer_email"] = sio::string_message::create(this->config->maintainer_email);
-    auth_data->get_map()["ros_distro"] = sio::string_message::create(this->config->ros_distro);
-    auth_data->get_map()["git_sha"] = sio::string_message::create(this->config->git_head_sha);
-    auth_data->get_map()["git_tag"] = sio::string_message::create(this->config->latest_git_tag);
+    this->auth_data = sio::object_message::create();
+    this->auth_data->get_map()["id_robot"] = sio::string_message::create(this->config->id_robot);
+    this->auth_data->get_map()["key"] = sio::string_message::create(this->config->auth_key);
+    this->auth_data->get_map()["name"] = sio::string_message::create(this->config->robot_name);
+    this->auth_data->get_map()["maintainer_email"] = sio::string_message::create(this->config->maintainer_email);
+    this->auth_data->get_map()["ros_distro"] = sio::string_message::create(this->config->ros_distro);
+    this->auth_data->get_map()["git_sha"] = sio::string_message::create(this->config->git_head_sha);
+    this->auth_data->get_map()["git_tag"] = sio::string_message::create(this->config->latest_git_tag);
 
     this->handled_events.emplace("ice-servers", std::bind(&BridgeSocket::onIceServers, this, std::placeholders::_1));
     this->handled_events.emplace("peer", std::bind(&BridgeSocket::onPeerConnected, this, std::placeholders::_1));
     this->handled_events.emplace("peer:disconnected", std::bind(&BridgeSocket::onPeerDisconnected, this, std::placeholders::_1));
     this->handled_events.emplace("introspection", std::bind(&BridgeSocket::onIntrospection, this, std::placeholders::_1));
 
-    this->client.connect(socket_url, auth_data);
-    for (auto ev : this->handled_events) {
-        this->client.socket()->on(ev.first, ev.second);
-    }
-
-    this->client.socket()->on_any(std::bind(&BridgeSocket::onOtherSocketMessage, this, std::placeholders::_1));
-    this->client.socket()->on_error(std::bind(&BridgeSocket::onSocketError, this, std::placeholders::_1));
-
+    this->client.connect(this->socket_url, this->auth_data);
+    
     return true;
 }
 
@@ -141,7 +76,14 @@ void BridgeSocket::emit(std::string const& name, sio::message::list const& msgli
 
 // socket connected (before handshale)
 void BridgeSocket::onConnected() {
-    std::cout << "Socket.io connection established" << std::endl;
+    std::cout << "Socket.io client connection established" << std::endl;
+
+    for (auto ev : this->handled_events) {
+        this->client.socket()->on(ev.first, ev.second);
+    }
+
+    this->client.socket()->on_any(std::bind(&BridgeSocket::onOtherSocketMessage, this, std::placeholders::_1));
+    this->client.socket()->on_error(std::bind(&BridgeSocket::onSocketError, this, std::placeholders::_1));
 }
 
 // auth done, socket ready
@@ -153,7 +95,7 @@ void BridgeSocket::onSocketOpen() {
 }
 
 void BridgeSocket::onDisconnected() {
-    std::cout << RED << "DISCONNECTED" << CLR << std::endl;
+    std::cout << RED << "Socket.io client disconnected" << CLR << std::endl;
     this->connected = false;
     ConnLED::FastPulse();
 }
@@ -253,21 +195,115 @@ void BridgeSocket::onOtherSocketMessage(sio::event const& ev) {
 }
 
 void BridgeSocket::onClosed(sio::client::close_reason const& reason) {
-    std::cout << RED << "CLOSED (reason " << reason << ")" << CLR << std::endl;
+    std::string reason_hr;
+    switch (reason) {
+        case sio::client::close_reason_drop: reason_hr = "drop"; break;
+        case sio::client::close_reason_normal: reason_hr = "normal"; break;
+        default: reason_hr = std::to_string(reason); break;
+    }
+    
+    std::cout << RED << "Socket.io client closed (reason " << reason_hr << ")" << CLR << std::endl;
+    this->client.socket()->off_all();
+    this->client.socket()->off_error();
+    
+    if (!this->shutting_down) {
+        std::cout << "  Attempting to reconnect..." << std::endl;
+        std::thread([this]() {
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            this->client.connect(this->socket_url, this->auth_data);
+        }).detach();
+    }
 }
 
 void BridgeSocket::onFailed() {
-    std::cout << RED << "FAILED" << CLR << std::endl;
+    std::cout << RED << "Socket.io client failed" << CLR << std::endl;
+}
+
+void BridgeSocket::onReconnecting() {
+    std::cout << "Socket.io client attempting to reconnect..." << std::endl;
+}
+
+void BridgeSocket::onReconnect(uint attemptCount, uint delay) {
+    std::cout << "Socket.io client reconnected after " << attemptCount << " attempts. Next attempt in " << delay << "ms" << std::endl;
 }
 
 void BridgeSocket::onSocketClose() {
-    std::cout << RED << "SOCKET CLOSED" << CLR << std::endl;
+    std::cout << RED << "Socket.io socket closed" << CLR << std::endl;
 }
 
-void BridgeSocket::disconnect() {
-    this->client.close();
+void BridgeSocket::shutdown() {
+    this->shutting_down = true;
+    this->client.set_reconnect_attempts(0);
+    this->client.clear_con_listeners();
+    this->client.sync_close();
 }
 
 BridgeSocket::~BridgeSocket() {
     ConnLED::Off();
+}
+
+std::string BridgeSocket::PrintMessage(const sio::message::ptr & message, bool pretty, int indent) {
+    std::string out;
+    const int sp = 2;
+
+    switch (message->get_flag()) {
+        case sio::message::flag::flag_string:
+            out += '"' + message->get_string() + '"';
+            break;
+        case sio::message::flag::flag_null:
+            out += "null";
+            break;
+        case sio::message::flag::flag_binary:
+            out += 'b';
+            out += message->get_binary()->c_str();
+            break;
+        case sio::message::flag::flag_boolean:
+            out += message->get_bool() ? "true" : "false";
+            break;
+        case sio::message::flag::flag_integer:
+            out += std::to_string(message->get_int());
+            break;
+        case sio::message::flag::flag_double:
+            out += std::to_string(message->get_double());
+            break;
+        case sio::message::flag::flag_object:
+            {
+                out += "{";
+                if (pretty)
+                        out += '\n';
+                auto map = message->get_map();
+                for (auto p : map) {
+                    if (pretty)
+                        out.append(sp*indent, ' ');
+                    out += p.first + ": " + PrintMessage(p.second, pretty, indent+1) + ", ";
+                    if (pretty)
+                        out += '\n';
+                }
+                if (pretty)
+                    out.append(sp*(indent-1), ' ');
+                out += "}";
+                break;
+            }
+        case sio::message::flag::flag_array:
+            {
+                out += "[";
+                if (pretty)
+                        out += '\n';
+                auto map = message->get_vector();
+                for (auto one : map) {
+                    if (pretty)
+                        out.append(sp*indent, ' ');
+                    out += PrintMessage(one, pretty, indent+1) + ", ";
+                    if (pretty)
+                        out += '\n';
+                }
+                if (pretty)
+                    out.append(sp*(indent-1), ' ');
+                out += "]";
+                break;
+            }
+        default:
+            break;
+    }
+    return out;
 }

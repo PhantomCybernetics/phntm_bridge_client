@@ -14,7 +14,7 @@ class BridgeSocket
     public:
         BridgeSocket(std::shared_ptr<BridgeConfig> config);
         bool connect();
-        void disconnect();
+        void shutdown();
         void emit(std::string const& name, sio::message::list const& msglist, std::function<void (sio::message::list const&)> const& ack);
         ~BridgeSocket();
         
@@ -28,12 +28,16 @@ class BridgeSocket
         sio::client client;
         sio::socket::ptr socket;
         std::shared_ptr<BridgeConfig> config;
-        bool connected;
+        bool connected, shutting_down;
+        std::string socket_url;
+        sio::message::ptr auth_data;
 
         void onConnected();
         void onDisconnected();
         void onClosed(sio::client::close_reason const& reason);
         void onFailed();
+        void onReconnecting();
+        void onReconnect(uint attemptCount, uint delay);
         void onSocketOpen();
         void onSocketClose();
         void onSocketError(sio::message::ptr const& message);

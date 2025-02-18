@@ -7,6 +7,7 @@
 #include "phntm_bridge/status_leds.hpp"
 
 #include <iostream>
+#include <ostream>
 #include <rclcpp/executors.hpp>
 #include <rclcpp/executors/multi_threaded_executor.hpp>
 
@@ -26,6 +27,13 @@ PhntmBridge::PhntmBridge(std::string node_name, std::shared_ptr<BridgeConfig> co
     // this->declare_parameter("calibration_files", "/calibration/");
 }
 
+std::atomic<bool> g_interrupt_requested(false);
+
+void signal_handler(int signum) {
+    std::cout << RED << "Signal handler got " << signum << CLR << std::endl;
+    g_interrupt_requested.store(true);
+}
+
 int main(int argc, char ** argv)
 {
   (void) argc;
@@ -39,6 +47,9 @@ int main(int argc, char ** argv)
   std::cout << LIME << "Launching the Bridge Node" << CLR << std::endl;
 
   rclcpp::init(argc, argv);
+  rclcpp::uninstall_signal_handlers();
+
+  std::signal(SIGINT, signal_handler);
 
   rclcpp::executors::MultiThreadedExecutor executor;
 
@@ -63,16 +74,24 @@ int main(int argc, char ** argv)
   introspection->start();
   sio->connect();
 
-  //rclcpp::spin((base_node));
-  executor.spin();
+  while (!g_interrupt_requested.load() && rclcpp::ok()) {
+    executor.spin_some();
+  }
     
   std::cout << BLUE << "Shutting down..." << CLR << std::endl;
 
+  introspection->stop();
   StatusLEDs::Clear();
 
-  introspection->stop();
-  sio->disconnect();
+  std::cout << "Spinning some more..." << std::endl;
+  executor.spin_some(); // make sure we send out what we need before shutdown
+  std::cout << "Done spinning" << std::endl;
+
+  sio->shutdown();
+
   rclcpp::shutdown();
+
+  std::cout << BLUE << "Rclcpp down..." << CLR << std::endl;
 
   return 0;
 }

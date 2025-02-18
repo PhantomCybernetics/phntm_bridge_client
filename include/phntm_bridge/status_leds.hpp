@@ -3,6 +3,8 @@
 #include "config.hpp"
 
 #include <gpiod.hpp>
+#include <thread>
+#include <chrono>
 
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/bool.hpp"
@@ -14,10 +16,11 @@ class StatusLED {
 
         void on();
         void off();
-        void once(float on_sec = 0.002f);
-        void interval(float on_sec, float interval_sec);
+        void once(int on_ms = 2);
+        void interval(int on_ms, int interval_ms);
         void fastPulse();
-    
+
+        void update();
         void clear();
 
         enum Mode {
@@ -38,18 +41,19 @@ class StatusLED {
     
     private:
         Mode mode;
+        State state;
+        float on_ms;
+        float interval_ms;
+
+        bool current_state;
+        std::chrono::steady_clock::time_point last_on_time;
+        std::chrono::steady_clock::time_point last_off_time;
 
         gpiod::line line;
 
         rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr publisher;
         std_msgs::msg::Bool msg_on;
         std_msgs::msg::Bool msg_off;
-
-        State state;
-        float on_sec;
-        float interval_sec;
-        float last_on_time;
-        float last_off_time;
 
         void setState(bool state);
 };
@@ -62,11 +66,16 @@ class StatusLEDs {
         static StatusLEDs * GetInstance() { return instance; }
         std::shared_ptr<StatusLED> conn;
         std::shared_ptr<StatusLED> data;
+        
 
     private:
         StatusLEDs() {};
         static StatusLEDs* instance;
-        std::shared_ptr<rclcpp::Node> publisher_node;
+        std::vector<std::shared_ptr<StatusLED>> leds;
+
+        bool loop_running;
+        std::thread loop_thread;
+        void loop();
 };
 
 // convenience
