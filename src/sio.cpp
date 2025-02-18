@@ -61,6 +61,10 @@ bool BridgeSocket::connect() {
     this->handled_events.emplace("peer:disconnected", std::bind(&BridgeSocket::onPeerDisconnected, this, std::placeholders::_1));
     this->handled_events.emplace("introspection", std::bind(&BridgeSocket::onIntrospection, this, std::placeholders::_1));
 
+    this->handled_events.emplace("subscribe", std::bind(&BridgeSocket::onSubscribeRead, this, std::placeholders::_1));
+    this->handled_events.emplace("subscribe:write", std::bind(&BridgeSocket::onSubscribeWrite, this, std::placeholders::_1));
+    this->handled_events.emplace("service", std::bind(&BridgeSocket::onServiceCall, this, std::placeholders::_1));
+
     this->client.connect(this->socket_url, this->auth_data);
     
     return true;
@@ -137,23 +141,105 @@ void BridgeSocket::onPeerConnected(sio::event &ev) {
         ack->get_map().emplace("err", sio::int_message::create(2));
         ack->get_map().emplace("msg", sio::string_message::create("No valid peer id provided"));
     } else {
-        WRTCPeer::OnPeerConnected(id_peer, ev.get_message(), ack);
+        WRTCPeer::OnPeerConnected(id_peer, ev.get_message(), this->config, ack);
     }
     ev.put_ack_message({ ack });
 }
 
 void BridgeSocket::onPeerDisconnected(sio::event const& ev) {
-    std::cout << BLUE << "Peer disconnected: " << CLR << std::endl;
+    std::cout << "Peer disconnect request: " << std::endl;
     std::cout << PrintMessage(ev.get_message()) << std::endl;
-}
-
-void BridgeSocket::onIntrospection(sio::event const& ev) {
-    if (ev.get_message()->get_map()["state"]->get_bool()) {
-        this->introspection->start();
-    } else {
-        this->introspection->stop();
+    auto id_peer = WRTCPeer::GetId(ev.get_message());
+    if (!id_peer.empty()) {
+        WRTCPeer::OnPeerDisconnected(id_peer);
     }
 }
+
+void BridgeSocket::onIntrospection(sio::event & ev) {
+    auto id_peer = WRTCPeer::GetId(ev.get_message());
+    auto ack = sio::object_message::create();
+    if (id_peer.empty()) {
+        ack->get_map().emplace("err", sio::int_message::create(2));
+        ack->get_map().emplace("msg", sio::string_message::create("No valid peer id provided"));
+    } else if (!WRTCPeer::IsConnected(id_peer)) {
+        ack->get_map().emplace("err", sio::int_message::create(2));
+        ack->get_map().emplace("msg", sio::string_message::create("Peer not connected"));
+    } else {
+        if (ev.get_message()->get_map()["state"]->get_bool()) {
+            this->introspection->start();
+        } else {
+            this->introspection->stop();
+        }
+        ack->get_map().emplace("success", sio::int_message::create(1));
+        ack->get_map().emplace("introspection", sio::bool_message::create(this->introspection->isRunning()));
+    }
+    ev.put_ack_message({ ack });
+}
+
+void BridgeSocket::onSubscribeRead(sio::event & ev) {
+
+    std::cout << "Subscribe read request: " << std::endl;
+    std::cout << PrintMessage(ev.get_message()) << std::endl;
+
+    auto id_peer = WRTCPeer::GetId(ev.get_message());
+    auto ack = sio::object_message::create();
+    if (id_peer.empty()) {
+        ack->get_map().emplace("err", sio::int_message::create(2));
+        ack->get_map().emplace("msg", sio::string_message::create("No valid peer id provided"));
+    } else if (!WRTCPeer::IsConnected(id_peer)) {
+        ack->get_map().emplace("err", sio::int_message::create(2));
+        ack->get_map().emplace("msg", sio::string_message::create("Peer not connected"));
+    } else {
+        
+        // TODO
+
+    }
+    ev.put_ack_message({ ack });
+}
+
+void BridgeSocket::onSubscribeWrite(sio::event & ev) {
+
+    std::cout << "Subscribe write request: " << std::endl;
+    std::cout << PrintMessage(ev.get_message()) << std::endl;
+
+    auto id_peer = WRTCPeer::GetId(ev.get_message());
+    auto ack = sio::object_message::create();
+    if (id_peer.empty()) {
+        ack->get_map().emplace("err", sio::int_message::create(2));
+        ack->get_map().emplace("msg", sio::string_message::create("No valid peer id provided"));
+    } else if (!WRTCPeer::IsConnected(id_peer)) {
+        ack->get_map().emplace("err", sio::int_message::create(2));
+        ack->get_map().emplace("msg", sio::string_message::create("Peer not connected"));
+    } else {
+        
+        // TODO
+
+    }
+    ev.put_ack_message({ ack });
+}
+
+void BridgeSocket::onServiceCall(sio::event & ev) {
+
+    std::cout << "Service call: " << std::endl;
+    std::cout << PrintMessage(ev.get_message()) << std::endl;
+
+    auto id_peer = WRTCPeer::GetId(ev.get_message());
+    auto ack = sio::object_message::create();
+    if (id_peer.empty()) {
+        ack->get_map().emplace("err", sio::int_message::create(2));
+        ack->get_map().emplace("msg", sio::string_message::create("No valid peer id provided"));
+    } else if (!WRTCPeer::IsConnected(id_peer)) {
+        ack->get_map().emplace("err", sio::int_message::create(2));
+        ack->get_map().emplace("msg", sio::string_message::create("Peer not connected"));
+    } else {
+        
+        // TODO
+
+    }
+    ev.put_ack_message({ ack });
+}
+
+
 
 void BridgeSocket::onSocketError(sio::message::ptr const& message) {
     switch (message->get_flag()) {
@@ -190,7 +276,7 @@ void BridgeSocket::onOtherSocketMessage(sio::event const& ev) {
     if (this->handled_events.find(ev.get_name().c_str()) != this->handled_events.end())
         return;
     
-    std::cout << MAGENTA << "UNHANDLED SOCKER MSG " << ev.get_name() << ": " << CLR << std::endl;
+    std::cout << RED << "UNHANDLED SOCKER MSG '" << ev.get_name() << "': " << CLR << std::endl;
     std::cout << PrintMessage(ev.get_message()) << std::endl;
 }
 
@@ -306,4 +392,40 @@ std::string BridgeSocket::PrintMessage(const sio::message::ptr & message, bool p
             break;
     }
     return out;
+}
+
+sio::message::ptr BridgeSocket::JsonToSioMessage(Json::Value val) {
+
+    if (val.isBool()) {
+        return sio::bool_message::create(val.asBool());
+    } else if (val.isDouble()) {
+        return sio::double_message::create(val.asDouble());
+    } else if (val.isInt()) {
+        return sio::int_message::create(val.asInt());
+    } else if (val.isInt64()) {
+        return sio::int_message::create(val.asInt64());
+    } else if (val.isNumeric()) {
+        return sio::double_message::create(val.asDouble());
+    } else if (val.isNull()) {
+        return sio::null_message::create();
+    } else if (val.isString()) {
+        return sio::string_message::create(val.asString());
+    } else if (val.isArray()) {
+        auto res = sio::array_message::create();
+        for (auto & one : val) {
+            res->get_vector().push_back(JsonToSioMessage(one));
+        }
+        return res;
+    } else if (val.isObject()) {
+        auto res = sio::object_message::create();
+        for (auto it = val.begin(); it != val.end(); ++it) {
+            const std::string& key = it.key().asString();
+            res->get_map().emplace(key, JsonToSioMessage(*it));
+        }
+        return res;
+    } else {
+        std::cerr << RED << "Invalid Json value type: " << std::endl;
+        std::cerr << val.toStyledString() << std::endl;
+        return sio::null_message::create();
+    }
 }

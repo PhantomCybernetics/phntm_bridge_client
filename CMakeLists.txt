@@ -17,6 +17,7 @@ find_library(FMT_LIBRARY fmt)
 find_library(JSONCPP_LIBRARY jsoncpp)
 find_package(yaml-cpp REQUIRED)
 find_library(TINYXML2_LIBRARY tinyxml2)
+find_library(UUID_LIBRARY uuid)
 # find_package(OpenSSL)
 find_library(OPENSSL_LIBRARY ssl)
 find_library(OPENSSL_CRYPTO_LIBRARY crypto)
@@ -106,6 +107,7 @@ target_link_libraries(phntm_bridge
   ${YAML_CPP_LIBRARIES}
   ${TINYXML2_LIBRARY}
   ${GPIOD_LIBRARIES}
+  ${UUID_LIBRARY}
   # ${WEBSOCKET_LIBRARY}
   # ${ASIO_LIBRARY}
   # ${RAPIDJSON_LIBRARY}

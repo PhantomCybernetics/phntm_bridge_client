@@ -134,11 +134,13 @@ void PhntmBridge::loadConfig(std::shared_ptr<BridgeConfig> config) {
     collapse_services_descriptor.additional_constraints="Service id or type";
     std::vector<std::string> default_collapsed_services {"rcl_interfaces/srv/DescribeParameters", "rcl_interfaces/srv/GetParameterTypes", "rcl_interfaces/srv/GetParameters", "rcl_interfaces/srv/ListParameters", "rcl_interfaces/srv/SetParameters", "rcl_interfaces/srv/SetParametersAtomically" };
     this->declare_parameter("collapse_services", default_collapsed_services, collapse_services_descriptor);
+    config->collapse_services = this->get_parameter("collapse_services").as_string_array();
 
     rcl_interfaces::msg::ParameterDescriptor collape_unhandled_services_descriptor;
     collape_unhandled_services_descriptor.description = "The UI will collapse services with unsupported message types";
     this->declare_parameter("collapse_unhandled_services", true, collape_unhandled_services_descriptor);
-    
+    config->collapse_unhandled_services = this->get_parameter("collapse_unhandled_services").as_bool();
+
     // blacklist topics from discovery (msg type or full topic id)
     this->declare_parameter("blacklist_topics", std::vector<std::string>());
     config->blacklist_topics = this->get_parameter("blacklist_topics").as_string_array();
@@ -216,13 +218,17 @@ void PhntmBridge::loadConfig(std::shared_ptr<BridgeConfig> config) {
 
     // wifi monitoring + scan
     this->declare_parameter("ui_wifi_monitor_topic", "/iw_status"); // Agent writes here
+    config->ui_wifi_monitor_topic = this->get_parameter("ui_wifi_monitor_topic").as_string();
     this->declare_parameter("ui_enable_wifi_scan", true); // enables scan without roaming
+    config->ui_enable_wifi_scan = this->get_parameter("ui_enable_wifi_scan").as_bool();
     this->declare_parameter("ui_enable_wifi_roam", false); // enables roaming (potentially dangerous)
+    config->ui_enable_wifi_roam = this->get_parameter("ui_enable_wifi_roam").as_bool();
     
     this->declare_parameter("ui_battery_topic", "/battery"); // use this in the ui 
+    config->ui_battery_topic = this->get_parameter("ui_battery_topic").as_string();
     this->declare_parameter("ui_docker_control", true);
-    this->declare_parameter("docker_monitor_topic", "/docker_info");
     config->docker_control_enabled = this->get_parameter("ui_docker_control").as_bool();
+    this->declare_parameter("docker_monitor_topic", "/docker_info");
     config->docker_monitor_topic = this->get_parameter("docker_monitor_topic").as_string();
 
     // input configs that get passed to ui

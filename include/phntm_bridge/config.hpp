@@ -32,8 +32,9 @@ class BridgeConfig {
         std::string conn_led_topic, data_led_topic, conn_led_gpio_chip;
         int conn_led_pin, data_led_pin;
 
-        bool docker_control_enabled;
-        std::string docker_monitor_topic;
+        std::vector<std::string> collapse_services;
+        std::string ui_battery_topic, ui_wifi_monitor_topic, docker_monitor_topic;
+        bool docker_control_enabled, ui_enable_wifi_scan, ui_enable_wifi_roam, collapse_unhandled_services;
 
         std::vector<std::string> input_drivers;
         std::vector<CustomWidgetDef> custom_input_drivers, custom_service_widgets;

@@ -16,6 +16,7 @@ class Introspection {
         void start();
         void stop();
         void report();
+        bool isRunning() { return this->running; };
         ~Introspection();
 
     private:
