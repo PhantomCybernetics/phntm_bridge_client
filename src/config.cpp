@@ -201,7 +201,7 @@ void PhntmBridge::loadConfig(std::shared_ptr<BridgeConfig> config) {
     config->data_led_topic = this->get_parameter("data_led_topic").as_string();
     
     // conn/data LED control via GPIO
-    this->declare_parameter("conn_led_gpio_chip", "/dev/gpiochip4"); // PI5 default (??)
+    this->declare_parameter("conn_led_gpio_chip", "/dev/gpiochip0"); // PI5 default, use gpiodetect to list available
     config->conn_led_gpio_chip = this->get_parameter("conn_led_gpio_chip").as_string();
     this->declare_parameter("conn_led_pin", -1); // set GPIO number
     config->conn_led_pin = this->get_parameter("conn_led_pin").as_int();
@@ -211,7 +211,7 @@ void PhntmBridge::loadConfig(std::shared_ptr<BridgeConfig> config) {
     // introspection
     this->declare_parameter("discovery_period_sec", 2.0f);
     config->discovery_period_sec = this->get_parameter("discovery_period_sec").as_double();
-    this->declare_parameter("stop_discovery_after_sec", -1.0f); // <0=run indefinitely
+    this->declare_parameter("stop_discovery_after_sec", -1.0f); // <0 = run indefinitely (don't show control)
     config->stop_discovery_after_sec = this->get_parameter("stop_discovery_after_sec").as_double();
     this->declare_parameter("introspection_verbose", false);
     config->introspection_verbose = this->get_parameter("introspection_verbose").as_bool();

@@ -150,6 +150,7 @@ void WRTCPeer::AddUIConfigToMessage(sio::object_message::ptr msg, std::shared_pt
 
      // ui config vars
      auto ui_config = sio::object_message::create();
+     ui_config->get_map().emplace("introspection_control", sio::bool_message::create(config->stop_discovery_after_sec > 0.0f)); // don't show introspection icon if continuous
      ui_config->get_map().emplace("battery_topic", sio::string_message::create(config->ui_battery_topic));
      ui_config->get_map().emplace("docker_control", sio::bool_message::create(config->docker_control_enabled));
      ui_config->get_map().emplace("docker_monitor_topic", sio::string_message::create(config->docker_monitor_topic));
