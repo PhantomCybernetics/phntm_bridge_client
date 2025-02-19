@@ -25,8 +25,10 @@ bool WRTCPeer::IsConnected(std::string id_peer) {
     return connected_peers.find(id_peer) != connected_peers.end();
 }
 
-void WRTCPeer::OnPeerConnected(std::string id_peer, sio::object_message::ptr data, std::shared_ptr<BridgeConfig> config, sio::object_message::ptr ack) {
+void WRTCPeer::OnPeerConnected(std::string id_peer, std::shared_ptr<BridgeSocket> sio, sio::event &ev, std::shared_ptr<BridgeConfig> config) {
     std::cout << GREEN << "Peer " << id_peer << " connected..." << CLR << std::endl;
+
+    auto data = ev.get_message();
 
     uuid_t session;
     uuid_generate(session);
@@ -39,13 +41,15 @@ void WRTCPeer::OnPeerConnected(std::string id_peer, sio::object_message::ptr dat
                                data->get_map()["id_app"]->get_string(),
                                data->get_map()["id_instance"]->get_string(),
                                id_session,
+                               sio,
                                config
                             );
     
     connected_peers.emplace(id_peer, peer);
 
+    auto ack = sio::object_message::create();
     AddUIConfigToMessage(ack, config);
-    peer.processSubscription(ack);
+    peer.processSubscription(ev, ack);
 }
 
 void WRTCPeer::OnPeerDisconnected(std::string id_peer) {
@@ -55,17 +59,18 @@ void WRTCPeer::OnPeerDisconnected(std::string id_peer) {
     connected_peers.erase(id_peer);
 }
 
-WRTCPeer::WRTCPeer(std::string id_peer, std::string id_app, std::string id_instance, std::string session, std::shared_ptr<BridgeConfig> config) {
+WRTCPeer::WRTCPeer(std::string id_peer, std::string id_app, std::string id_instance, std::string session, std::shared_ptr<BridgeSocket> sio, std::shared_ptr<BridgeConfig> config) {
     this->id = id_peer;
     this->id_app = id_app;
     this->id_instance = id_instance;
     this->session = session;
+    this->sio = sio;
     this->config = config;
 
     this->processing_subscriptions = false;
 }
 
-void WRTCPeer::processSubscription(sio::object_message::ptr reply) {
+void WRTCPeer::processSubscription(sio::event &ev, sio::object_message::ptr reply) {
 
     if (this->processing_subscriptions) {
         std::cerr << RED << "Failed to process " << this->id << " subs, peer busy" << CLR << std::endl;
@@ -97,6 +102,7 @@ void WRTCPeer::processSubscription(sio::object_message::ptr reply) {
         //                     callback=peer.on_answer_reply)
 
     } else {
+        this->sio->ack(ev.get_msgId(), { reply });
         this->processing_subscriptions = false; // all done here
     }
 }

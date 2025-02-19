@@ -17,6 +17,7 @@ class BridgeSocket
         bool connect();
         void shutdown();
         void emit(std::string const& name, sio::message::list const& msglist, std::function<void (sio::message::list const&)> const& ack);
+        void ack(int msg_id, sio::message::list const& msglist);
         ~BridgeSocket();
         
         void setIntrospection(std::shared_ptr<Introspection> introspection) { this->introspection = introspection; };
@@ -55,4 +56,6 @@ class BridgeSocket
         void onServiceCall(sio::event & ev);
 
         void onOtherSocketMessage(sio::event const& ev);
+
+        std::string getConnectedPeerId(sio::event & ev);
 };

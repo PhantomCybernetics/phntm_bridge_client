@@ -5,7 +5,6 @@
 #include <string>
 
 #include "../sioclient/sio_message.h"
-#include "sio_socket.h"
 
 #include "phntm_bridge/sio.hpp"
 #include "phntm_bridge/introspection.hpp"
@@ -78,6 +77,14 @@ void BridgeSocket::emit(std::string const& name, sio::message::list const& msgli
     this->client.socket()->emit(name, msglist, ack);
 }
 
+void BridgeSocket::ack(int msg_id, sio::message::list const& msglist) {
+    if (!this->connected) {
+        std::cout << "Socket.io not connected, ignoring ack(" << msg_id << ")" << std::endl;
+        return;
+    }
+    this->client.socket()->ack(msg_id, msglist);
+}
+
 // socket connected (before handshale)
 void BridgeSocket::onConnected() {
     std::cout << "Socket.io client connection established" << std::endl;
@@ -132,114 +139,122 @@ void BridgeSocket::onIceServers(sio::event const& ev) {
     }
 }
 
+// vaidates peer id, checks if connected, calls error ack if requested
+std::string BridgeSocket::getConnectedPeerId(sio::event & ev) {
+    auto id_peer = WRTCPeer::GetId(ev.get_message());
+    if (id_peer.empty()) {
+        if (ev.need_ack()) {
+            auto err_ack = sio::object_message::create();
+            err_ack->get_map().emplace("err", sio::int_message::create(2));
+            err_ack->get_map().emplace("msg", sio::string_message::create("No valid peer id provided"));
+            this->client.socket()->ack(ev.get_msgId(), { err_ack });
+        }
+        return "";
+    } else if (!WRTCPeer::IsConnected(id_peer)) {
+        if (ev.need_ack()) {
+            auto err_ack = sio::object_message::create();
+            err_ack->get_map().emplace("err", sio::int_message::create(2));
+            err_ack->get_map().emplace("msg", sio::string_message::create("Peer not connected"));
+            this->client.socket()->ack(ev.get_msgId(), { err_ack });
+        }
+        return "";
+    } else {
+        return id_peer; // ok
+    }
+}
+
+// peer connected
 void BridgeSocket::onPeerConnected(sio::event &ev) {
     std::cout << "Peer connecttion request: " << std::endl;
     std::cout << PrintMessage(ev.get_message()) << std::endl;
     auto id_peer = WRTCPeer::GetId(ev.get_message());
-    auto ack = sio::object_message::create();
+    
     if (id_peer.empty()) {
-        ack->get_map().emplace("err", sio::int_message::create(2));
-        ack->get_map().emplace("msg", sio::string_message::create("No valid peer id provided"));
-    } else {
-        WRTCPeer::OnPeerConnected(id_peer, ev.get_message(), this->config, ack);
-    }
-    ev.put_ack_message({ ack });
+        auto err_ack = sio::object_message::create();
+        err_ack->get_map().emplace("err", sio::int_message::create(2));
+        err_ack->get_map().emplace("msg", sio::string_message::create("No valid peer id provided"));
+        this->client.socket()->ack(ev.get_msgId(), { err_ack });
+        return;
+    } 
+
+    std::shared_ptr<BridgeSocket> sharedPtr(this);
+    WRTCPeer::OnPeerConnected(id_peer, sharedPtr, ev, this->config);
 }
 
+// peer disconnected
 void BridgeSocket::onPeerDisconnected(sio::event const& ev) {
     std::cout << "Peer disconnect request: " << std::endl;
     std::cout << PrintMessage(ev.get_message()) << std::endl;
     auto id_peer = WRTCPeer::GetId(ev.get_message());
-    if (!id_peer.empty()) {
-        WRTCPeer::OnPeerDisconnected(id_peer);
-    }
+    if (id_peer.empty()) return;
+
+    WRTCPeer::OnPeerDisconnected(id_peer);
 }
 
+// introspection control
 void BridgeSocket::onIntrospection(sio::event & ev) {
-    auto id_peer = WRTCPeer::GetId(ev.get_message());
-    auto ack = sio::object_message::create();
-    if (id_peer.empty()) {
-        ack->get_map().emplace("err", sio::int_message::create(2));
-        ack->get_map().emplace("msg", sio::string_message::create("No valid peer id provided"));
-    } else if (!WRTCPeer::IsConnected(id_peer)) {
-        ack->get_map().emplace("err", sio::int_message::create(2));
-        ack->get_map().emplace("msg", sio::string_message::create("Peer not connected"));
+    auto id_peer = this->getConnectedPeerId(ev);
+    if (id_peer.empty()) return;
+        
+    if (ev.get_message()->get_map()["state"]->get_bool()) {
+        this->introspection->start();
     } else {
-        if (ev.get_message()->get_map()["state"]->get_bool()) {
-            this->introspection->start();
-        } else {
-            this->introspection->stop();
-        }
-        ack->get_map().emplace("success", sio::int_message::create(1));
-        ack->get_map().emplace("introspection", sio::bool_message::create(this->introspection->isRunning()));
+        this->introspection->stop();
     }
-    ev.put_ack_message({ ack });
+
+    auto ack = sio::object_message::create();
+    ack->get_map().emplace("success", sio::int_message::create(1));
+    ack->get_map().emplace("introspection", sio::bool_message::create(this->introspection->isRunning()));
+    this->client.socket()->ack(ev.get_msgId(), { ack });
 }
 
+// peer subscribing to stuffs
 void BridgeSocket::onSubscribeRead(sio::event & ev) {
 
     std::cout << "Subscribe read request: " << std::endl;
     std::cout << PrintMessage(ev.get_message()) << std::endl;
 
-    auto id_peer = WRTCPeer::GetId(ev.get_message());
-    auto ack = sio::object_message::create();
-    if (id_peer.empty()) {
-        ack->get_map().emplace("err", sio::int_message::create(2));
-        ack->get_map().emplace("msg", sio::string_message::create("No valid peer id provided"));
-    } else if (!WRTCPeer::IsConnected(id_peer)) {
-        ack->get_map().emplace("err", sio::int_message::create(2));
-        ack->get_map().emplace("msg", sio::string_message::create("Peer not connected"));
-    } else {
-        
-        // TODO
+    auto id_peer = this->getConnectedPeerId(ev);
+    if (id_peer.empty()) return;
+    
+    // TODO
 
-    }
-    ev.put_ack_message({ ack });
+    auto ack = sio::object_message::create();
+    this->client.socket()->ack(ev.get_msgId(), { ack });
 }
 
+// peer requesting write subscriptions
 void BridgeSocket::onSubscribeWrite(sio::event & ev) {
 
     std::cout << "Subscribe write request: " << std::endl;
     std::cout << PrintMessage(ev.get_message()) << std::endl;
 
-    auto id_peer = WRTCPeer::GetId(ev.get_message());
-    auto ack = sio::object_message::create();
-    if (id_peer.empty()) {
-        ack->get_map().emplace("err", sio::int_message::create(2));
-        ack->get_map().emplace("msg", sio::string_message::create("No valid peer id provided"));
-    } else if (!WRTCPeer::IsConnected(id_peer)) {
-        ack->get_map().emplace("err", sio::int_message::create(2));
-        ack->get_map().emplace("msg", sio::string_message::create("Peer not connected"));
-    } else {
+    auto id_peer = this->getConnectedPeerId(ev);
+    if (id_peer.empty()) return;
         
-        // TODO
+    // TODO
 
-    }
-    ev.put_ack_message({ ack });
+    auto ack = sio::object_message::create();
+    this->client.socket()->ack(ev.get_msgId(), { ack });
 }
 
+// peer calling a service
 void BridgeSocket::onServiceCall(sio::event & ev) {
 
     std::cout << "Service call: " << std::endl;
     std::cout << PrintMessage(ev.get_message()) << std::endl;
 
-    auto id_peer = WRTCPeer::GetId(ev.get_message());
-    auto ack = sio::object_message::create();
-    if (id_peer.empty()) {
-        ack->get_map().emplace("err", sio::int_message::create(2));
-        ack->get_map().emplace("msg", sio::string_message::create("No valid peer id provided"));
-    } else if (!WRTCPeer::IsConnected(id_peer)) {
-        ack->get_map().emplace("err", sio::int_message::create(2));
-        ack->get_map().emplace("msg", sio::string_message::create("Peer not connected"));
-    } else {
-        
-        // TODO
+    auto id_peer = this->getConnectedPeerId(ev);
+    if (id_peer.empty()) return;
 
-    }
-    ev.put_ack_message({ ack });
+    std::thread newThread([this, ev]() {
+        DataLED::Once();
+        std::this_thread::sleep_for(std::chrono::seconds(10)); // 1ms loop
+        auto ack = sio::object_message::create();
+        this->client.socket()->ack(ev.get_msgId(), { ack });
+    });
+    newThread.detach();
 }
-
-
 
 void BridgeSocket::onSocketError(sio::message::ptr const& message) {
     switch (message->get_flag()) {
@@ -272,6 +287,7 @@ void BridgeSocket::onSocketError(sio::message::ptr const& message) {
     }
 }
 
+// report unhandled messages
 void BridgeSocket::onOtherSocketMessage(sio::event const& ev) {
     if (this->handled_events.find(ev.get_name().c_str()) != this->handled_events.end())
         return;

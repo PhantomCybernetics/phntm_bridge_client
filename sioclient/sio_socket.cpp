@@ -24,17 +24,17 @@ namespace sio
     public:
         static void adapt_func(socket::event_listener_aux  const& func, event& event)
         {
-            func(event.get_name(),event.get_message(),event.need_ack(),event.get_ack_message_impl());
+            func(event.get_name(), event.get_message(), event.need_ack());
         }
         
         static inline socket::event_listener do_adapt(socket::event_listener_aux const& func)
         {
-            return std::bind(&event_adapter::adapt_func, func,std::placeholders::_1);
+            return std::bind(&event_adapter::adapt_func, func, std::placeholders::_1);
         }
         
-        static inline event create_event(std::string const& nsp,std::string const& name,message::list&& message,bool need_ack)
+        static inline event create_event(std::string const& nsp, std::string const& name, const int msgId, message::list&& message, bool need_ack)
         {
-            return event(nsp,name,message,need_ack);
+            return event(nsp, name, msgId, message, need_ack);
         }
     };
     
@@ -46,6 +46,11 @@ namespace sio
     const std::string& event::get_name() const
     {
         return m_name;
+    }
+
+    int event::get_msgId() const
+    {
+        return m_msgId;
     }
     
     const message::ptr& event::get_message() const
@@ -69,40 +74,68 @@ namespace sio
         return m_need_ack;
     }
     
-    void event::put_ack_message(message::list const& ack_message)
-    {
-        if(m_need_ack)
-            m_ack_message = std::move(ack_message);
-    }
+    // void event::ack(message::list const& ack_message)
+    // {
+    //     // if(m_need_ack)
+    //     //     m_ack_message = std::move(ack_message);
+    // }
     
     inline
-    event::event(std::string const& nsp,std::string const& name,message::list&& messages,bool need_ack):
+    event::event(std::string const& nsp, std::string const& name, const int msgId, message::list&& messages, bool need_ack):
         m_nsp(nsp),
         m_name(name),
+        m_msgId(msgId),
         m_messages(std::move(messages)),
         m_need_ack(need_ack)
     {
     }
 
     inline
-    event::event(std::string const& nsp,std::string const& name,message::list const& messages,bool need_ack):
+    event::event(std::string const& nsp, std::string const& name, const int msgId, message::list const& messages, bool need_ack):
         m_nsp(nsp),
         m_name(name),
+        m_msgId(msgId),
         m_messages(messages),
         m_need_ack(need_ack)
     {
     }
     
-    message::list const& event::get_ack_message() const
-    {
-        return m_ack_message;
-    }
+    // message::list const& event::get_ack_message() const
+    // {
+    //     return m_ack_message;
+    // }
     
-    inline
-    message::list& event::get_ack_message_impl()
-    {
-        return m_ack_message;
-    }
+    // inline
+    // message::list& event::get_ack_message_impl()
+    // {
+    //     return m_ack_message;
+    // }
+
+    // message::list& event::get_ack_message_impl()
+    // {
+    //     return m_ack_message;
+    // }
+
+    // int event::get_msgId() const
+    // {
+    //     return m_ack_message;
+    // }
+    
+    // inline
+    // int event::get_msgId_impl()
+    // {
+    //     return m_msgId;
+    // }
+
+    // int event::get_msgId_impl()
+    // {
+    //     return m_msgId;
+    // }
+
+    // message::list& event::get_ack_message_impl()
+    // {
+    //     return m_ack_message;
+    // }
     
     class socket::impl
     {
@@ -139,7 +172,9 @@ namespace sio
         
         void emit(std::string const& name, message::list const& msglist, std::function<void (message::list const&)> const& ack);
         
-        std::string const& get_namespace() const {return m_nsp;}
+        void ack(int msgId, message::list const& ack_message);
+
+        std::string const& get_namespace() const {return m_nsp; }
         
     protected:
         void on_connected();
@@ -160,8 +195,6 @@ namespace sio
         void on_socketio_error(message::ptr const& err_message);
         
         event_listener get_bind_listener_locked(string const& event);
-        
-        void ack(int msgId,string const& name,message::list const& ack_message);
         
         void timeout_connection(const asio::error_code &ec);
         
@@ -453,22 +486,20 @@ namespace sio
         }
     }
     
-    void socket::impl::on_socketio_event(const std::string& nsp,int msgId,const std::string& name, message::list && message)
+    void socket::impl::on_socketio_event(const std::string& nsp, int msgId, const std::string& name, message::list && message)
     {
         bool needAck = msgId >= 0;
-        event ev = event_adapter::create_event(nsp,name, std::move(message),needAck);
+        event ev = event_adapter::create_event(nsp, name, msgId, std::move(message), needAck);
         event_listener func = this->get_bind_listener_locked(name);
-        if(func)func(ev);
-        if (m_event_listener) m_event_listener(ev);
-        if(needAck)
-        {
-            this->ack(msgId, name, ev.get_ack_message());
-        }
+        if(func)
+            func(ev);
+        if (m_event_listener)
+            m_event_listener(ev);
     }
     
-    void socket::impl::ack(int msgId, const string &, const message::list &ack_message)
+    void socket::impl::ack(int msgId, message::list const& ack_message)
     {
-        packet p(m_nsp, ack_message.to_array_message(),msgId,true);
+        packet p(m_nsp, ack_message.to_array_message(), msgId, true);
         send_packet(p);
     }
     
@@ -599,7 +630,12 @@ namespace sio
 
     void socket::emit(std::string const& name, message::list const& msglist, std::function<void (message::list const&)> const& ack)
     {
-        m_impl->emit(name, msglist,ack);
+        m_impl->emit(name, msglist, ack);
+    }
+
+    void socket::ack(int msgId, message::list const & msglist)
+    {
+        m_impl->ack(msgId, msglist);
     }
     
     std::string const& socket::get_namespace() const

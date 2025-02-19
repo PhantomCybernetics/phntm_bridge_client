@@ -170,11 +170,12 @@ void StatusLEDs::Init(std::shared_ptr<BridgeConfig> config, std::shared_ptr<rclc
 
     instance->loop_running = true;
     instance->loop_thread = std::thread(&StatusLEDs::loop, instance);
+    instance->loop_thread.detach();
 }
 
 void StatusLEDs::Clear() {
     instance->loop_running = false;
-    instance->loop_thread.join();
+    // instance->loop_thread.join();
     instance->conn->clear();
     instance->data->clear();
     instance = nullptr;
