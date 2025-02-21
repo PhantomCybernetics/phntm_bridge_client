@@ -1,7 +1,8 @@
 #pragma once
 
-#include "../../sioclient/sio_client.h"
+#include "sio_client.h"
 #include "config.hpp"
+#include "phntm_bridge/phntm_bridge.hpp"
 #include "sio_message.h"
 #include "sio_socket.h"
 #include <map>
@@ -9,11 +10,12 @@
 #include <json/json.h>
 
 class Introspection;
+class PhntmBridge;
 
 class BridgeSocket
 {
     public:
-        BridgeSocket(std::shared_ptr<BridgeConfig> config);
+        BridgeSocket(std::shared_ptr<BridgeConfig> config, std::shared_ptr<PhntmBridge> node);
         bool connect();
         void shutdown();
         void emit(std::string const& name, sio::message::list const& msglist, std::function<void (sio::message::list const&)> const& ack);
@@ -27,9 +29,12 @@ class BridgeSocket
 
     private:
         std::shared_ptr<Introspection> introspection;
+        std::shared_ptr<PhntmBridge> node;
 
         sio::client client;
         sio::socket::ptr socket;
+        std::shared_ptr<BridgeSocket> sharedPtr;
+
         std::shared_ptr<BridgeConfig> config;
         bool connected, shutting_down;
         std::string socket_url;

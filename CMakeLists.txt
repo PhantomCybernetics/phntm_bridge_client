@@ -82,6 +82,7 @@ target_include_directories(phntm_bridge PUBLIC
   $<INSTALL_INTERFACE:include>
   /root/websocketpp/
   /usr/include/
+  /ros2_ws/src/phntm_bridge/sioclient/
   # /usr/include/asio/
   /root/asio/asio
   ${TINYXML2_INCLUDE_DIRS}

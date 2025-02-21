@@ -17,10 +17,14 @@ class Introspection {
         void stop();
         void report();
         bool isRunning() { return this->running; };
+        std::string getService(std::string service);
         ~Introspection();
 
     private:
+        static Introspection * instance;
+
         bool running;
+
         std::shared_ptr<BridgeSocket> sio;
         std::shared_ptr<rclcpp::Node> node;
         std::shared_ptr<BridgeConfig> config;
@@ -56,7 +60,7 @@ class Introspection {
             std::string ns; //namespace
             std::map<std::string, NodePubTopic> publishers; // topic => NodeTopic
             std::map<std::string, NodeSubTopic> subscribers; // topic => NodeTopic
-            std::map<std::string, std::string> services; // topic => msg_type
+            std::map<std::string, std::string> services; // service => msg_type
         };
 
         std::map<std::string, DiscoveredNode> discovered_nodes;

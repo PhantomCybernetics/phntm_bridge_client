@@ -15,6 +15,9 @@
 // #include "std_msgs/msg/string.hpp"
 // #include <memory>
 #include "std_srvs/srv/trigger.hpp"
+#include "sio_socket.h"
+
+class BridgeSocket;
 
 class PhntmBridge : public rclcpp::Node
 {
@@ -22,6 +25,7 @@ class PhntmBridge : public rclcpp::Node
     PhntmBridge(std::string node_name, std::shared_ptr<BridgeConfig> config);
     void loadConfig(std::shared_ptr<BridgeConfig> config);
     void makeServices();
+    void callService(std::string service_name, std::string service_type, std::shared_ptr<BridgeSocket> sio, sio::event const& ev);
     void readGitRepoHead(std::string repo_path);
 
     std::shared_ptr<BridgeConfig> config = std::make_shared<BridgeConfig>();

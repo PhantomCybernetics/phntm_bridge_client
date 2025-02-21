@@ -4,18 +4,22 @@
 #include <iostream>
 #include <string>
 
-#include "../sioclient/sio_message.h"
+#include "sio_message.h"
 
+#include "phntm_bridge/phntm_bridge.hpp"
 #include "phntm_bridge/sio.hpp"
 #include "phntm_bridge/introspection.hpp"
 #include "phntm_bridge/const.hpp"
 #include "phntm_bridge/wrtc_peer.hpp"
 #include "phntm_bridge/status_leds.hpp"
 
-BridgeSocket::BridgeSocket(std::shared_ptr<BridgeConfig> config) {
+BridgeSocket::BridgeSocket(std::shared_ptr<BridgeConfig> config, std::shared_ptr<PhntmBridge> node) {
     this->config = config;
+    this->node = node;
     this->connected = false;
     this->shutting_down = false;
+    this->sharedPtr = std::shared_ptr<BridgeSocket>(this);
+
     ConnLED::FastPulse();
 
     uint reconnect_ms = this->config->sio_connection_retry_sec * 1000;
@@ -177,8 +181,7 @@ void BridgeSocket::onPeerConnected(sio::event &ev) {
         return;
     } 
 
-    std::shared_ptr<BridgeSocket> sharedPtr(this);
-    WRTCPeer::OnPeerConnected(id_peer, sharedPtr, ev, this->config);
+    WRTCPeer::OnPeerConnected(id_peer, this->sharedPtr, ev, this->config);
 }
 
 // peer disconnected
@@ -247,11 +250,27 @@ void BridgeSocket::onServiceCall(sio::event & ev) {
     auto id_peer = this->getConnectedPeerId(ev);
     if (id_peer.empty()) return;
 
-    std::thread newThread([this, ev]() {
+    auto service_name = ev.get_message()->get_map().at("service")->get_string();
+    if (service_name.empty()) {
+        auto err_ack = sio::object_message::create();
+        err_ack->get_map().emplace("err", sio::int_message::create(2));
+        err_ack->get_map().emplace("msg", sio::string_message::create("Service id not provided"));
+        this->client.socket()->ack(ev.get_msgId(), { err_ack });
+        return;
+    }
+    auto service_type = this->introspection->getService(service_name);
+    if (service_type.empty()) {
+        auto err_ack = sio::object_message::create();
+        err_ack->get_map().emplace("err", sio::int_message::create(2));
+        err_ack->get_map().emplace("msg", sio::string_message::create("Service not discovered"));
+        this->client.socket()->ack(ev.get_msgId(), { err_ack });
+        return;
+    }
+
+    // async thread
+    std::thread newThread([this, ev, service_name, service_type]() {
         DataLED::Once();
-        std::this_thread::sleep_for(std::chrono::seconds(10)); // 1ms loop
-        auto ack = sio::object_message::create();
-        this->client.socket()->ack(ev.get_msgId(), { ack });
+        this->node->callService(service_name, service_type, this->sharedPtr, ev);
     });
     newThread.detach();
 }

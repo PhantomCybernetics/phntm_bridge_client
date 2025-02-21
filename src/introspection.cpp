@@ -11,11 +11,21 @@
 #include <filesystem>
 #include <fstream>
 
+Introspection* Introspection::instance = nullptr;
+
 Introspection::Introspection(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<BridgeSocket> sio, std::shared_ptr<BridgeConfig> config) {
+
+    if (instance != nullptr) {
+        std::cerr << RED << "Introspection instance already created" << CLR << std::endl;
+        return;
+    }
+
     this->node = node;
     this->sio = sio;
     this->config = config;
     this->running = false;
+
+    instance = this;
 
     // auto my_callback_group = rclcpp::create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
 
@@ -540,6 +550,17 @@ void Introspection::reportRunningState() {
     this->sio->emit("introspection", { msg }, nullptr);
 }
 
+std::string Introspection::getService(std::string service) {
+    for (auto n : this->discovered_nodes) {
+        for (auto s : n.second.services) {
+            if (s.first == service) {
+                return s.second;
+            }
+        }
+    }
+    return ""; //not found
+}
+
 Introspection::~Introspection() {
-    
+    instance = nullptr;
 }

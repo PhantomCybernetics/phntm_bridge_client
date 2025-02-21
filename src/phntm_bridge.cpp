@@ -67,7 +67,7 @@ int main(int argc, char ** argv)
 
   StatusLEDs::Init(config, base_node);
 
-  auto sio = std::make_shared<BridgeSocket>(config);
+  auto sio = std::make_shared<BridgeSocket>(config, base_node);
   auto introspection = std::make_shared<Introspection>(base_node, sio, config);
   sio->setIntrospection(introspection);
 
