@@ -270,7 +270,7 @@ void BridgeSocket::onServiceCall(sio::event & ev) {
     // async thread
     std::thread newThread([this, ev, service_name, service_type]() {
         DataLED::Once();
-        this->node->callService(service_name, service_type, this->sharedPtr, ev);
+        this->node->callGenericService(service_name, service_type, this->sharedPtr, ev);
     });
     newThread.detach();
 }

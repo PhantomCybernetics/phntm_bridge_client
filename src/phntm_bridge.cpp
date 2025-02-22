@@ -16,7 +16,7 @@ PhntmBridge::PhntmBridge(std::string node_name, std::shared_ptr<BridgeConfig> co
     this->config = config;
 
     this->loadConfig(this->config);
-    this->makeServices();
+    this->setupLocalServices();
 
     // this->declare_parameter("topic_prefix", "/picam_ros2/camera_");
     // this->declare_parameter("log_message_every_sec", 5.0); // -1.0 = off
@@ -32,6 +32,10 @@ std::atomic<bool> g_interrupt_requested(false);
 void signal_handler(int signum) {
     std::cout << RED << "Signal handler got " << signum << CLR << std::endl;
     g_interrupt_requested.store(true);
+}
+
+PhntmBridge::~PhntmBridge() {
+  this->clearServicesCache();
 }
 
 int main(int argc, char ** argv)

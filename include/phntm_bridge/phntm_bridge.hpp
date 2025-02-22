@@ -23,23 +23,29 @@ class PhntmBridge : public rclcpp::Node
 {
   public:
     PhntmBridge(std::string node_name, std::shared_ptr<BridgeConfig> config);
+    ~PhntmBridge();
     void loadConfig(std::shared_ptr<BridgeConfig> config);
-    void makeServices();
-    void callService(std::string service_name, std::string service_type, std::shared_ptr<BridgeSocket> sio, sio::event const& ev);
+    void setupLocalServices();
+    void callGenericService(std::string service_name, std::string service_type, std::shared_ptr<BridgeSocket> sio, sio::event const& ev);
     void readGitRepoHead(std::string repo_path);
 
     std::shared_ptr<BridgeConfig> config = std::make_shared<BridgeConfig>();
-    // std::future<int> async_function(int x);
     
   private:
     bool shutting_down = false;
 
-    // service refs
-    void requestClearFileCache(const std::shared_ptr<std_srvs::srv::Trigger::Request> request, std::shared_ptr<std_srvs::srv::Trigger::Response> response);
+    // local service refs
+    void srvRequestClearFileCache(const std::shared_ptr<std_srvs::srv::Trigger::Request> request, std::shared_ptr<std_srvs::srv::Trigger::Response> response);
     std::shared_ptr<rclcpp::Service<std_srvs::srv::Trigger>> srv_clear_file_cache;
 
-    // void timer_callback();
-    // rclcpp::TimerBase::SharedPtr timer_;
-    // rclcpp::Publisher<std_msgs::msg::String>::SharedPtr publisher_;
-    // size_t count_;
+    // generic service handling
+    std::map<std::string, void *> srv_library_handle_cache; // package_name / package_name+"_introspection" => handle to open library
+    std::map<std::string, rcl_client_t *> srv_client_cache; // service_name => client instance
+    struct SrvTypeCache {
+      const rosidl_message_type_support_t* request;
+      const rosidl_message_type_support_t* response;
+    };
+    std::map<std::string, SrvTypeCache> srv_types_cache; // service_name => reg/res type_support
+    void returnServiceError(std::string message, std::shared_ptr<BridgeSocket> sio, sio::event const& ev);
+    void clearServicesCache();
 };

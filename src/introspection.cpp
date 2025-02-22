@@ -92,12 +92,14 @@ void Introspection::runIntrospection() {
         size_t pos = n.rfind('/');
         std::string ns, node;
         if (pos != std::string::npos) {
-            ns = n.substr(0, pos+1);
+            ns = n.substr(0, pos); // must not include the trailing /
             node = n.substr(pos+1);
         } else {
             ns = "";
             node = n;
         }
+        if (ns.empty())
+            ns = "/";
         nodes_and_namespaces.emplace(node, ns);
     }
 

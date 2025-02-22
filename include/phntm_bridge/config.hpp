@@ -35,6 +35,7 @@ class BridgeConfig {
         std::vector<std::string> collapse_services;
         std::string ui_battery_topic, ui_wifi_monitor_topic, docker_monitor_topic;
         bool docker_control_enabled, ui_enable_wifi_scan, ui_enable_wifi_roam, collapse_unhandled_services;
+        int64_t service_timeout_ns;
 
         std::vector<std::string> input_drivers;
         std::vector<CustomWidgetDef> custom_input_drivers, custom_service_widgets;
