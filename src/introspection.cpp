@@ -103,11 +103,13 @@ void Introspection::runIntrospection() {
         nodes_and_namespaces.emplace(node, ns);
     }
 
-    // remove not found
+    // remove not found nodes
     for (auto it = this->discovered_nodes.begin(); it != this->discovered_nodes.end();) {
         if (nodes_and_namespaces.find(it->first) == nodes_and_namespaces.end()) {
+            auto removed = it->first;
             it = this->discovered_nodes.erase(it);
             nodes_changed = true;
+            std::cout << GRAY << "Lost node " << removed << CLR << std::endl;
         } else {
             ++it;
         }
@@ -127,10 +129,12 @@ void Introspection::runIntrospection() {
     // fresh topics
     auto topics_and_types = this->node->get_topic_names_and_types();
 
+    // remove no longer observed topics
     for (auto it = this->discovered_topics.begin(); it != this->discovered_topics.end();) {
         if (topics_and_types.find(it->first) == topics_and_types.end()) {
             it = this->discovered_topics.erase(it);
             topics_changed = true;
+            std::cout << GRAY << "Lost topic " << it->first << CLR << std::endl;
         } else {
             ++it;
         }
@@ -208,8 +212,10 @@ void Introspection::runIntrospection() {
 
     // services 
     for (auto &n : this->discovered_nodes) {
+
         // fresh services
         auto node_services = this->node->get_service_names_and_types_by_node(n.first, n.second.ns);
+
         for (auto s : node_services) {
 
             if (std::find(this->config->blacklist_services.begin(), this->config->blacklist_services.end(), s.first) != this->config->blacklist_services.end()) {

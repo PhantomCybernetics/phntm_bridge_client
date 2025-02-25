@@ -241,6 +241,15 @@ void BridgeSocket::onSubscribeWrite(sio::event & ev) {
     this->client.socket()->ack(ev.get_msgId(), { ack });
 }
 
+// report error call via socket.io + rosout
+void BridgeSocket::returnError(std::string message, sio::event const &ev) {
+    RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "%s", message.c_str());
+    auto err_ack = sio::object_message::create();
+    err_ack->get_map().emplace("err", sio::int_message::create(2));
+    err_ack->get_map().emplace("msg", sio::string_message::create(message));
+    this->ack(ev.get_msgId(), {err_ack});
+}
+
 // peer calling a service
 void BridgeSocket::onServiceCall(sio::event & ev) {
 
@@ -252,19 +261,11 @@ void BridgeSocket::onServiceCall(sio::event & ev) {
 
     auto service_name = ev.get_message()->get_map().at("service")->get_string();
     if (service_name.empty()) {
-        auto err_ack = sio::object_message::create();
-        err_ack->get_map().emplace("err", sio::int_message::create(2));
-        err_ack->get_map().emplace("msg", sio::string_message::create("Service id not provided"));
-        this->client.socket()->ack(ev.get_msgId(), { err_ack });
-        return;
+        return this->returnError("Service id not provided", ev);
     }
     auto service_type = this->introspection->getService(service_name);
     if (service_type.empty()) {
-        auto err_ack = sio::object_message::create();
-        err_ack->get_map().emplace("err", sio::int_message::create(2));
-        err_ack->get_map().emplace("msg", sio::string_message::create("Service not discovered"));
-        this->client.socket()->ack(ev.get_msgId(), { err_ack });
-        return;
+        return this->returnError("Service '" + service_name + "' not discovered", ev);
     }
 
     // async thread
@@ -363,7 +364,7 @@ BridgeSocket::~BridgeSocket() {
     ConnLED::Off();
 }
 
-std::string BridgeSocket::PrintMessage(const sio::message::ptr & message, bool pretty, int indent) {
+std::string BridgeSocket::PrintMessage(const sio::message::ptr & message, bool pretty, int indent, std::string indent_prefix) {
     std::string out;
     const int sp = 2;
 
@@ -388,20 +389,23 @@ std::string BridgeSocket::PrintMessage(const sio::message::ptr & message, bool p
             out += std::to_string(message->get_double());
             break;
         case sio::message::flag::flag_object:
-            {
+            {   
                 out += "{";
                 if (pretty)
-                        out += '\n';
+                    out += '\n';
                 auto map = message->get_map();
                 for (auto p : map) {
-                    if (pretty)
+                    if (pretty) {
                         out.append(sp*indent, ' ');
-                    out += p.first + ": " + PrintMessage(p.second, pretty, indent+1) + ", ";
+                    }
+                    out += p.first + ": " + PrintMessage(p.second, pretty, indent+1, "") + ", ";
                     if (pretty)
                         out += '\n';
                 }
-                if (pretty)
+                if (pretty) {
                     out.append(sp*(indent-1), ' ');
+                }
+                    
                 out += "}";
                 break;
             }
@@ -409,23 +413,37 @@ std::string BridgeSocket::PrintMessage(const sio::message::ptr & message, bool p
             {
                 out += "[";
                 if (pretty)
-                        out += '\n';
+                    out += '\n';
                 auto map = message->get_vector();
                 for (auto one : map) {
-                    if (pretty)
+                    if (pretty) {
                         out.append(sp*indent, ' ');
-                    out += PrintMessage(one, pretty, indent+1) + ", ";
+                    }
+                    out += PrintMessage(one, pretty, indent+1, "") + ", ";
                     if (pretty)
                         out += '\n';
                 }
-                if (pretty)
+                if (pretty) {
                     out.append(sp*(indent-1), ' ');
+                }
                 out += "]";
                 break;
             }
         default:
             break;
     }
+
+    if (indent == 1) {
+        auto lines = split(out, '\n');
+        std::string out_shifted;
+        for (size_t i = 0; i < lines.size(); i++) {
+            out_shifted += indent_prefix + lines[i];
+            if (i < lines.size()-1)
+                out_shifted += "\n";
+        }
+        return out_shifted;
+    }
+
     return out;
 }
 

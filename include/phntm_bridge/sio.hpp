@@ -24,7 +24,7 @@ class BridgeSocket
         
         void setIntrospection(std::shared_ptr<Introspection> introspection) { this->introspection = introspection; };
 
-        static std::string PrintMessage(const sio::message::ptr & message, bool pretty = true, int indent = 1);
+        static std::string PrintMessage(const sio::message::ptr & message, bool pretty = true, int indent = 1, std::string indent_prefix = "");
         static sio::message::ptr JsonToSioMessage(Json::Value val);
 
     private:
@@ -49,6 +49,7 @@ class BridgeSocket
         void onSocketOpen();
         void onSocketClose();
         void onSocketError(sio::message::ptr const& message);
+        void returnError(std::string message, sio::event const &ev);
 
         std::map<std::string, sio::socket::event_listener> handled_events;
         void onIceServers(sio::event const& ev);
