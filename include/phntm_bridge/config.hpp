@@ -40,6 +40,7 @@ class BridgeConfig {
         std::vector<std::string> input_drivers;
         std::vector<CustomWidgetDef> custom_input_drivers, custom_service_widgets;
         std::vector<ServiceWidgetConfig> service_widgets;
+        bool service_message_mapping_verbose;
 
         Json::Value input_defaults, service_defaults;
 };
