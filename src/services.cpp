@@ -6,6 +6,7 @@
 #include "rosidl_typesupport_introspection_cpp/field_types.hpp"
 #include "rosidl_typesupport_introspection_cpp/message_introspection.hpp"
 #include "rosidl_typesupport_introspection_cpp/service_type_support_decl.hpp"
+#include "sio_message.h"
 #include <cstdint>
 #include <dlfcn.h>
 #include <fmt/core.h>
@@ -15,6 +16,10 @@
 #include <string>
 
 std::string MapSocketMessageToRequest(const sio::message::ptr &in_data, void *request_msg, const rosidl_typesupport_introspection_cpp::MessageMembers *request_members, bool verbose, int indent = 0);
+std::string MapResponseToSocketMessage(const void *response_msg, const rosidl_typesupport_introspection_cpp::MessageMembers *response_members, sio::message::ptr &out_data, bool verbose, int indent = 0);
+std::string SetRequestFieldValue(void *field, const rosidl_typesupport_introspection_cpp::MessageMember *member, sio::message::ptr value, size_t index = 0, bool verbose = false, int indent = 0);
+
+std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> converter;
 
 // calling generic ROS services from the socket.io
 // running on an async thread
@@ -135,16 +140,16 @@ void PhntmBridge::callGenericService(std::string service_name, std::string servi
 
   const rosidl_typesupport_introspection_cpp::MessageMembers *request_members = static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(request_introspection_ts->data);
   
-  // Allocate memory for the message
+  // allocate memory for the request
   void *request_msg = malloc(request_members->size_of_);
   request_members->init_function(request_msg, rosidl_runtime_cpp::MessageInitialization::ALL);
   if (this->config->service_message_mapping_verbose)
     std::cout << YELLOW << "Request initial alloc ok (" << request_members->size_of_ << "B)" << CLR << std::endl;
   auto request_data = ev.get_message()->get_map()["msg"];
   // std::cout << "Setting request data: " << BridgeSocket::PrintMessage(request_data) << std::endl;
-  auto err = MapSocketMessageToRequest(request_data, request_msg, request_members, this->config->service_message_mapping_verbose);
-  if (!err.empty())
-    return this->returnServiceError(fmt::format("Error mapping request data: {}", err.c_str()), sio, ev);
+  auto req_err = MapSocketMessageToRequest(request_data, request_msg, request_members, this->config->service_message_mapping_verbose);
+  if (!req_err.empty())
+    return this->returnServiceError(fmt::format("Error mapping request data: {}", req_err.c_str()), sio, ev);
 
   if (this->config->service_message_mapping_verbose)
     std::cout << "Request data set ok" << std::endl;
@@ -183,7 +188,7 @@ void PhntmBridge::callGenericService(std::string service_name, std::string servi
   if (this->config->service_message_mapping_verbose)
     std::cout << "Waiting..." << std::endl;
 
-  // Wait for a response (timeout in nanoseconds)
+  // wait for a response (timeout in ns)
   ret = rcl_wait(&wait_set, this->config->service_timeout_ns);
   if (ret == RCL_RET_TIMEOUT)
     return this->returnServiceError("Service call timed out.", sio, ev);
@@ -193,7 +198,7 @@ void PhntmBridge::callGenericService(std::string service_name, std::string servi
   if (this->config->service_message_mapping_verbose)
     std::cout << "Getting response..." << std::endl;
 
-  // response msg
+  // alloc response msg
   const rosidl_typesupport_introspection_cpp::MessageMembers *response_members = static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(response_introspection_ts->data);
   void *response_msg = malloc(response_members->size_of_);
   response_members->init_function(response_msg, rosidl_runtime_cpp::MessageInitialization::ALL);
@@ -209,12 +214,20 @@ void PhntmBridge::callGenericService(std::string service_name, std::string servi
   if (this->config->service_message_mapping_verbose)
     std::cout << "Has response!" << std::endl;
 
+  // map response to socket message
   auto ack = sio::object_message::create();
+  auto res_err = MapResponseToSocketMessage(response_msg, response_members, ack, this->config->service_message_mapping_verbose);
+  if (!res_err.empty())
+    return this->returnServiceError(fmt::format("Error mapping result data: {}", res_err.c_str()), sio, ev);
+  
+  // send the reply
+  if (this->config->service_message_mapping_verbose)
+    std::cout << "Sending reply..." << std::endl;
   sio->ack(ev.get_msgId(), {ack});
 }
 
 
-std::string SetRequestFieldValue(void *field, const rosidl_typesupport_introspection_cpp::MessageMember *member, sio::message::ptr value, bool verbose, size_t index = 0, int indent = 0) {
+std::string SetRequestFieldValue(void *field, const rosidl_typesupport_introspection_cpp::MessageMember *member, sio::message::ptr value, size_t index, bool verbose, int indent) {
   
   std::string s_indent;
   s_indent.append(indent*4, ' ');
@@ -254,7 +267,7 @@ std::string SetRequestFieldValue(void *field, const rosidl_typesupport_introspec
     case rosidl_typesupport_introspection_cpp::ROS_TYPE_CHAR:
     case rosidl_typesupport_introspection_cpp::ROS_TYPE_INT8: {
       if (verbose)
-        std::cout << s_indent << GREEN << ">> ROS_TYPE_CHAR: " << CLR << std::endl;
+        std::cout << s_indent << GREEN << ">> ROS_TYPE_CHAR: ";
       int8_t *v = new int8_t();
       *v = static_cast<int8_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : 0);
       if (verbose)
@@ -268,7 +281,7 @@ std::string SetRequestFieldValue(void *field, const rosidl_typesupport_introspec
     }
     case rosidl_typesupport_introspection_cpp::ROS_TYPE_FLOAT32: {
       if (verbose)
-        std::cout << s_indent << GREEN << ">> ROS_TYPE_FLOAT32: " << CLR << std::endl;
+        std::cout << s_indent << GREEN << ">> ROS_TYPE_FLOAT32: ";
       float *v = new float();
       *v = static_cast<float>(value->get_flag() == sio::message::flag::flag_double ? value->get_double() : 0.0f);
       if (verbose)
@@ -282,7 +295,7 @@ std::string SetRequestFieldValue(void *field, const rosidl_typesupport_introspec
     }
     case rosidl_typesupport_introspection_cpp::ROS_TYPE_FLOAT64: {
       if (verbose)
-        std::cout << s_indent << GREEN << ">> FLOAT64: ";
+        std::cout << s_indent << GREEN << ">> ROS_TYPE_FLOAT64: ";
       double *v = new double();
       *v = static_cast<double>(value->get_flag() == sio::message::flag::flag_double ? value->get_double() : 0.0f);
       if (verbose)
@@ -296,7 +309,7 @@ std::string SetRequestFieldValue(void *field, const rosidl_typesupport_introspec
     }
     case rosidl_typesupport_introspection_cpp::ROS_TYPE_INT16: {
       if (verbose)
-        std::cout << s_indent << GREEN << ">> ROS_TYPE_INT16: " << CLR << std::endl;
+        std::cout << s_indent << GREEN << ">> ROS_TYPE_INT16: ";
       int16_t *v = new int16_t();
       *v = static_cast<int16_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : 0);
       if (verbose)
@@ -310,7 +323,7 @@ std::string SetRequestFieldValue(void *field, const rosidl_typesupport_introspec
     }
     case rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT16: {
       if (verbose)
-        std::cout << s_indent << GREEN << ">> ROS_TYPE_UINT16: " << CLR << std::endl;
+        std::cout << s_indent << GREEN << ">> ROS_TYPE_UINT16: ";
       uint16_t *v = new uint16_t();
       *v = static_cast<uint16_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : 0);
       if (verbose)
@@ -324,7 +337,7 @@ std::string SetRequestFieldValue(void *field, const rosidl_typesupport_introspec
     }
     case rosidl_typesupport_introspection_cpp::ROS_TYPE_INT32: {
       if (verbose)
-        std::cout << s_indent << GREEN << ">> ROS_TYPE_INT32: " << CLR << std::endl;
+        std::cout << s_indent << GREEN << ">> ROS_TYPE_INT32: ";
       int32_t *v = new int32_t();
       *v = static_cast<int32_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : 0);
       if (verbose)
@@ -338,7 +351,7 @@ std::string SetRequestFieldValue(void *field, const rosidl_typesupport_introspec
     }
     case rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT32: {
       if (verbose)
-        std::cout << s_indent << GREEN << ">> ROS_TYPE_UINT32: " << CLR << std::endl;
+        std::cout << s_indent << GREEN << ">> ROS_TYPE_UINT32: ";
       uint32_t *v = new uint32_t();
       *v = static_cast<uint32_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : 0);
       if (verbose)
@@ -366,7 +379,7 @@ std::string SetRequestFieldValue(void *field, const rosidl_typesupport_introspec
     }
     case rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT64: {
       if (verbose)
-        std::cout << s_indent << GREEN << ">> ROS_TYPE_UINT64: " << CLR << std::endl;
+        std::cout << s_indent << GREEN << ">> ROS_TYPE_UINT64: ";
       uint64_t *v = new uint64_t();
       *v = static_cast<uint64_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : 0);
       if (verbose)
@@ -380,7 +393,7 @@ std::string SetRequestFieldValue(void *field, const rosidl_typesupport_introspec
     }
     case rosidl_typesupport_introspection_cpp::ROS_TYPE_STRING: {
       if (verbose)
-        std::cout << s_indent << GREEN << ">> STRING: ";
+        std::cout << s_indent << GREEN << ">> ROS_TYPE_STRING: ";
       std::string *v = new std::string();
       *v = value->get_string();
       auto str_len = (*v).length();
@@ -396,10 +409,9 @@ std::string SetRequestFieldValue(void *field, const rosidl_typesupport_introspec
       break;
     }
     case rosidl_typesupport_introspection_cpp::ROS_TYPE_WSTRING: {
-      std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> converter;
       if (verbose)
         std::cout << s_indent << GREEN << ">> ROS_TYPE_WSTRING: ";
-      std::u16string  *v = new std::u16string ();
+      std::u16string *v = new std::u16string ();
       *v = converter.from_bytes(value->get_string());
       auto str_len = (*v).length();
       if (verbose)
@@ -417,11 +429,9 @@ std::string SetRequestFieldValue(void *field, const rosidl_typesupport_introspec
         if (value->get_flag() != sio::message::flag::flag_object)
           return "Attribute is not an object";
 
-        if (verbose)
-          std::cout << s_indent << "{" << std::endl;
         const rosidl_typesupport_introspection_cpp::MessageMembers *nested_members = static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(member->members_->data);
         if (verbose)
-          std::cout << s_indent << YELLOW << ">> MESSAGE " << nested_members->message_name_ << CLR << std::endl;
+          std::cout << s_indent << YELLOW << "{ >> ROS_TYPE_MESSAGE " << nested_members->message_name_ << ": " << CLR << std::endl;
       
         if (member->is_array_) {
           void *nested_field = malloc(nested_members->size_of_);
@@ -437,15 +447,12 @@ std::string SetRequestFieldValue(void *field, const rosidl_typesupport_introspec
         break;
     }
     default:
-      return "Unsupported member type: " + std::to_string(member->type_id_);
-      break;
+      return "Unsupported request member type: " + std::to_string(member->type_id_);
   }
 
   return "";
 }
 
-
-// assign request here
 std::string MapSocketMessageToRequest(const sio::message::ptr &in_data, void *request_msg, const rosidl_typesupport_introspection_cpp::MessageMembers *request_members, bool verbose, int indent) {
 
   if (in_data->get_flag() == sio::message::flag::flag_null) {
@@ -467,7 +474,7 @@ std::string MapSocketMessageToRequest(const sio::message::ptr &in_data, void *re
 
     // find the corresponding member in the ros message
     const rosidl_typesupport_introspection_cpp::MessageMember *member = nullptr;
-    for (size_t i = 0; i < request_members->member_count_; ++i) {
+    for (size_t i = 0; i < request_members->member_count_; i++) {
       if (std::string(request_members->members_[i].name_) == key) {
         member = &request_members->members_[i];
         break;
@@ -502,7 +509,7 @@ std::string MapSocketMessageToRequest(const sio::message::ptr &in_data, void *re
       for (size_t i = 0; i < array_size; i++) {
         if (verbose) 
           std::cout << s_indent << "Assigning " << i << std::endl;
-        auto err = SetRequestFieldValue(field, member, value_array[i], verbose, i, indent+1);
+        auto err = SetRequestFieldValue(field, member, value_array[i], i, verbose,  indent+1);
         if (!err.empty())
           return err;
       }
@@ -510,13 +517,293 @@ std::string MapSocketMessageToRequest(const sio::message::ptr &in_data, void *re
         std::cout << s_indent << "]" << std::endl;
 
     } else {
-      auto err = SetRequestFieldValue(field, member, value, verbose, 0, indent);
+
+      auto err = SetRequestFieldValue(field, member, value, 0, verbose, indent);
       if (!err.empty())
           return err;
+
     }    
   }
 
-  return "";
+  return ""; // ok
+}
+
+std::string SetResponseFieldValue(const void *field, const rosidl_typesupport_introspection_cpp::MessageMember *member, sio::message::ptr out_target, std::string key, size_t index, bool verbose, int indent) {
+
+  std::string s_indent;
+  s_indent.append(indent*4, ' ');
+
+  sio::message::ptr res;
+
+  switch (member->type_id_) {
+
+    case rosidl_typesupport_introspection_cpp::ROS_TYPE_BOOL: {
+      if (verbose)
+        std::cout << s_indent << MAGENTA << ">> ROS_TYPE_BOOL: ";
+      bool *v = new bool();
+      if (member->is_array_) {
+        member->fetch_function(field, index, v);
+      } else {
+        *v = *static_cast<const bool *>(field);
+      }
+      if (verbose)
+        std::cout << *v << CLR << std::endl;
+      res = sio::bool_message::create(*v);
+      break;
+    }
+    case rosidl_typesupport_introspection_cpp::ROS_TYPE_BYTE:
+    case rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT8: {
+      if (verbose)
+        std::cout << s_indent << MAGENTA << ">> ROS_TYPE_UINT8: ";
+      uint8_t *v = new uint8_t();
+      if (member->is_array_) {
+        member->fetch_function(field, index, v);
+      } else {
+        *v = *static_cast<const uint8_t *>(field);
+      }
+      if (verbose)
+        std::cout << std::to_string(*v) << CLR << std::endl;
+      res = sio::int_message::create(*v);
+      break;
+    }
+    case rosidl_typesupport_introspection_cpp::ROS_TYPE_CHAR:
+    case rosidl_typesupport_introspection_cpp::ROS_TYPE_INT8: {
+      if (verbose)
+        std::cout << s_indent << MAGENTA << ">> ROS_TYPE_INT8: ";
+      int8_t *v = new int8_t();
+      if (member->is_array_) {
+        member->fetch_function(field, index, v);
+      } else {
+        *v = *static_cast<const int8_t *>(field);
+      }
+      if (verbose)
+        std::cout << std::to_string(*v) << CLR << std::endl;
+      res = sio::int_message::create(*v);
+      break;
+    }
+    case rosidl_typesupport_introspection_cpp::ROS_TYPE_FLOAT32: {
+      if (verbose)
+        std::cout << s_indent << MAGENTA << ">> ROS_TYPE_FLOAT32: ";
+      float *v = new float();
+      if (member->is_array_) {
+        member->fetch_function(field, index, v);
+      } else {
+        *v = *static_cast<const float *>(field);
+      }
+      if (verbose)
+        std::cout << std::to_string(*v) << CLR << std::endl;
+      res = sio::double_message::create(*v);
+      break;
+    }
+    case rosidl_typesupport_introspection_cpp::ROS_TYPE_FLOAT64: {
+      if (verbose)
+        std::cout << s_indent << MAGENTA << ">> ROS_TYPE_FLOAT64: ";
+      double *v = new double();
+      if (member->is_array_) {
+        member->fetch_function(field, index, v);
+      } else {
+        *v = *static_cast<const double *>(field);
+      }
+      if (verbose)
+        std::cout << std::to_string(*v) << CLR << std::endl;
+      res = sio::double_message::create(*v);
+      break;
+    }
+    case rosidl_typesupport_introspection_cpp::ROS_TYPE_INT16: {
+      if (verbose)
+        std::cout << s_indent << MAGENTA << ">> ROS_TYPE_INT16: ";
+      int16_t *v = new int16_t();
+      if (member->is_array_) {
+        member->fetch_function(field, index, v);
+      } else {
+        *v = *static_cast<const int16_t *>(field);
+      }
+      if (verbose)
+        std::cout << std::to_string(*v) << CLR << std::endl;
+      res = sio::int_message::create(*v);
+      break;
+    }
+    case rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT16: {
+      if (verbose)
+        std::cout << s_indent << MAGENTA << ">> ROS_TYPE_UINT16: ";
+      uint16_t *v = new uint16_t();
+      if (member->is_array_) {
+        member->fetch_function(field, index, v);
+      } else {
+        *v = *static_cast<const uint16_t *>(field);
+      }
+      if (verbose)
+        std::cout << std::to_string(*v) << CLR << std::endl;
+      res = sio::int_message::create(*v);
+      break;
+    }
+    case rosidl_typesupport_introspection_cpp::ROS_TYPE_INT32: {
+      if (verbose)
+        std::cout << s_indent << MAGENTA << ">> ROS_TYPE_INT32: ";
+      int32_t *v = new int32_t();
+      if (member->is_array_) {
+        member->fetch_function(field, index, v);
+      } else {
+        *v = *static_cast<const int32_t *>(field);
+      }
+      if (verbose)
+        std::cout << std::to_string(*v) << CLR << std::endl;
+      res = sio::int_message::create(*v);
+      break;
+    }
+    case rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT32: {
+      if (verbose)
+        std::cout << s_indent << MAGENTA << ">> ROS_TYPE_UINT32: ";
+      uint32_t *v = new uint32_t();
+      if (member->is_array_) {
+        member->fetch_function(field, index, v);
+      } else {
+        *v = *static_cast<const uint32_t *>(field);
+      }
+      if (verbose)
+        std::cout << std::to_string(*v) << CLR << std::endl;
+      res = sio::int_message::create(*v);
+      break;
+    }
+    case rosidl_typesupport_introspection_cpp::ROS_TYPE_INT64: {
+      if (verbose)
+        std::cout << s_indent << MAGENTA << ">> ROS_TYPE_INT64: ";
+      int64_t *v = new int64_t();
+      if (member->is_array_) {
+        member->fetch_function(field, index, v);
+      } else {
+        *v = *static_cast<const int64_t *>(field);
+      }
+      if (verbose)
+        std::cout << std::to_string(*v) << CLR << std::endl;
+      res = sio::int_message::create(*v);
+      break;
+    }
+    case rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT64: {
+      if (verbose)
+        std::cout << s_indent << MAGENTA << ">> ROS_TYPE_UINT64: ";
+      uint64_t *v = new uint64_t();
+      if (member->is_array_) {
+        member->fetch_function(field, index, v);
+      } else {
+        *v = *static_cast<const uint64_t *>(field);
+      }
+      if (verbose)
+        std::cout << std::to_string(*v) << CLR << std::endl;
+      res = sio::int_message::create(*v);
+      break;
+    }
+    case rosidl_typesupport_introspection_cpp::ROS_TYPE_STRING: {
+      if (verbose)
+        std::cout << s_indent << MAGENTA << ">> ROS_TYPE_STRING: ";
+      std::string *v = new std::string();
+      if (member->is_array_) {
+        member->fetch_function(field, index, v);
+      } else {
+        *v = *static_cast<const std::string *>(field);
+      }
+      if (verbose)
+        std::cout << *v << CLR << std::endl;
+      res = sio::string_message::create(*v);
+      break;
+    }
+    case rosidl_typesupport_introspection_cpp::ROS_TYPE_WSTRING: {
+      std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> converter;
+      if (verbose)
+        std::cout << s_indent << MAGENTA << ">> ROS_TYPE_WSTRING: ";
+      std::u16string *w = new std::u16string ();
+      if (member->is_array_) {
+        member->fetch_function(field, index, w);
+      } else {
+        *w = *static_cast<const std::u16string *>(field);
+      }
+      std::string v = converter.to_bytes(*w);
+      if (verbose)
+        std::cout << v << CLR << std::endl;
+      res = sio::string_message::create(v);
+      break;
+    }
+    case rosidl_typesupport_introspection_cpp::ROS_TYPE_MESSAGE: {
+        if (verbose)
+          std::cout << s_indent << YELLOW << ">> ROS_TYPE_MESSAGE " << CLR << std::endl;
+
+        const rosidl_typesupport_introspection_cpp::MessageMembers *nested_members = static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(member->members_->data);
+        res = sio::object_message::create();
+
+        if (member->is_array_) {
+          const void *v = member->get_const_function(field, index);
+          for (size_t i = 0; i < nested_members->member_count_; i++) {
+            auto nested_member = &nested_members->members_[i];
+            auto nested_key = nested_member->name_;
+            const void *nested_field = static_cast<const char *>(v) + nested_member->offset_;  
+            auto err = SetResponseFieldValue(nested_field, nested_member, res, nested_key, 0, verbose, indent+1);
+            if (!err.empty())
+              return err;
+          }
+        } else {
+          for (size_t i = 0; i < nested_members->member_count_; i++) {
+            auto nested_member = &nested_members->members_[i];
+            auto nested_key = nested_member->name_;
+            const void *nested_field = static_cast<const char *>(field) + nested_member->offset_;  
+            auto err = SetResponseFieldValue(nested_field, nested_member, res, nested_key, 0, verbose, indent+1);
+            if (!err.empty())
+              return err;
+          }
+        }
+
+        break;
+    }
+    default:
+      return "Unsupported response member type " + std::to_string(member->type_id_);
+  }
+
+  if (out_target->get_flag() == sio::message::flag::flag_array) {
+    out_target->get_vector().push_back(res);
+  } else {
+    out_target->get_map().emplace(key, res);
+  }
+
+  return ""; // ok
+}
+
+
+std::string MapResponseToSocketMessage(const void *response_msg, const rosidl_typesupport_introspection_cpp::MessageMembers *response_members, sio::message::ptr &out_data, bool verbose, int indent) {
+
+  std::string s_indent;
+  s_indent.append(indent*4, ' ');
+
+  for (size_t i = 0; i < response_members->member_count_; i++) {
+    auto member = &response_members->members_[i];
+    auto key = member->name_;
+    const void *field = static_cast<const char *>(response_msg) + member->offset_;
+
+    if (member->is_array_) {
+      auto array_size = member->size_function(field);
+      if (verbose)
+        std::cout  << s_indent << YELLOW << "'" << key << "' is an array(" << std::to_string(array_size) << ") of type " << std::to_string(member->type_id_) << CLR << std::endl;
+      
+      auto out_array = sio::array_message::create();
+      
+      for (size_t j = 0; j < array_size; j++) {
+        auto err = SetResponseFieldValue(field, member, out_array, key, j, verbose, indent+1);
+        if (!err.empty())
+            return err;
+      }
+
+      out_data->get_map().emplace(key, out_array);
+    
+    } else {
+
+      if (verbose)
+        std::cout << s_indent << "Assigning '" << key << "' of type " << std::to_string(member->type_id_) << std::endl;
+
+      auto err = SetResponseFieldValue(field, member, out_data, key, 0, verbose, indent);
+      if (!err.empty())
+          return err;
+    }
+  }
+
+  return ""; // ok
 }
 
 // report error during service call via socket.io + rosout
@@ -539,13 +826,13 @@ void PhntmBridge::clearServicesCache() {
   this->srv_types_cache.clear();
 }
 
-// set up local service of this node here
+// set up local services of this node
 void PhntmBridge::setupLocalServices() {
   this->srv_clear_file_cache = this->create_service<std_srvs::srv::Trigger>(fmt::format("/{}/clear_cloud_file_cache", this->get_name()),
                                                                             std::bind(&PhntmBridge::srvRequestClearFileCache, this, std::placeholders::_1, std::placeholders::_2));
 }
 
-// request the files cache on the cloud bridge be cleared
+// local service that requests the files cache on the cloud bridge to be cleared
 void PhntmBridge::srvRequestClearFileCache(const std::shared_ptr<std_srvs::srv::Trigger::Request> request, std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
   std::cout << MAGENTA << "Requesting clear server file cache" << CLR << std::endl;
 

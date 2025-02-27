@@ -126,7 +126,8 @@ void PhntmBridge::loadConfig(std::shared_ptr<BridgeConfig> config) {
     this->declare_parameter("sio_path", "/robot/socket.io");
     this->declare_parameter("sio_connection_retry_sec", 2.0);
     this->declare_parameter("sio_ssl_verify", true);
-    this->declare_parameter("sio_verbose", false);
+    this->declare_parameter("sio_debug", false); // prints internal sio debug
+    this->declare_parameter("sio_verbose", false); // prints received and sent messages
 
     // services collapsed in the ui menu (still operational, parameneter services by default)
     rcl_interfaces::msg::ParameterDescriptor collapse_services_descriptor;
@@ -185,6 +186,7 @@ void PhntmBridge::loadConfig(std::shared_ptr<BridgeConfig> config) {
     config->sio_port = this->get_parameter("sio_port").as_int();
     config->sio_path = this->get_parameter("sio_path").as_string();
     config->sio_ssl_verify = this->get_parameter("sio_ssl_verify").as_bool();
+    config->sio_debug = this->get_parameter("sio_debug").as_bool();
     config->sio_verbose = this->get_parameter("sio_verbose").as_bool();
     config->sio_connection_retry_sec = this->get_parameter("sio_connection_retry_sec").as_double();
     if (config->cloud_bridge_address.empty()) {

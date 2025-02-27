@@ -89,7 +89,7 @@ RUN . /opt/ros/$ROS_DISTRO/setup.sh && \
 # pimp up prompt with hostame and color
 RUN echo "PS1='\${debian_chroot:+(\$debian_chroot)}\\[\\033[01;35m\\]\\u@\\h\\[\\033[00m\\] \\[\\033[01;34m\\]\\w\\[\\033[00m\\] '"  >> /root/.bashrc
 
-WORKDIR $ROS_WS/src/phntm_bridge
+WORKDIR $ROS_WS
 
 ENTRYPOINT ["/ros_entrypoint.sh"]
 CMD [ "bash" ]

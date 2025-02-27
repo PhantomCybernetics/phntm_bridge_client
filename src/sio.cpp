@@ -37,7 +37,7 @@ BridgeSocket::BridgeSocket(std::shared_ptr<BridgeConfig> config, std::shared_ptr
     this->client.set_socket_open_listener(std::bind(&BridgeSocket::onSocketOpen, this));
     this->client.set_socket_close_listener(std::bind(&BridgeSocket::onSocketClose, this));
 
-    if (this->config->sio_verbose)
+    if (this->config->sio_debug)
         this->client.set_logs_verbose();
 }
 
@@ -78,6 +78,10 @@ void BridgeSocket::emit(std::string const& name, sio::message::list const& msgli
         std::cout << "Socket.io not connected, ignoring \"" + name << "\"" << std::endl;
         return;
     }
+    if (this->config->sio_verbose) {
+        std::cout << "Emitting '" << name << "':" << std::endl;
+        std::cout << PrintMessage(msglist.at(0)) << std::endl;
+    }
     this->client.socket()->emit(name, msglist, ack);
 }
 
@@ -85,6 +89,10 @@ void BridgeSocket::ack(int msg_id, sio::message::list const& msglist) {
     if (!this->connected) {
         std::cout << "Socket.io not connected, ignoring ack(" << msg_id << ")" << std::endl;
         return;
+    }
+    if (this->config->sio_verbose) {
+        std::cout << "Sending ack for msg_id=" << std::to_string(msg_id) << ":" << std::endl;
+        std::cout << PrintMessage(msglist.at(0)) << std::endl;
     }
     this->client.socket()->ack(msg_id, msglist);
 }
@@ -229,8 +237,10 @@ void BridgeSocket::onSubscribeRead(sio::event & ev) {
 // peer requesting write subscriptions
 void BridgeSocket::onSubscribeWrite(sio::event & ev) {
 
-    std::cout << "Subscribe write request: " << std::endl;
-    std::cout << PrintMessage(ev.get_message()) << std::endl;
+    if (this->config->sio_verbose) {
+        std::cout << "Subscribe write request: " << std::endl;
+        std::cout << PrintMessage(ev.get_message()) << std::endl;
+    }
 
     auto id_peer = this->getConnectedPeerId(ev);
     if (id_peer.empty()) return;
@@ -253,9 +263,11 @@ void BridgeSocket::returnError(std::string message, sio::event const &ev) {
 // peer calling a service
 void BridgeSocket::onServiceCall(sio::event & ev) {
 
-    std::cout << "Service call: " << std::endl;
-    std::cout << PrintMessage(ev.get_message()) << std::endl;
-
+    if (this->config->sio_verbose) {
+        std::cout << "Service call: " << std::endl;
+        std::cout << PrintMessage(ev.get_message()) << std::endl;
+    }
+    
     auto id_peer = this->getConnectedPeerId(ev);
     if (id_peer.empty()) return;
 
