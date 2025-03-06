@@ -313,6 +313,6 @@ void PhntmBridge::loadConfig(std::shared_ptr<BridgeConfig> config) {
     this->declare_parameter("service_timeout_sec", 20.0f); // 20 sec
     config->service_timeout_ns = this->get_parameter("service_timeout_sec").as_double() * 1000000000;
 
-    this->declare_parameter("service_message_mapping_verbose", false);
-    config->service_message_mapping_verbose = this->get_parameter("service_message_mapping_verbose").as_bool();    
+    this->declare_parameter("service_calls_verbose", false);
+    config->service_calls_verbose = this->get_parameter("service_calls_verbose").as_bool();    
 }

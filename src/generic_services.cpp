@@ -27,14 +27,15 @@ std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> converter;
 // running on an async thread
 void PhntmBridge::callGenericService(std::string service_name, std::string service_type, std::shared_ptr<BridgeSocket> sio, sio::event const &ev) {
 
-  std::cout << MAGENTA << "Calling service: " << service_name << CLR << " {" << service_type << "}" << std::endl;
+  if (this->config->service_calls_verbose)
+    std::cout << "Handling service call for: " << service_name << " {" << service_type << "} msg_id=" << ev.get_msgId() << std::endl;
 
   auto parts = split(service_type, '/');
   std::string package_name = parts[0];
   std::string srv_name = parts[2];
   rcl_ret_t ret;
 
-  if (this->config->service_message_mapping_verbose)
+  if (this->config->service_calls_verbose)
     std::cout << "package_name: " << package_name << " srv_name: " << srv_name << std::endl;
 
   rcl_client_t *client;
@@ -58,19 +59,19 @@ void PhntmBridge::callGenericService(std::string service_name, std::string servi
         service_lib_handle = this->srv_library_handle_cache.at(package_name);
       } else {
         std::string lib_name = "lib" + package_name + "__rosidl_typesupport_cpp.so";
-        if (this->config->service_message_mapping_verbose)
+        if (this->config->service_calls_verbose)
           std::cout << "Loading lib: " << lib_name << std::endl;
         service_lib_handle = dlopen(lib_name.c_str(), RTLD_LAZY);
         if (!service_lib_handle)
           return returnServiceError(fmt::format("Library load error: {}", dlerror()), sio, ev);
         this->srv_library_handle_cache.emplace( package_name, service_lib_handle); // keep the handle open as long as we need the client
-        if (this->config->service_message_mapping_verbose)
+        if (this->config->service_calls_verbose)
           std::cout << "Lib " << lib_name << " loaded" << std::endl;
       }
 
       // get type support handle
       std::string service_symbol_name = "rosidl_typesupport_cpp__get_service_type_support_handle__" + package_name + "__srv__" + srv_name;
-      if (this->config->service_message_mapping_verbose)
+      if (this->config->service_calls_verbose)
         std::cout << "Getting get_service_ts " << service_symbol_name << std::endl;
       auto get_service_ts = reinterpret_cast<const rosidl_service_type_support_t *(*)()>(dlsym(service_lib_handle, service_symbol_name.c_str()));
       if (!get_service_ts)
@@ -81,7 +82,7 @@ void PhntmBridge::callGenericService(std::string service_name, std::string servi
       if (!service_type_support)
         return this->returnServiceError("Failed to get type support", sio, ev);
 
-      if (this->config->service_message_mapping_verbose)
+      if (this->config->service_calls_verbose)
         std::cout << "Initializing " << service_name << " client..." << std::endl;
       // initialize rcl client
       client = new rcl_client_t();
@@ -92,7 +93,7 @@ void PhntmBridge::callGenericService(std::string service_name, std::string servi
       if (ret != RCL_RET_OK)
         return this->returnServiceError(fmt::format("Client init failed: {}", rcl_get_error_string().str), sio, ev);
 
-      if (this->config->service_message_mapping_verbose)
+      if (this->config->service_calls_verbose)
         std::cout << "Client init ok" << std::endl;
       SrvClientCache cache;
       cache.client = client;
@@ -120,7 +121,7 @@ void PhntmBridge::callGenericService(std::string service_name, std::string servi
         if (!introspection_handle)
           return this->returnServiceError(fmt::format("Introspection library load error: {}", dlerror()), sio, ev);
 
-        if (this->config->service_message_mapping_verbose)
+        if (this->config->service_calls_verbose)
           std::cout << "Introspection lib loaded ok " << introspection_lib_name << std::endl;
         this->srv_library_handle_cache.emplace(id_introslection_lib, introspection_handle); // keep the handle open as long as we need the client
       }
@@ -131,7 +132,7 @@ void PhntmBridge::callGenericService(std::string service_name, std::string servi
       if (!get_request_introspection_ts)
         return this->returnServiceError(fmt::format("Request introspection symbol load error: {}", dlerror()), sio, ev);
       request_introspection_ts = get_request_introspection_ts();
-      if (this->config->service_message_mapping_verbose)
+      if (this->config->service_calls_verbose)
         std::cout << "Got request type support " << request_introspection_ts->typesupport_identifier << std::endl;
 
       std::string response_introspection_symbol = "rosidl_typesupport_introspection_cpp__get_message_type_support_handle__" + package_name + "__srv__" + srv_name + "_Response";
@@ -140,7 +141,7 @@ void PhntmBridge::callGenericService(std::string service_name, std::string servi
         return this->returnServiceError(fmt::format("Response introspection symbol load error:: {}", dlerror()), sio, ev);
 
       response_introspection_ts = get_response_introspection_ts();
-      if (this->config->service_message_mapping_verbose)
+      if (this->config->service_calls_verbose)
         std::cout << "Got response type support " << response_introspection_ts->typesupport_identifier << std::endl;
 
       SrvTypeCache cache;
@@ -155,24 +156,26 @@ void PhntmBridge::callGenericService(std::string service_name, std::string servi
   // allocate memory for the request
   void *request_msg = malloc(request_members->size_of_);
   request_members->init_function(request_msg, rosidl_runtime_cpp::MessageInitialization::ALL);
-  if (this->config->service_message_mapping_verbose)
+  if (this->config->service_calls_verbose)
     std::cout << YELLOW << "Request initial alloc ok (" << request_members->size_of_ << "B) for " << service_name << CLR << std::endl;
   auto request_data = ev.get_message()->get_map()["msg"];
   // std::cout << "Setting request data: " << BridgeSocket::PrintMessage(request_data) << std::endl;
-  auto req_err = MapSocketMessageToRequest(request_data, request_msg, request_members, this->config->service_message_mapping_verbose);
+  auto req_err = MapSocketMessageToRequest(request_data, request_msg, request_members, this->config->service_calls_verbose);
   if (!req_err.empty())
     return this->returnServiceError(fmt::format("Error mapping request data: {}", req_err.c_str()), sio, ev);
 
-  if (this->config->service_message_mapping_verbose)
+  if (this->config->service_calls_verbose)
     std::cout << "Request data set ok for " << service_name << std::endl;
 
   const rosidl_typesupport_introspection_cpp::MessageMembers *response_members;
   void *response_msg;
   {
-    if (this->config->service_message_mapping_verbose)
+    if (this->config->service_calls_verbose)
       std::cout << "Waiting for previous " << service_name << " calls to finish..." << std::endl;
     // prevent another call to the service until previous call finishes
     std::lock_guard<std::mutex> lock(*client_mutex);
+
+    std::cout << MAGENTA << "Calling service: " << service_name << CLR << " {" << service_type << "} msg_id=" << ev.get_msgId() << std::endl;
 
     // send the request
     int64_t sequence_number;
@@ -180,7 +183,7 @@ void PhntmBridge::callGenericService(std::string service_name, std::string servi
     if (ret != RCL_RET_OK)
       return this->returnServiceError(fmt::format("Failed to send request: {}", rcl_get_error_string().str), sio, ev);
 
-    if (this->config->service_message_mapping_verbose)
+    if (this->config->service_calls_verbose)
       std::cout << "Request " << service_name << " sent ok" << std::endl;
 
     // wait for the response
@@ -198,14 +201,14 @@ void PhntmBridge::callGenericService(std::string service_name, std::string servi
     if (ret != RCL_RET_OK)
       return this->returnServiceError(fmt::format("Failed to initialize wait set: {}", rcl_get_error_string().str), sio, ev);
 
-    if (this->config->service_message_mapping_verbose)
+    if (this->config->service_calls_verbose)
       std::cout << "Adding " << service_name << " client to wait set" << std::endl;
 
     ret = rcl_wait_set_add_client(&wait_set, client, NULL);
     if (ret != RCL_RET_OK)
       return this->returnServiceError(fmt::format("Failed to add client to wait set: {}", rcl_get_error_string().str), sio, ev);
 
-    if (this->config->service_message_mapping_verbose)
+    if (this->config->service_calls_verbose)
       std::cout << "Waiting for " << service_name << "..." << std::endl;
 
     // wait for a response (timeout in ns)
@@ -215,7 +218,7 @@ void PhntmBridge::callGenericService(std::string service_name, std::string servi
     else if (ret != RCL_RET_OK)
       return this->returnServiceError(fmt::format("Error during wait: {}", rcl_get_error_string().str), sio, ev);
     
-    if (this->config->service_message_mapping_verbose)
+    if (this->config->service_calls_verbose)
       std::cout << "Getting " << service_name << " response..." << std::endl;
 
     // alloc response msg
@@ -223,7 +226,7 @@ void PhntmBridge::callGenericService(std::string service_name, std::string servi
     response_msg = malloc(response_members->size_of_);
     response_members->init_function(response_msg, rosidl_runtime_cpp::MessageInitialization::ALL);
     
-    if (this->config->service_message_mapping_verbose)
+    if (this->config->service_calls_verbose)
       std::cout << "Response init ok for " << service_name << std::endl;
 
     rmw_request_id_t request_header;
@@ -231,18 +234,18 @@ void PhntmBridge::callGenericService(std::string service_name, std::string servi
     if (ret != RCL_RET_OK)
       return this->returnServiceError(fmt::format("Failed to take response: {}", rcl_get_error_string().str), sio, ev);
     
-    if (this->config->service_message_mapping_verbose)
+    if (this->config->service_calls_verbose)
       std::cout << "Has response from " << service_name << std::endl;
   }
   
   // map response to socket message
   auto ack = sio::object_message::create();
-  auto res_err = MapResponseToSocketMessage(response_msg, response_members, ack, this->config->service_message_mapping_verbose);
+  auto res_err = MapResponseToSocketMessage(response_msg, response_members, ack, this->config->service_calls_verbose);
   if (!res_err.empty())
     return this->returnServiceError(fmt::format("Error mapping result data: {}", res_err.c_str()), sio, ev);
   
   // send the reply
-  if (this->config->service_message_mapping_verbose)
+  if (this->config->service_calls_verbose)
     std::cout << "Sending " << service_name << " reply..." << std::endl;
   sio->ack(ev.get_msgId(), {ack});
 }
@@ -845,34 +848,4 @@ void PhntmBridge::clearServicesCache() {
   this->srv_library_handle_cache.clear();
   this->srv_client_cache.clear();
   this->srv_types_cache.clear();
-}
-
-// set up local services of this node
-void PhntmBridge::setupLocalServices() {
-  this->srv_clear_file_cache = this->create_service<std_srvs::srv::Trigger>(fmt::format("/{}/clear_cloud_file_cache", this->get_name()),
-                                                                            std::bind(&PhntmBridge::srvRequestClearFileCache, this, std::placeholders::_1, std::placeholders::_2));
-}
-
-// local service that requests the files cache on the cloud bridge to be cleared
-void PhntmBridge::srvRequestClearFileCache(const std::shared_ptr<std_srvs::srv::Trigger::Request> request, std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
-  std::cout << MAGENTA << "Requesting clear server file cache" << CLR << std::endl;
-
-  (void)request;
-  (void)response;
-
-  // clear_data = {
-  //     'idRobot': id_robot,
-  //     'authKey': auth_key
-  // }
-  // clear_response = requests.post(f'{upload_host}/clear_cache',
-  // json=clear_data)
-
-  // if clear_response.status_code == 200:
-  //     logger.debug("Cache cleared")
-  //     response.success = True
-  //     response.message = clear_response.text
-  // else:
-  //     logger.error(f"Error clearing cache: {clear_response.text}")
-  //     response.success = False
-  //     response.message = clear_response.text
 }

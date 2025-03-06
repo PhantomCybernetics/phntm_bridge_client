@@ -66,7 +66,8 @@ add_executable(phntm_bridge
               src/git.cpp
               src/sio.cpp
               src/introspection.cpp
-              src/services.cpp
+              src/generic_services.cpp
+              src/local_services.cpp
               src/phntm_bridge.cpp
               src/config.cpp
               src/extra_packages.cpp

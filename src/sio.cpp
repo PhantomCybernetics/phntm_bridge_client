@@ -79,8 +79,8 @@ void BridgeSocket::emit(std::string const& name, sio::message::list const& msgli
         return;
     }
     if (this->config->sio_verbose) {
-        std::cout << "Emitting '" << name << "':" << std::endl;
-        std::cout << PrintMessage(msglist.at(0)) << std::endl;
+        std::cout << "SIO emitting '" << name << "':" << std::endl
+                  << PrintMessage(msglist.at(0)) << std::endl;
     }
     this->client.socket()->emit(name, msglist, ack);
 }
@@ -91,8 +91,8 @@ void BridgeSocket::ack(int msg_id, sio::message::list const& msglist) {
         return;
     }
     if (this->config->sio_verbose) {
-        std::cout << "Sending ack for msg_id=" << std::to_string(msg_id) << ":" << std::endl;
-        std::cout << PrintMessage(msglist.at(0)) << std::endl;
+        std::cout << "SIO sending ack for msg_id=" << std::to_string(msg_id) << ":" << std::endl
+                  << PrintMessage(msglist.at(0)) << std::endl;
     }
     this->client.socket()->ack(msg_id, msglist);
 }
@@ -264,7 +264,7 @@ void BridgeSocket::returnError(std::string message, sio::event const &ev) {
 void BridgeSocket::onServiceCall(sio::event & ev) {
 
     if (this->config->sio_verbose) {
-        std::cout << "Service call: " << std::endl;
+        std::cout << "Service call request: " << std::endl;
         std::cout << PrintMessage(ev.get_message()) << std::endl;
     }
     
