@@ -28,6 +28,7 @@ RUN apt install -y libyaml-cpp-dev
 RUN apt install -y libtinyxml2-dev
 RUN apt install -y gpiod libgpiod-dev
 RUN apt install -y uuid-dev
+RUN apt install -y libcurl4-openssl-dev
 
 # wget https://sourceforge.net/projects/asio/files/asio/1.30.2%20%28Stable%29/asio-1.30.2.tar.bz2/download
 # RUN git clone https://github.com/chriskohlhoff/asio.git

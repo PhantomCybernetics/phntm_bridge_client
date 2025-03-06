@@ -36,7 +36,7 @@ class PhntmBridge : public rclcpp::Node
     bool shutting_down = false;
 
     // local service refs
-    void srvRequestClearFileCache(const std::shared_ptr<std_srvs::srv::Trigger::Request> request, std::shared_ptr<std_srvs::srv::Trigger::Response> response);
+    void srvRequestClearFileCache(const std::shared_ptr<std_srvs::srv::Trigger::Request>, std::shared_ptr<std_srvs::srv::Trigger::Response> response);
     std::shared_ptr<rclcpp::Service<std_srvs::srv::Trigger>> srv_clear_file_cache;
 
     // generic service handling

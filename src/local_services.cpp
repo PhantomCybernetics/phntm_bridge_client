@@ -1,4 +1,6 @@
 #include "phntm_bridge/phntm_bridge.hpp"
+#include <json/json.h>
+#include <curl/curl.h>
 
 // set up local services of this node
 void PhntmBridge::setupLocalServices() {
@@ -6,26 +8,78 @@ void PhntmBridge::setupLocalServices() {
                                                                               std::bind(&PhntmBridge::srvRequestClearFileCache, this, std::placeholders::_1, std::placeholders::_2));
 }
 
-// local service that requests the files cache on the cloud bridge to be cleared
-void PhntmBridge::srvRequestClearFileCache(const std::shared_ptr<std_srvs::srv::Trigger::Request> request, std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
-std::cout << YELLOW << "Requesting clear server file cache" << CLR << std::endl;
+// receives CURL response data
+size_t CURLResponseCallback(void* contents, size_t size, size_t nmemb, std::string* out) {
+    size_t totalSize = size * nmemb;
+    out->append((char*)contents, totalSize);
+    return totalSize;
+}
 
-(void)request;
-(void)response;
+// service that requests the files cache on the cloud bridge to be cleared
+void PhntmBridge::srvRequestClearFileCache(const std::shared_ptr<std_srvs::srv::Trigger::Request>, std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
+    
+    CURL* curl = curl_easy_init();
+    if (!curl) {
+        std::string err = "Failed to initialize CURL";
+        RCLCPP_ERROR(get_logger(), "%s", err.c_str());
+        response->success = false;
+        response->message = err;
+        return;
+    }
 
-// clear_data = {
-//     'idRobot': id_robot,
-//     'authKey': auth_key
-// }
-// clear_response = requests.post(f'{upload_host}/clear_cache',
-// json=clear_data)
+    // url to call
+    std::string url = this->config->uploader_address + "/clear_cache";
 
-// if clear_response.status_code == 200:
-//     logger.debug("Cache cleared")
-//     response.success = True
-//     response.message = clear_response.text
-// else:
-//     logger.error(f"Error clearing cache: {clear_response.text}")
-//     response.success = False
-//     response.message = clear_response.text
+    // JSON payload
+    Json::Value jsonData;
+    jsonData["idRobot"] = this->config->id_robot;
+    jsonData["authKey"] = this->config->auth_key;
+    Json::FastWriter writer;
+    std::string payload = writer.write(jsonData);
+
+    std::cout << YELLOW << "Requesting clear server file cache at " << url << CLR << std::endl;
+
+    // response buffer
+    std::string responseBuffer;
+
+    // CURL options
+    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload.c_str());
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, payload.size());
+    
+    // set headers
+    struct curl_slist* headers = nullptr;
+    headers = curl_slist_append(headers, "Content-Type: application/json");
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
+    // set callback to capture the response
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, CURLResponseCallback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &responseBuffer);
+
+    // perform the request
+    CURLcode res = curl_easy_perform(curl);
+    if (res != CURLE_OK) {
+        std::string err = fmt::format("CURL error: {}", curl_easy_strerror(res));
+        RCLCPP_ERROR(get_logger(), "%s", err.c_str());
+        response->success = false;
+        response->message = err;
+        return;
+    }
+
+    // cleanup
+    curl_slist_free_all(headers);
+    curl_easy_cleanup(curl);
+
+    long responseCode;
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &responseCode);
+
+    if (responseCode == 200) { // ok
+        std::cout << "Server replied: " << responseBuffer << " (" << std::to_string(responseCode) << ")" << std::endl;
+        response->success = true;
+        response->message = responseBuffer;
+    } else {
+        std::cerr << RED << "Server replied: " << responseBuffer << " (" << std::to_string(responseCode) << ")" << CLR << std::endl;
+        response->success = false;
+        response->message = responseBuffer;
+    }
 }

@@ -21,6 +21,7 @@ find_library(UUID_LIBRARY uuid)
 # find_package(OpenSSL)
 find_library(OPENSSL_LIBRARY ssl)
 find_library(OPENSSL_CRYPTO_LIBRARY crypto)
+find_package(CURL REQUIRED)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GPIOD REQUIRED libgpiodcxx)
@@ -90,6 +91,7 @@ target_include_directories(phntm_bridge PUBLIC
   ${TINYXML2_INCLUDE_DIRS}
   ${OPENSSL_INCLUDE_DIR}
   ${GPIOD_INCLUDE_DIRS}
+  ${CURL_INCLUDE_DIR}
 )
 target_compile_features(phntm_bridge PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
 
@@ -111,6 +113,7 @@ target_link_libraries(phntm_bridge
   ${TINYXML2_LIBRARY}
   ${GPIOD_LIBRARIES}
   ${UUID_LIBRARY}
+  ${CURL_LIBRARIES}
   # ${WEBSOCKET_LIBRARY}
   # ${ASIO_LIBRARY}
   # ${RAPIDJSON_LIBRARY}
