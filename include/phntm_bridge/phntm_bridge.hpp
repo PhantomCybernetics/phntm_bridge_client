@@ -4,6 +4,7 @@
 #include <vector>
 #include <fmt/core.h>
 #include <json/json.h>
+#include <mutex>
 
 #include "rclcpp/rclcpp.hpp"
 
@@ -39,13 +40,18 @@ class PhntmBridge : public rclcpp::Node
     std::shared_ptr<rclcpp::Service<std_srvs::srv::Trigger>> srv_clear_file_cache;
 
     // generic service handling
+    std::mutex srv_init_mutex; // make sure we don't init the same service types & client in paralel
     std::map<std::string, void *> srv_library_handle_cache; // package_name / package_name+"_introspection" => handle to open library
-    std::map<std::string, rcl_client_t *> srv_client_cache; // service_name => client instance
     struct SrvTypeCache {
       const rosidl_message_type_support_t* request;
       const rosidl_message_type_support_t* response;
     };
     std::map<std::string, SrvTypeCache> srv_types_cache; // service_name => reg/res type_support
+    struct SrvClientCache {
+      rcl_client_t * client;
+      std::mutex * mutex; // makes sure we don't the service before another call finishes
+    };
+    std::map<std::string, SrvClientCache> srv_client_cache; // service_name => client instance & mutex
     void returnServiceError(std::string message, std::shared_ptr<BridgeSocket> sio, sio::event const& ev);
     void clearServicesCache();
 };
