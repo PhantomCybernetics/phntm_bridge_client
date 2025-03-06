@@ -17,6 +17,7 @@ def generate_launch_description():
             executable='phntm_bridge',
             output='screen',
             emulate_tty=True,
-            parameters=[config]
+            parameters=[config],
+            # prefix=['gdb -ex run --args']
         )
     ])

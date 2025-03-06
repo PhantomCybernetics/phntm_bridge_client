@@ -28,6 +28,7 @@ pkg_check_modules(GPIOD REQUIRED libgpiodcxx)
 add_definitions(
     -DSIO_TLS
     # -DDEBUG
+    # -DCMAKE_BUILD_TYPE=Debug
 
     # These will force ASIO to compile without Boost
     # -DBOOST_DATE_TIME_NO_LIB

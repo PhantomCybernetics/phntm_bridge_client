@@ -106,10 +106,9 @@ void Introspection::runIntrospection() {
     // remove not found nodes
     for (auto it = this->discovered_nodes.begin(); it != this->discovered_nodes.end();) {
         if (nodes_and_namespaces.find(it->first) == nodes_and_namespaces.end()) {
-            auto removed = it->first;
+            std::cout << GRAY << "Lost node " << it->first << CLR << std::endl;
             it = this->discovered_nodes.erase(it);
             nodes_changed = true;
-            std::cout << GRAY << "Lost node " << removed << CLR << std::endl;
         } else {
             ++it;
         }
@@ -132,9 +131,9 @@ void Introspection::runIntrospection() {
     // remove no longer observed topics
     for (auto it = this->discovered_topics.begin(); it != this->discovered_topics.end();) {
         if (topics_and_types.find(it->first) == topics_and_types.end()) {
+            std::cout << GRAY << "Lost topic " << it->first << CLR << std::endl;
             it = this->discovered_topics.erase(it);
             topics_changed = true;
-            std::cout << GRAY << "Lost topic " << it->first << CLR << std::endl;
         } else {
             ++it;
         }
@@ -379,8 +378,6 @@ bool Introspection::collectIDLs(std::string msg_type) {
 
 void Introspection::onDockerMonitorMessage(phntm_interfaces::msg::DockerStatus const & msg) {
 
-    // std::cout << "onDockerMonitorMessage " << msg.header.frame_id << " " << msg.header.stamp.sec << ":" << msg.header.stamp.nanosec << std::endl;
-
     auto host = !msg.header.frame_id.empty() ? "phntm_agent_" + msg.header.frame_id : "phntm_agent"; // # default frame id is empty
     auto docker_containers_changed = false;
 
@@ -415,7 +412,7 @@ void Introspection::onDockerMonitorMessage(phntm_interfaces::msg::DockerStatus c
         }
     }
 
-    this->discovered_docker_containers.emplace(host, msg);
+    this->discovered_docker_containers.insert_or_assign(host, msg);
 
     if (docker_containers_changed) {
         this->reportDocker();
@@ -513,6 +510,7 @@ void Introspection::reportNodes() {
 void Introspection::reportDocker() {
     auto msg = sio::object_message::create();
     std::vector<std::string> hosts;
+
     for (auto p : this->discovered_docker_containers) {
         hosts.push_back(p.first);
 
