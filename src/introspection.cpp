@@ -234,16 +234,16 @@ void Introspection::runIntrospection() {
         }
     }
 
+    if (idls_changed) {
+        this->reportIDLs(); // report defs before others
+    }
+
     if (nodes_changed || topics_changed) {
         this->checkSubscriberQos();
     }
 
     if (nodes_changed || topics_changed || services_changed) {
         this->reportNodes();
-    }
-
-    if (idls_changed) {
-        this->reportIDLs();
     }
 
     this->introspection_in_progress = false;
@@ -424,7 +424,7 @@ void Introspection::onDockerMonitorMessage(phntm_interfaces::msg::DockerStatus c
 }
 
 void Introspection::report() {
-    this->reportIDLs();
+    this->reportIDLs(); // report defs before others
     this->reportNodes();
     this->reportDocker();
     this->reportRunningState();
