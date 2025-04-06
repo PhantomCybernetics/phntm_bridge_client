@@ -323,8 +323,7 @@ namespace sio
         packet p(packet::type_connect, m_nsp, m_auth);
         m_client->send(p);
         m_connection_timer.reset(new asio::steady_timer(m_client->get_io_context()));
-        asio::error_code ec;
-        m_connection_timer->expires_from_now(std::chrono::milliseconds(20000), ec);
+        m_connection_timer->expires_after(std::chrono::milliseconds(20000));
         m_connection_timer->async_wait(std::bind(&socket::impl::timeout_connection,this, std::placeholders::_1));
     }
     
@@ -340,8 +339,7 @@ namespace sio
             {
                 m_connection_timer.reset(new asio::steady_timer(m_client->get_io_context()));
             }
-            asio::error_code ec;
-            m_connection_timer->expires_from_now(std::chrono::milliseconds(3000), ec);
+            m_connection_timer->expires_after(std::chrono::milliseconds(3000));
             m_connection_timer->async_wait(std::bind(&socket::impl::on_close, this));
         }
     }
