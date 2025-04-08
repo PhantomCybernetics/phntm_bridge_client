@@ -20,7 +20,7 @@
 std::string MapSocketMessageToRequest(const sio::message::ptr &in_data, void *request_msg, const rosidl_typesupport_introspection_cpp::MessageMembers *request_members, bool verbose, int indent = 0);
 std::string MapResponseToSocketMessage(const void *response_msg, const rosidl_typesupport_introspection_cpp::MessageMembers *response_members, sio::message::ptr &out_data, bool verbose, int indent = 0);
 std::string SetRequestFieldValue(void *field, const rosidl_typesupport_introspection_cpp::MessageMember *member, sio::message::ptr value, size_t index = 0, bool verbose = false, int indent = 0);
-
+std::string SetResponseFieldValue(const void *field_ptr, const rosidl_typesupport_introspection_cpp::MessageMember *member, sio::message::ptr out_target, std::string key, bool verbose, int indent);
 std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> converter;
 
 // calling generic ROS services from the socket.io
@@ -239,7 +239,7 @@ void PhntmBridge::callGenericService(std::string service_name, std::string servi
   }
   
   // map response to socket message
-  auto ack = sio::object_message::create();
+  auto ack = sio::object_message::create(); // always obj
   auto res_err = MapResponseToSocketMessage(response_msg, response_members, ack, this->config->service_calls_verbose);
   if (!res_err.empty())
     return this->returnServiceError(fmt::format("Error mapping result data: {}", res_err.c_str()), sio, ev);
@@ -552,7 +552,7 @@ std::string MapSocketMessageToRequest(const sio::message::ptr &in_data, void *re
   return ""; // ok
 }
 
-std::string SetResponseFieldValue(const void *field_ptr, const rosidl_typesupport_introspection_cpp::MessageMember *member, sio::message::ptr out_target, std::string key, size_t index, bool verbose, int indent) {
+std::string SetOneResponseValue(const void *field_ptr, const rosidl_typesupport_introspection_cpp::MessageMember *member, sio::message::ptr out_target, std::string key, int index, bool verbose, int indent) {
 
   std::string s_indent;
   s_indent.append(indent*4, ' ');
@@ -565,7 +565,7 @@ std::string SetResponseFieldValue(const void *field_ptr, const rosidl_typesuppor
       if (verbose)
         std::cout << s_indent << MAGENTA << ">> ROS_TYPE_BOOL: ";
       bool *v = new bool();
-      if (member->is_array_) {
+      if (index > -1) {
         member->fetch_function(field_ptr, index, v);
       } else {
         *v = *static_cast<const bool *>(field_ptr);
@@ -580,7 +580,7 @@ std::string SetResponseFieldValue(const void *field_ptr, const rosidl_typesuppor
       if (verbose)
         std::cout << s_indent << MAGENTA << ">> ROS_TYPE_UINT8: ";
       uint8_t *v = new uint8_t();
-      if (member->is_array_) {
+      if (index > -1) {
         member->fetch_function(field_ptr, index, v);
       } else {
         *v = *static_cast<const uint8_t *>(field_ptr);
@@ -595,7 +595,7 @@ std::string SetResponseFieldValue(const void *field_ptr, const rosidl_typesuppor
       if (verbose)
         std::cout << s_indent << MAGENTA << ">> ROS_TYPE_INT8: ";
       int8_t *v = new int8_t();
-      if (member->is_array_) {
+      if (index > -1) {
         member->fetch_function(field_ptr, index, v);
       } else {
         *v = *static_cast<const int8_t *>(field_ptr);
@@ -609,7 +609,7 @@ std::string SetResponseFieldValue(const void *field_ptr, const rosidl_typesuppor
       if (verbose)
         std::cout << s_indent << MAGENTA << ">> ROS_TYPE_FLOAT32: ";
       float *v = new float();
-      if (member->is_array_) {
+      if (index > -1) {
         member->fetch_function(field_ptr, index, v);
       } else {
         *v = *static_cast<const float *>(field_ptr);
@@ -623,7 +623,7 @@ std::string SetResponseFieldValue(const void *field_ptr, const rosidl_typesuppor
       if (verbose)
         std::cout << s_indent << MAGENTA << ">> ROS_TYPE_FLOAT64: ";
       double *v = new double();
-      if (member->is_array_) {
+      if (index > -1) {
         member->fetch_function(field_ptr, index, v);
       } else {
         *v = *static_cast<const double *>(field_ptr);
@@ -637,7 +637,7 @@ std::string SetResponseFieldValue(const void *field_ptr, const rosidl_typesuppor
       if (verbose)
         std::cout << s_indent << MAGENTA << ">> ROS_TYPE_INT16: ";
       int16_t *v = new int16_t();
-      if (member->is_array_) {
+      if (index > -1) {
         member->fetch_function(field_ptr, index, v);
       } else {
         *v = *static_cast<const int16_t *>(field_ptr);
@@ -651,7 +651,7 @@ std::string SetResponseFieldValue(const void *field_ptr, const rosidl_typesuppor
       if (verbose)
         std::cout << s_indent << MAGENTA << ">> ROS_TYPE_UINT16: ";
       uint16_t *v = new uint16_t();
-      if (member->is_array_) {
+      if (index > -1) {
         member->fetch_function(field_ptr, index, v);
       } else {
         *v = *static_cast<const uint16_t *>(field_ptr);
@@ -665,7 +665,7 @@ std::string SetResponseFieldValue(const void *field_ptr, const rosidl_typesuppor
       if (verbose)
         std::cout << s_indent << MAGENTA << ">> ROS_TYPE_INT32: ";
       int32_t *v = new int32_t();
-      if (member->is_array_) {
+      if (index > -1) {
         member->fetch_function(field_ptr, index, v);
       } else {
         *v = *static_cast<const int32_t *>(field_ptr);
@@ -679,7 +679,7 @@ std::string SetResponseFieldValue(const void *field_ptr, const rosidl_typesuppor
       if (verbose)
         std::cout << s_indent << MAGENTA << ">> ROS_TYPE_UINT32: ";
       uint32_t *v = new uint32_t();
-      if (member->is_array_) {
+      if (index > -1) {
         member->fetch_function(field_ptr, index, v);
       } else {
         *v = *static_cast<const uint32_t *>(field_ptr);
@@ -693,7 +693,7 @@ std::string SetResponseFieldValue(const void *field_ptr, const rosidl_typesuppor
       if (verbose)
         std::cout << s_indent << MAGENTA << ">> ROS_TYPE_INT64: ";
       int64_t *v = new int64_t();
-      if (member->is_array_) {
+      if (index > -1) {
         member->fetch_function(field_ptr, index, v);
       } else {
         *v = *static_cast<const int64_t *>(field_ptr);
@@ -707,7 +707,7 @@ std::string SetResponseFieldValue(const void *field_ptr, const rosidl_typesuppor
       if (verbose)
         std::cout << s_indent << MAGENTA << ">> ROS_TYPE_UINT64: ";
       uint64_t *v = new uint64_t();
-      if (member->is_array_) {
+      if (index > -1) {
         member->fetch_function(field_ptr, index, v);
       } else {
         *v = *static_cast<const uint64_t *>(field_ptr);
@@ -721,7 +721,7 @@ std::string SetResponseFieldValue(const void *field_ptr, const rosidl_typesuppor
       if (verbose)
         std::cout << s_indent << MAGENTA << ">> ROS_TYPE_STRING: ";
       std::string *v = new std::string();
-      if (member->is_array_) {
+      if (index > -1) {
         member->fetch_function(field_ptr, index, v);
       } else {
         *v = *static_cast<const std::string *>(field_ptr);
@@ -736,7 +736,7 @@ std::string SetResponseFieldValue(const void *field_ptr, const rosidl_typesuppor
       if (verbose)
         std::cout << s_indent << MAGENTA << ">> ROS_TYPE_WSTRING: ";
       std::u16string *w = new std::u16string ();
-      if (member->is_array_) {
+      if (index > -1) {
         member->fetch_function(field_ptr, index, w);
       } else {
         *w = *static_cast<const std::u16string *>(field_ptr);
@@ -748,57 +748,100 @@ std::string SetResponseFieldValue(const void *field_ptr, const rosidl_typesuppor
       break;
     }
     case rosidl_typesupport_introspection_cpp::ROS_TYPE_MESSAGE: {
-        if (verbose)
-          std::cout << s_indent << YELLOW << ">> " << (member->is_array_?"ARRAY OF ":"") << "ROS_TYPE_MESSAGE " << CLR << std::endl;
+      if (verbose)
+        std::cout << s_indent << YELLOW << ">> " << (member->is_array_?"ARRAY OF ":"") << "ROS_TYPE_MESSAGE " << CLR << std::endl;
 
-        const rosidl_typesupport_introspection_cpp::MessageMembers *nested_members = static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(member->members_->data);
-        res = sio::object_message::create();
+      const rosidl_typesupport_introspection_cpp::MessageMembers *nested_members = static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(member->members_->data);
+      const void * obj_base_ptr = index > -1 ? member->get_const_function(field_ptr, index) : field_ptr;
+      res = sio::object_message::create();
 
-        if (member->is_array_) { // array of objs
-          const void *v = member->get_const_function(field_ptr, index);
-          for (size_t i = 0; i < nested_members->member_count_; i++) {
-            auto nested_member = &nested_members->members_[i];
-            auto nested_key = nested_member->name_;
-            const void *nested_field = static_cast<const char *>(v) + nested_member->offset_;  
-            auto err = SetResponseFieldValue(nested_field, nested_member, res, nested_key, 0, verbose, indent+1);
-            if (!err.empty())
-              return err;
-          }
+      for (size_t i = 0; i < nested_members->member_count_; i++) {
+        auto nested_member = &nested_members->members_[i];
+        auto nested_key = nested_member->name_;
+        const void *nested_field = static_cast<const char *>(obj_base_ptr) + nested_member->offset_;
+
+        if (nested_member->is_array_ || nested_member->type_id_ == rosidl_typesupport_introspection_cpp::ROS_TYPE_MESSAGE) {
+
+          auto err = SetResponseFieldValue(nested_field, nested_member, res, nested_key, verbose, indent+1);
+          if (!err.empty())
+            return err;
+
         } else {
-          for (size_t i = 0; i < nested_members->member_count_; i++) {
-            auto nested_member = &nested_members->members_[i];
-            auto nested_key = nested_member->name_;
-            const void *nested_field_ptr = static_cast<const char *>(field_ptr) + nested_member->offset_;  
-            if (nested_member->is_array_) {
-              auto res_nested_array = sio::array_message::create();
-              auto nested_array_size = nested_member->size_function(nested_field_ptr);
-              if (verbose) 
-                std::cout << s_indent << YELLOW << ">> '" << nested_key << "' is array(" << nested_array_size << "): " << CLR << std::endl;
-              for (size_t j = 0; j < nested_array_size; j++) {
-                std::cout << RED << s_indent << " adding nested #" << j << CLR << std::endl;
-                auto err = SetResponseFieldValue(nested_field_ptr, nested_member, res_nested_array, "", j, verbose, indent+1);
-                if (!err.empty())
-                  return err;
-              }
-              res->get_map().emplace(nested_key, res_nested_array);
-            } else {
-              auto err = SetResponseFieldValue(nested_field_ptr, nested_member, res, nested_key, 0, verbose, indent+1);
-              if (!err.empty())
-                return err;
-            }
-          }
-        }
 
-        break;
+          auto err = SetOneResponseValue(nested_field, nested_member, res, nested_key, -1, verbose, indent+1);
+          if (!err.empty())
+            return err;
+
+        }
+      }
+
+      break;
     }
     default:
       return "Unsupported response member type " + std::to_string(member->type_id_);
   }
 
-  if (out_target->get_flag() == sio::message::flag::flag_array) {
+  if (index > -1) { // add to an array
     out_target->get_vector().push_back(res);
   } else {
     out_target->get_map().emplace(key, res);
+  }
+
+  return ""; //ok
+}
+
+std::string SetResponseFieldValue(const void *field_ptr, const rosidl_typesupport_introspection_cpp::MessageMember *member, sio::message::ptr out_target, std::string key, bool verbose, int indent) {
+
+  std::string s_indent;
+  s_indent.append(indent*4, ' ');
+
+  if (member->is_array_) { // member is an array
+    auto array_size = member->size_function(field_ptr);
+    auto out_array = sio::array_message::create();
+    if (verbose)
+      std::cout  << s_indent << YELLOW << "'" << key << "' is an array(" << std::to_string(array_size) << ") of type " << std::to_string(member->type_id_) << CLR << std::endl;
+      
+    for (size_t j = 0; j < array_size; j++) {
+      if (verbose)
+        std::cout << s_indent << "setting [" << j << "]:" << std::endl;
+      auto err = SetOneResponseValue(field_ptr, member, out_array, key, j, verbose, indent+1);
+      if (!err.empty())
+          return err;
+    }
+
+    out_target->get_map().emplace(key, out_array);
+    
+  } else if (member->type_id_ == rosidl_typesupport_introspection_cpp::ROS_TYPE_MESSAGE) { // member is an obj
+    
+    const rosidl_typesupport_introspection_cpp::MessageMembers *nested_members = static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(member->members_->data);
+    auto out_obj = sio::object_message::create();
+
+    for (size_t i = 0; i < nested_members->member_count_; i++) {
+      auto nested_member = &nested_members->members_[i];
+      auto nested_key = nested_member->name_;
+      const void *nested_field_ptr = static_cast<const char *>(field_ptr) + nested_member->offset_;  
+
+      if (verbose)
+      std::cout << s_indent << "setting [" << nested_key << "]:" << std::endl;
+      if (nested_member->is_array_) {
+        auto err = SetResponseFieldValue(nested_field_ptr, nested_member, out_obj, nested_key, verbose, indent+1);
+        if (!err.empty())
+          return err;
+      } else {
+        auto err = SetOneResponseValue(nested_field_ptr, nested_member, out_obj, nested_key, -1, verbose, indent+1);
+        if (!err.empty())
+          return err;
+      }
+    }
+
+    out_target->get_map().emplace(key, out_obj);
+
+  } else { // primitive type
+
+    auto err = SetOneResponseValue(field_ptr, member, out_target, key, -1, verbose, indent+1);
+    if (!err.empty())
+        return err;
+
   }
 
   return ""; // ok
@@ -810,35 +853,17 @@ std::string MapResponseToSocketMessage(const void *response_msg, const rosidl_ty
   std::string s_indent;
   s_indent.append(indent*4, ' ');
 
-  for (size_t i = 0; i < response_members->member_count_; i++) {
+  for (size_t i = 0; i < response_members->member_count_; i++) { // always obj
     auto member = &response_members->members_[i];
     auto key = member->name_;
     const void *field_ptr = static_cast<const char *>(response_msg) + member->offset_;
 
-    if (member->is_array_) {
-      auto array_size = member->size_function(field_ptr);
-      if (verbose)
-        std::cout  << s_indent << YELLOW << "'" << key << "' is an array(" << std::to_string(array_size) << ") of type " << std::to_string(member->type_id_) << CLR << std::endl;
-      
-      auto out_array = sio::array_message::create();
-      
-      for (size_t j = 0; j < array_size; j++) {
-        auto err = SetResponseFieldValue(field_ptr, member, out_array, key, j, verbose, indent+1);
-        if (!err.empty())
-            return err;
-      }
+    if (verbose)
+      std::cout << s_indent << "Assigning '" << key << "' of type " << std::to_string(member->type_id_) << std::endl;
 
-      out_data->get_map().emplace(key, out_array);
-    
-    } else {
-
-      if (verbose)
-        std::cout << s_indent << "Assigning '" << key << "' of type " << std::to_string(member->type_id_) << std::endl;
-
-      auto err = SetResponseFieldValue(field_ptr, member, out_data, key, 0, verbose, indent);
-      if (!err.empty())
-          return err;
-    }
+    auto err = SetResponseFieldValue(field_ptr, member, out_data, key, verbose, indent);
+    if (!err.empty())
+        return err;
   }
 
   return ""; // ok
