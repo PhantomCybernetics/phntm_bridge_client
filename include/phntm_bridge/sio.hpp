@@ -27,16 +27,18 @@ class BridgeSocket
         static std::string PrintMessage(const sio::message::ptr & message, bool pretty = true, int indent = 1, std::string indent_prefix = "");
         static sio::message::ptr JsonToSioMessage(Json::Value val);
 
+        bool connected, shutting_down;
+
     private:
         std::shared_ptr<Introspection> introspection;
         std::shared_ptr<PhntmBridge> node;
 
         sio::client client;
         sio::socket::ptr socket;
-        std::shared_ptr<BridgeSocket> sharedPtr;
+        std::shared_ptr<BridgeSocket> shared_ptr;
 
         std::shared_ptr<BridgeConfig> config;
-        bool connected, shutting_down;
+        
         std::string socket_url;
         sio::message::ptr auth_data;
 
@@ -54,7 +56,7 @@ class BridgeSocket
         std::map<std::string, sio::socket::event_listener> handled_events;
         void onIceServers(sio::event const& ev);
         void onPeerConnected(sio::event &ev);
-        void onPeerDisconnected(sio::event const& ev);
+        void onPeerDisconnected(sio::event & ev);
         void onIntrospection(sio::event & ev);
 
         void onSubscribeRead(sio::event & ev);
@@ -62,6 +64,4 @@ class BridgeSocket
         void onServiceCall(sio::event & ev);
 
         void onOtherSocketMessage(sio::event const& ev);
-
-        std::string getConnectedPeerId(sio::event & ev);
 };

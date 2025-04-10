@@ -48,6 +48,15 @@ RUN git clone --single-branch --branch support-new-asio https://github.com/toone
 # RUN apt install -y libasio-dev
 RUN apt install -y rapidjson-dev
 
+WORKDIR /root
+RUN git clone https://github.com/paullouisageneau/libdatachannel.git
+WORKDIR /root/libdatachannel
+RUN git submodule update --init --recursive --depth 1
+RUN cmake -B build -DCMAKE_BUILD_TYPE=Release
+WORKDIR /root/libdatachannel/build
+RUN make -j2
+RUN make install
+
 # init workspace
 ENV ROS_WS=/ros2_ws
 RUN mkdir -p $ROS_WS/src

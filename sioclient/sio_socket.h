@@ -23,10 +23,11 @@ namespace sio
        
         // message::list const& get_ack_message() const;
         
-    protected:
         event(std::string const& nsp, std::string const& name, const int msgId, message::list const& messages, bool need_ack);
         event(std::string const& nsp, std::string const& name, const int msgId, message::list&& messages, bool need_ack);
 
+    protected:
+    
         // message::list& get_ack_message_impl();
         // int get_msgId_impl();
         

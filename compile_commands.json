@@ -5,6 +5,7 @@
                  -DDEFAULT_RMW_IMPLEMENTATION=rmw_fastrtps_cpp -DRCUTILS_ENABLE_FAULT_INJECTION \
                  -I/ros2_ws/src/phntm_bridge/include \
                  -I/ros2_ws/src/phntm_bridge/sioclient \
+                 -I/root/libdatachannel/include \
                  -isystem /usr/include/jsoncpp \
                  -isystem /usr/local/include \
                  -isystem /opt/ros/humble/include/rclcpp \

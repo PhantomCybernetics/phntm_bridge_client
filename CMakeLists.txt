@@ -22,6 +22,7 @@ find_library(UUID_LIBRARY uuid)
 find_library(OPENSSL_LIBRARY ssl)
 find_library(OPENSSL_CRYPTO_LIBRARY crypto)
 find_package(CURL REQUIRED)
+find_package(LibDataChannel REQUIRED)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GPIOD REQUIRED libgpiodcxx)
@@ -87,6 +88,7 @@ target_include_directories(phntm_bridge PUBLIC
   /usr/include/
   /ros2_ws/src/phntm_bridge/sioclient/
   /root/asio/asio/include/
+  /root/libdatachannel/include/
   ${TINYXML2_INCLUDE_DIRS}
   ${OPENSSL_INCLUDE_DIR}
   ${GPIOD_INCLUDE_DIRS}
@@ -113,6 +115,7 @@ target_link_libraries(phntm_bridge
   ${GPIOD_LIBRARIES}
   ${UUID_LIBRARY}
   ${CURL_LIBRARIES}
+  LibDataChannel::LibDataChannel
   # ${WEBSOCKET_LIBRARY}
   # ${ASIO_LIBRARY}
   # ${RAPIDJSON_LIBRARY}

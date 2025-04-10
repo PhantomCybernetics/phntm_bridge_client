@@ -315,4 +315,7 @@ void PhntmBridge::loadConfig(std::shared_ptr<BridgeConfig> config) {
 
     this->declare_parameter("service_calls_verbose", false);
     config->service_calls_verbose = this->get_parameter("service_calls_verbose").as_bool();    
+
+    this->declare_parameter("webrtc_debug", false);
+    config->webrtc_debug = this->get_parameter("webrtc_debug").as_bool(); 
 }
