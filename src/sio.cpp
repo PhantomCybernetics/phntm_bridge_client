@@ -139,7 +139,7 @@ void BridgeSocket::onDisconnected() {
     std::cout << RED << "Socket.io client disconnected" << CLR << std::endl;
     this->connected = false;
     ConnLED::fastPulse();
-    WRTCPeer::OnAllPeersDisconnected();
+    WRTCPeer::onAllPeersDisconnected();
 }
 
 void BridgeSocket::onIceServers(sio::event const& ev) {
@@ -182,7 +182,7 @@ void BridgeSocket::onPeerConnected(sio::event &ev) {
         std::cout << printMessage(ev.get_message()) << std::endl;
     }
     
-    auto id_peer = WRTCPeer::GetId(ev.get_message());
+    auto id_peer = WRTCPeer::getId(ev.get_message());
     
     if (id_peer.empty()) {
         auto err_ack = sio::object_message::create();
@@ -192,7 +192,7 @@ void BridgeSocket::onPeerConnected(sio::event &ev) {
         return;
     } 
 
-    WRTCPeer::OnPeerConnected(id_peer, ev, this->config);        
+    WRTCPeer::onPeerConnected(id_peer, ev, this->config);        
 }
 
 // peer disconnected
@@ -201,14 +201,14 @@ void BridgeSocket::onPeerDisconnected(sio::event & ev) {
         std::cout << "Peer disconnect request: " << std::endl;
         std::cout << printMessage(ev.get_message()) << std::endl;
     }
-    auto peer = WRTCPeer::GetConnectedPeer(ev);
+    auto peer = WRTCPeer::getConnectedPeer(ev);
     if (peer == nullptr) return;
     peer->onDisconnected();
 }
 
 // introspection control
 void BridgeSocket::onIntrospection(sio::event & ev) {
-    auto peer = WRTCPeer::GetConnectedPeer(ev);
+    auto peer = WRTCPeer::getConnectedPeer(ev);
     if (peer == nullptr) return;
         
     if (ev.get_message()->get_map()["state"]->get_bool()) {
@@ -230,7 +230,7 @@ void BridgeSocket::onSubscribeRead(sio::event & ev) {
         std::cout << printMessage(ev.get_message()) << std::endl;
     }
     
-    auto peer = WRTCPeer::GetConnectedPeer(ev);
+    auto peer = WRTCPeer::getConnectedPeer(ev);
     if (peer == nullptr) return;
     
     auto msg = ev.get_message();
@@ -257,7 +257,7 @@ void BridgeSocket::onUnsubscribeRead(sio::event & ev) {
         std::cout << printMessage(ev.get_message()) << std::endl;
     }
 
-    auto peer = WRTCPeer::GetConnectedPeer(ev);
+    auto peer = WRTCPeer::getConnectedPeer(ev);
     if (peer == nullptr) return;
     
     auto msg = ev.get_message();
@@ -284,7 +284,7 @@ void BridgeSocket::onSubscribeWrite(sio::event & ev) {
         std::cout << printMessage(ev.get_message()) << std::endl;
     }
 
-    auto peer = WRTCPeer::GetConnectedPeer(ev);
+    auto peer = WRTCPeer::getConnectedPeer(ev);
     if (peer == nullptr) return;
         
     auto msg = ev.get_message();
@@ -313,7 +313,7 @@ void BridgeSocket::onUnsubscribeWrite(sio::event & ev) {
         std::cout << printMessage(ev.get_message()) << std::endl;
     }
 
-    auto peer = WRTCPeer::GetConnectedPeer(ev);
+    auto peer = WRTCPeer::getConnectedPeer(ev);
     if (peer == nullptr) return;
         
     auto msg = ev.get_message();
@@ -362,7 +362,7 @@ void BridgeSocket::onServiceCall(sio::event & ev) {
         std::cout << printMessage(ev.get_message()) << std::endl;
     }
     
-    auto peer = WRTCPeer::GetConnectedPeer(ev);
+    auto peer = WRTCPeer::getConnectedPeer(ev);
     if (peer == nullptr) return;
 
     auto service_name = ev.get_message()->get_map().at("service")->get_string();
@@ -464,7 +464,7 @@ void BridgeSocket::shutdown() {
     if (instance == nullptr)
         return;
     instance->shutting_down = true;
-    WRTCPeer::OnAllPeersDisconnected();
+    WRTCPeer::onAllPeersDisconnected();
     instance->client.set_reconnect_attempts(0);
     instance->client.clear_con_listeners();
     instance->client.sync_close();

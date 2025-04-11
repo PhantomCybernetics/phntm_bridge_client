@@ -15,7 +15,7 @@
 
 std::map<std::string, std::shared_ptr<WRTCPeer>> WRTCPeer::connected_peers;
 
-std::string WRTCPeer::GetId(sio::object_message::ptr data) {
+std::string WRTCPeer::getId(sio::object_message::ptr data) {
     std::string id_peer;
     if (data->get_map().find("id_app") != data->get_map().end()) 
         id_peer = data->get_map().at("id_app")->get_string();
@@ -24,13 +24,13 @@ std::string WRTCPeer::GetId(sio::object_message::ptr data) {
     return id_peer;
 }
 
-bool WRTCPeer::IsConnected(std::string id_peer) {
+bool WRTCPeer::isConnected(std::string id_peer) {
     return connected_peers.find(id_peer) != connected_peers.end();
 }
 
 // vaidates peer id, checks if connected, calls error ack if requested
-std::shared_ptr<WRTCPeer> WRTCPeer::GetConnectedPeer(sio::event & ev) {
-    auto id_peer = WRTCPeer::GetId(ev.get_message());
+std::shared_ptr<WRTCPeer> WRTCPeer::getConnectedPeer(sio::event & ev) {
+    auto id_peer = WRTCPeer::getId(ev.get_message());
     if (id_peer.empty()) {
         if (ev.need_ack()) {
             auto err_ack = sio::object_message::create();
@@ -39,7 +39,7 @@ std::shared_ptr<WRTCPeer> WRTCPeer::GetConnectedPeer(sio::event & ev) {
             BridgeSocket::ack(ev.get_msgId(), { err_ack });
         }
         return nullptr;
-    } else if (!WRTCPeer::IsConnected(id_peer)) {
+    } else if (!WRTCPeer::isConnected(id_peer)) {
         if (ev.need_ack()) {
             auto err_ack = sio::object_message::create();
             err_ack->get_map().emplace("err", sio::int_message::create(2));
@@ -52,7 +52,7 @@ std::shared_ptr<WRTCPeer> WRTCPeer::GetConnectedPeer(sio::event & ev) {
     }
 }
 
-void WRTCPeer::OnPeerConnected(std::string id_peer, sio::event &ev, std::shared_ptr<BridgeConfig> config) {
+void WRTCPeer::onPeerConnected(std::string id_peer, sio::event &ev, std::shared_ptr<BridgeConfig> config) {
     std::cout << GREEN << "Peer " << id_peer << " connected..." << CLR << std::endl;
 
     auto data = ev.get_message();
@@ -102,7 +102,7 @@ void WRTCPeer::OnPeerConnected(std::string id_peer, sio::event &ev, std::shared_
     }
 
     auto ack = sio::object_message::create();
-    AddUIConfigToMessage(ack, config); // adds ui config to reply that is emitted later
+    WRTCPeer::addUIConfigToMessage(ack, config); // adds ui config to reply that is emitted later
     peer->processSubscriptions(ev.get_msgId(), ack);
 }
 
@@ -167,7 +167,7 @@ void WRTCPeer::onDisconnected() {
     connected_peers.erase(this->id);
 }
 
-void WRTCPeer::OnAllPeersDisconnected() {
+void WRTCPeer::onAllPeersDisconnected() {
     std::vector<std::string> user_ids;
     for (const auto& pair : connected_peers) {
         user_ids.push_back(pair.first); // Access the key
@@ -216,7 +216,7 @@ void WRTCPeer::onRTCGatheringStateChange(rtc::PeerConnection::GatheringState sta
         std::cout << YELLOW << this->toString() << "Gathering state: " << state << CLR << std::endl;
 }
 
-void WRTCPeer::ProcessAllPeerSubscriptions() {
+void WRTCPeer::processAllPeerSubscriptions() {
     for (auto it = WRTCPeer::connected_peers.begin(); it != WRTCPeer::connected_peers.end(); ++it) {  
         it->second->processSubscriptions(-1, nullptr);
     }
@@ -345,7 +345,7 @@ void WRTCPeer::onAnswerReply(sio::message::list const& reply) {
     // self.processing_subscriptions = False
 }
 
-void WRTCPeer::AddUIConfigToMessage(sio::object_message::ptr msg, std::shared_ptr<BridgeConfig> config) {
+void WRTCPeer::addUIConfigToMessage(sio::object_message::ptr msg, std::shared_ptr<BridgeConfig> config) {
      // enabled input drivers
      auto input_drivers = sio::array_message::create();
      for (auto & one : config->input_drivers) {

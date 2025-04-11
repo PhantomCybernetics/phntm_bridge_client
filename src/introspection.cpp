@@ -249,7 +249,7 @@ void Introspection::runIntrospection() {
     }
 
     if (topics_changed)
-        WRTCPeer::ProcessAllPeerSubscriptions();
+        WRTCPeer::processAllPeerSubscriptions();
 
     this->introspection_in_progress = false;
 

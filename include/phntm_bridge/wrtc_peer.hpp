@@ -13,18 +13,18 @@ class WRTCPeer {
     public: 
         WRTCPeer(std::string id_peer, std::string id_app, std::string id_instance, std::string session, std::shared_ptr<BridgeConfig> config);
         ~WRTCPeer();
-        static std::string GetId(sio::object_message::ptr data);
-        static bool IsConnected(std::string id_peer);
-        static std::shared_ptr<WRTCPeer> GetConnectedPeer(sio::event &ev);
-        static void OnPeerConnected(std::string id_peer, sio::event &ev, std::shared_ptr<BridgeConfig> config);
-        static void OnAllPeersDisconnected();
+        static std::string getId(sio::object_message::ptr data);
+        static bool isConnected(std::string id_peer);
+        static std::shared_ptr<WRTCPeer> getConnectedPeer(sio::event &ev);
+        static void onPeerConnected(std::string id_peer, sio::event &ev, std::shared_ptr<BridgeConfig> config);
+        static void onAllPeersDisconnected();
 
         void onDisconnected();
         std::string toString();
 
         // std::shared_ptr<WRTCPeer> shared_ptr;
         void processSubscriptions(int ack_msg_id, sio::object_message::ptr ack);
-        static void ProcessAllPeerSubscriptions();
+        static void processAllPeerSubscriptions();
         // void processWriteSubscriptions(int ack_msg_id);
         bool addReqReadSubscription(std::string topic);
         bool removeReqReadSubscription(std::string topic);
@@ -33,7 +33,7 @@ class WRTCPeer {
 
     private:
         static std::map<std::string, std::shared_ptr<WRTCPeer>> connected_peers;
-        static void AddUIConfigToMessage(sio::object_message::ptr msg, std::shared_ptr<BridgeConfig> config);
+        static void addUIConfigToMessage(sio::object_message::ptr msg, std::shared_ptr<BridgeConfig> config);
         void onAnswerReply(sio::message::list const& reply);
         std::mutex processing_subscriptions_mutex;
 
