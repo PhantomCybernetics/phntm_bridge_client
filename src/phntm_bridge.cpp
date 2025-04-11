@@ -69,14 +69,12 @@ int main(int argc, char ** argv)
   executor.add_node(base_node);
   // executor.add_node(introspection_node);
 
-  StatusLEDs::Init(config, base_node);
+  StatusLEDs::init(base_node, config);
 
-  auto sio = std::make_shared<BridgeSocket>(config, base_node);
-  auto introspection = std::make_shared<Introspection>(base_node, sio, config);
-  sio->setIntrospection(introspection);
-
-  introspection->start();
-  sio->connect();
+  BridgeSocket::init(base_node, config);
+  Introspection::init(base_node, config);
+  Introspection::start();
+  BridgeSocket::connect();
 
   while (!g_interrupt_requested.load() && rclcpp::ok()) {
     executor.spin_some();
@@ -84,14 +82,14 @@ int main(int argc, char ** argv)
     
   std::cout << BLUE << "Shutting down..." << CLR << std::endl;
 
-  introspection->stop();
-  StatusLEDs::Clear();
+  Introspection::stop();
+  StatusLEDs::clear();
 
   std::cout << "Spinning some more..." << std::endl;
   executor.spin_some(); // make sure we send out what we need before shutdown
   std::cout << "Done spinning" << std::endl;
 
-  sio->shutdown();
+  BridgeSocket::shutdown();
 
   rclcpp::shutdown();
 

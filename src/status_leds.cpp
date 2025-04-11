@@ -115,7 +115,7 @@ void StatusLED::clear() {
 
 StatusLEDs* StatusLEDs::instance = nullptr;
 
-void StatusLEDs::Init(std::shared_ptr<BridgeConfig> config, std::shared_ptr<rclcpp::Node> node) {
+void StatusLEDs::init(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<BridgeConfig> config) {
 
     if (instance == nullptr) {
         instance = new StatusLEDs();
@@ -173,7 +173,7 @@ void StatusLEDs::Init(std::shared_ptr<BridgeConfig> config, std::shared_ptr<rclc
     instance->loop_thread.detach();
 }
 
-void StatusLEDs::Clear() {
+void StatusLEDs::clear() {
     instance->loop_running = false;
     // instance->loop_thread.join();
     instance->conn->clear();
@@ -193,19 +193,19 @@ void StatusLEDs::loop() {
 }
 
 // convenience 
-void ConnLED::On() {
-    StatusLEDs::GetInstance()->conn->on();
+void ConnLED::on() {
+    StatusLEDs::getInstance()->conn->on();
 }
-void ConnLED::FastPulse() {
-    StatusLEDs::GetInstance()->conn->fastPulse();
+void ConnLED::fastPulse() {
+    StatusLEDs::getInstance()->conn->fastPulse();
 }
-void ConnLED::Off() {
-    StatusLEDs::GetInstance()->conn->off();
+void ConnLED::off() {
+    StatusLEDs::getInstance()->conn->off();
 }
 
-void DataLED::Once() {
-    StatusLEDs::GetInstance()->data->once();
+void DataLED::once() {
+    StatusLEDs::getInstance()->data->once();
 }
-void DataLED::Off() {
-    StatusLEDs::GetInstance()->data->off();
+void DataLED::off() {
+    StatusLEDs::getInstance()->data->off();
 }

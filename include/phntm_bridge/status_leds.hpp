@@ -61,9 +61,9 @@ class StatusLED {
 class StatusLEDs {
 
     public:
-        static void Init(std::shared_ptr<BridgeConfig> config, std::shared_ptr<rclcpp::Node> node);
-        static void Clear();
-        static StatusLEDs * GetInstance() { return instance; }
+        static void init(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<BridgeConfig> config);
+        static void clear();
+        static StatusLEDs * getInstance() { return instance; }
         std::shared_ptr<StatusLED> conn;
         std::shared_ptr<StatusLED> data;
         
@@ -81,13 +81,13 @@ class StatusLEDs {
 // convenience
 class ConnLED {
     public:
-        static void On(); // connected to Cloud Bridge
-        static void FastPulse(); // trying to connect
-        static void Off(); // clear 
+        static void on(); // connected to Cloud Bridge
+        static void fastPulse(); // trying to connect
+        static void off(); // clear 
         
 };
 class DataLED {
     public:
-        static void Once(); // message sent via webrtc
-        static void Off(); // clear 
+        static void once(); // message sent via webrtc
+        static void off(); // clear 
 };

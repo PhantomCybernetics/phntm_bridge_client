@@ -27,7 +27,7 @@ class PhntmBridge : public rclcpp::Node
     ~PhntmBridge();
     void loadConfig(std::shared_ptr<BridgeConfig> config);
     void setupLocalServices();
-    void callGenericService(std::string service_name, std::string service_type, std::shared_ptr<BridgeSocket> sio, sio::event const& ev);
+    void callGenericService(std::string service_name, std::string service_type, sio::event const& ev);
     void readGitRepoHead(std::string repo_path);
 
     std::shared_ptr<BridgeConfig> config = std::make_shared<BridgeConfig>();
@@ -52,6 +52,6 @@ class PhntmBridge : public rclcpp::Node
       std::mutex * mutex; // makes sure we don't the service before another call finishes
     };
     std::map<std::string, SrvClientCache> srv_client_cache; // service_name => client instance & mutex
-    void returnServiceError(std::string message, std::shared_ptr<BridgeSocket> sio, sio::event const& ev);
+    void returnServiceError(std::string message, sio::event const& ev);
     void clearServicesCache();
 };

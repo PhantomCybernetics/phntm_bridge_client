@@ -13,14 +13,15 @@
 #include "phntm_bridge/wrtc_peer.hpp"
 #include "phntm_bridge/status_leds.hpp"
 
-BridgeSocket::BridgeSocket(std::shared_ptr<BridgeConfig> config, std::shared_ptr<PhntmBridge> node) {
+BridgeSocket* BridgeSocket::instance = nullptr;
+
+BridgeSocket::BridgeSocket(std::shared_ptr<PhntmBridge> node, std::shared_ptr<BridgeConfig> config) {
     this->config = config;
     this->node = node;
     this->connected = false;
     this->shutting_down = false;
-    this->shared_ptr = std::shared_ptr<BridgeSocket>(this);
 
-    ConnLED::FastPulse();
+    ConnLED::fastPulse();
 
     uint reconnect_ms = this->config->sio_connection_retry_sec * 1000;
     std::cout << "SIO reconenct ms: " << reconnect_ms << std::endl;
@@ -41,60 +42,77 @@ BridgeSocket::BridgeSocket(std::shared_ptr<BridgeConfig> config, std::shared_ptr
         this->client.set_logs_verbose();
 }
 
+void BridgeSocket::init(std::shared_ptr<PhntmBridge> node, std::shared_ptr<BridgeConfig> config) {
+    if (BridgeSocket::instance != nullptr) {
+        return;
+    }
+    BridgeSocket::instance = new BridgeSocket(node, config);
+}
+
 bool BridgeSocket::connect() {
     // self.get_logger().info(f'Socket.io connecting to ')
+    auto instance = BridgeSocket::instance;
+    if (instance == nullptr) {
+        std::cerr << "BridgeSocket not initialized" << std::endl;
+        return false;
+    }
 
-    this->socket_url = fmt::format("{}:{}{}", this->config->cloud_bridge_address, this->config->sio_port, this->config->sio_path);
+    instance->socket_url = fmt::format("{}:{}{}", instance->config->cloud_bridge_address, instance->config->sio_port, instance->config->sio_path);
 
-    RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Socket.io connecting to %s", socket_url.c_str());
+    RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Socket.io connecting to %s", instance->socket_url.c_str());
 
-    std::cout << YELLOW << "Connecting id_robot: " << this->config->id_robot << CLR << std::endl;
+    std::cout << YELLOW << "Connecting id_robot: " << instance->config->id_robot << CLR << std::endl;
 
-    this->auth_data = sio::object_message::create();
-    this->auth_data->get_map()["id_robot"] = sio::string_message::create(this->config->id_robot);
-    this->auth_data->get_map()["key"] = sio::string_message::create(this->config->auth_key);
-    this->auth_data->get_map()["name"] = sio::string_message::create(this->config->robot_name);
-    this->auth_data->get_map()["maintainer_email"] = sio::string_message::create(this->config->maintainer_email);
-    this->auth_data->get_map()["ros_distro"] = sio::string_message::create(this->config->ros_distro);
-    this->auth_data->get_map()["git_sha"] = sio::string_message::create(this->config->git_head_sha);
-    this->auth_data->get_map()["git_tag"] = sio::string_message::create(this->config->latest_git_tag);
+    instance->auth_data = sio::object_message::create();
+    instance->auth_data->get_map()["id_robot"] = sio::string_message::create(instance->config->id_robot);
+    instance->auth_data->get_map()["key"] = sio::string_message::create(instance->config->auth_key);
+    instance->auth_data->get_map()["name"] = sio::string_message::create(instance->config->robot_name);
+    instance->auth_data->get_map()["maintainer_email"] = sio::string_message::create(instance->config->maintainer_email);
+    instance->auth_data->get_map()["ros_distro"] = sio::string_message::create(instance->config->ros_distro);
+    instance->auth_data->get_map()["git_sha"] = sio::string_message::create(instance->config->git_head_sha);
+    instance->auth_data->get_map()["git_tag"] = sio::string_message::create(instance->config->latest_git_tag);
 
-    this->handled_events.emplace("ice-servers", std::bind(&BridgeSocket::onIceServers, this, std::placeholders::_1));
-    this->handled_events.emplace("peer", std::bind(&BridgeSocket::onPeerConnected, this, std::placeholders::_1));
-    this->handled_events.emplace("peer:disconnected", std::bind(&BridgeSocket::onPeerDisconnected, this, std::placeholders::_1));
-    this->handled_events.emplace("introspection", std::bind(&BridgeSocket::onIntrospection, this, std::placeholders::_1));
+    instance->handled_events.emplace("ice-servers", std::bind(&BridgeSocket::onIceServers, instance, std::placeholders::_1));
+    instance->handled_events.emplace("peer", std::bind(&BridgeSocket::onPeerConnected, instance, std::placeholders::_1));
+    instance->handled_events.emplace("peer:disconnected", std::bind(&BridgeSocket::onPeerDisconnected, instance, std::placeholders::_1));
+    instance->handled_events.emplace("introspection", std::bind(&BridgeSocket::onIntrospection, instance, std::placeholders::_1));
 
-    this->handled_events.emplace("subscribe", std::bind(&BridgeSocket::onSubscribeRead, this, std::placeholders::_1));
-    this->handled_events.emplace("subscribe:write", std::bind(&BridgeSocket::onSubscribeWrite, this, std::placeholders::_1));
-    this->handled_events.emplace("service", std::bind(&BridgeSocket::onServiceCall, this, std::placeholders::_1));
+    instance->handled_events.emplace("subscribe", std::bind(&BridgeSocket::onSubscribeRead, instance, std::placeholders::_1));
+    instance->handled_events.emplace("unsubscribe", std::bind(&BridgeSocket::onUnsubscribeRead, instance, std::placeholders::_1));
+    instance->handled_events.emplace("subscribe:write", std::bind(&BridgeSocket::onSubscribeWrite, instance, std::placeholders::_1));
+    instance->handled_events.emplace("unsubscribe:write", std::bind(&BridgeSocket::onUnsubscribeWrite, instance, std::placeholders::_1));
+    instance->handled_events.emplace("service", std::bind(&BridgeSocket::onServiceCall, instance, std::placeholders::_1));
+    instance->handled_events.emplace("sdp:answer", std::bind(&BridgeSocket::onSDPAnswer, instance, std::placeholders::_1));
 
-    this->client.connect(this->socket_url, this->auth_data);
+    instance->client.connect(instance->socket_url, instance->auth_data);
     
     return true;
 }
 
 void BridgeSocket::emit(std::string const& name, sio::message::list const& msglist, std::function<void (sio::message::list const&)> const& ack) {
-    if (!this->connected) {
+    auto instance = BridgeSocket::instance;
+    if (instance == nullptr || !instance->connected) {
         std::cout << "Socket.io not connected, ignoring \"" + name << "\"" << std::endl;
         return;
     }
-    if (this->config->sio_verbose) {
+    if (instance->config->sio_verbose) {
         std::cout << "SIO emitting '" << name << "':" << std::endl
-                  << PrintMessage(msglist.at(0)) << std::endl;
+                  << printMessage(msglist.at(0)) << std::endl;
     }
-    this->client.socket()->emit(name, msglist, ack);
+    instance->client.socket()->emit(name, msglist, ack);
 }
 
 void BridgeSocket::ack(int msg_id, sio::message::list const& msglist) {
-    if (!this->connected) {
+    auto instance = BridgeSocket::instance;
+    if (instance == nullptr || !instance->connected) {
         std::cout << "Socket.io not connected, ignoring ack(" << msg_id << ")" << std::endl;
         return;
     }
-    if (this->config->sio_verbose) {
+    if (instance->config->sio_verbose) {
         std::cout << "SIO sending ack for msg_id=" << std::to_string(msg_id) << ":" << std::endl
-                  << PrintMessage(msglist.at(0)) << std::endl;
+                  << printMessage(msglist.at(0)) << std::endl;
     }
-    this->client.socket()->ack(msg_id, msglist);
+    instance->client.socket()->ack(msg_id, msglist);
 }
 
 // socket connected (before handshale)
@@ -113,14 +131,14 @@ void BridgeSocket::onConnected() {
 void BridgeSocket::onSocketOpen() {
     std::cout << GREEN << "Socket.io auth successful for #" << this->config->id_robot << CLR << std::endl;
     this->connected = true;
-    ConnLED::On();
-    this->introspection->report();
+    ConnLED::on();
+    Introspection::report();
 }
 
 void BridgeSocket::onDisconnected() {
     std::cout << RED << "Socket.io client disconnected" << CLR << std::endl;
     this->connected = false;
-    ConnLED::FastPulse();
+    ConnLED::fastPulse();
     WRTCPeer::OnAllPeersDisconnected();
 }
 
@@ -130,8 +148,10 @@ void BridgeSocket::onIceServers(sio::event const& ev) {
         return;
     }
 
-    std::cout << "Got cloud ICE server config" << std::endl;
-    // std::cout << PrintMessage(ev.get_message()) << std::endl;
+    if (this->config->sio_verbose) {
+        std::cout << "Got cloud ICE server config" << std::endl;
+        std::cout << printMessage(ev.get_message()) << std::endl;
+    }
 
     this->config->ice_servers.clear();
     // first add custom
@@ -143,20 +163,25 @@ void BridgeSocket::onIceServers(sio::event const& ev) {
     // set received secret
     this->config->ice_secret = ev.get_message()->get_map().at("secret")->get_string();
 
-    std::cout << CYAN << "Complete ICE config: " << CLR << std::endl;
-    std::cout << "  username: " << this->config->ice_username << std::endl;
-    std::cout << "  secret: " << this->config->ice_secret << std::endl;
-    std::cout << "  servers: " << std::endl;
-    for (auto & one : this->config->ice_servers) {
-        std::cout << "    " << one << std::endl;
+    if (this->config->webrtc_debug) {
+        std::cout << CYAN << "Complete ICE config: " << CLR << std::endl;
+        std::cout << "  username: " << this->config->ice_username << std::endl;
+        std::cout << "  secret: " << this->config->ice_secret << std::endl;
+        std::cout << "  servers: " << std::endl;
+        for (auto & one : this->config->ice_servers) {
+            std::cout << "    " << one << std::endl;
+        }
     }
 }
 
 
 // peer connected
 void BridgeSocket::onPeerConnected(sio::event &ev) {
-    std::cout << "Peer connecttion request: " << std::endl;
-    std::cout << PrintMessage(ev.get_message()) << std::endl;
+    if (this->config->sio_verbose) {
+        std::cout << "Peer connection request: " << std::endl;
+        std::cout << printMessage(ev.get_message()) << std::endl;
+    }
+    
     auto id_peer = WRTCPeer::GetId(ev.get_message());
     
     if (id_peer.empty()) {
@@ -167,48 +192,88 @@ void BridgeSocket::onPeerConnected(sio::event &ev) {
         return;
     } 
 
-    WRTCPeer::OnPeerConnected(id_peer, this->shared_ptr, ev, this->config);        
+    WRTCPeer::OnPeerConnected(id_peer, ev, this->config);        
 }
 
 // peer disconnected
 void BridgeSocket::onPeerDisconnected(sio::event & ev) {
-    std::cout << "Peer disconnect request: " << std::endl;
-    std::cout << PrintMessage(ev.get_message()) << std::endl;
-    auto peer = WRTCPeer::GetConnectedPeer(ev, this->shared_ptr);
+    if (this->config->sio_verbose) {
+        std::cout << "Peer disconnect request: " << std::endl;
+        std::cout << printMessage(ev.get_message()) << std::endl;
+    }
+    auto peer = WRTCPeer::GetConnectedPeer(ev);
     if (peer == nullptr) return;
     peer->onDisconnected();
 }
 
 // introspection control
 void BridgeSocket::onIntrospection(sio::event & ev) {
-    auto peer = WRTCPeer::GetConnectedPeer(ev, this->shared_ptr);
+    auto peer = WRTCPeer::GetConnectedPeer(ev);
     if (peer == nullptr) return;
         
     if (ev.get_message()->get_map()["state"]->get_bool()) {
-        this->introspection->start();
+        Introspection::start();
     } else {
-        this->introspection->stop();
+        Introspection::stop();
     }
 
     auto ack = sio::object_message::create();
     ack->get_map().emplace("success", sio::int_message::create(1));
-    ack->get_map().emplace("introspection", sio::bool_message::create(this->introspection->isRunning()));
+    ack->get_map().emplace("introspection", sio::bool_message::create(Introspection::isRunning()));
     this->client.socket()->ack(ev.get_msgId(), { ack });
 }
 
 // peer subscribing to stuffs
 void BridgeSocket::onSubscribeRead(sio::event & ev) {
-
-    std::cout << "Subscribe read request: " << std::endl;
-    std::cout << PrintMessage(ev.get_message()) << std::endl;
-
-    auto peer = WRTCPeer::GetConnectedPeer(ev, this->shared_ptr);
+    if (this->config->sio_verbose) {
+        std::cout << "Subscribe read request: " << std::endl;
+        std::cout << printMessage(ev.get_message()) << std::endl;
+    }
+    
+    auto peer = WRTCPeer::GetConnectedPeer(ev);
     if (peer == nullptr) return;
     
-    // TODO
+    auto msg = ev.get_message();
+    if (msg->get_map().find("sources") != msg->get_map().end()) {
+        auto arr = msg->get_map().at("sources");
+        if (arr->get_flag() == sio::message::flag_array) {
+            for (auto t : arr->get_vector()){
+                peer->addReqReadSubscription(t->get_string());
+            }
+        } 
+    }
 
-    auto ack = sio::object_message::create();
-    this->client.socket()->ack(ev.get_msgId(), { ack });
+    if (ev.need_ack())
+        peer->processSubscriptions(ev.get_msgId(), nullptr); // will emit ack
+    else
+        peer->processSubscriptions(-1, nullptr); // will emit new msg
+}
+
+// peer unsubscribing from stuffs
+void BridgeSocket::onUnsubscribeRead(sio::event & ev) {
+
+    if (this->config->sio_verbose) {
+        std::cout << "Unsubscribe read request: " << std::endl;
+        std::cout << printMessage(ev.get_message()) << std::endl;
+    }
+
+    auto peer = WRTCPeer::GetConnectedPeer(ev);
+    if (peer == nullptr) return;
+    
+    auto msg = ev.get_message();
+    if (msg->get_map().find("sources") != msg->get_map().end()) {
+        auto arr = msg->get_map().at("sources");
+        if (arr->get_flag() == sio::message::flag_array) {
+            for (auto t : arr->get_vector()){
+                peer->removeReqReadSubscription(t->get_string());
+            }
+        } 
+    }
+
+    if (ev.need_ack())
+        peer->processSubscriptions(ev.get_msgId(), nullptr); // will emit ack
+    else
+        peer->processSubscriptions(-1, nullptr); // will emit new msg
 }
 
 // peer requesting write subscriptions
@@ -216,16 +281,68 @@ void BridgeSocket::onSubscribeWrite(sio::event & ev) {
 
     if (this->config->sio_verbose) {
         std::cout << "Subscribe write request: " << std::endl;
-        std::cout << PrintMessage(ev.get_message()) << std::endl;
+        std::cout << printMessage(ev.get_message()) << std::endl;
     }
 
-    auto peer = WRTCPeer::GetConnectedPeer(ev, this->shared_ptr);
+    auto peer = WRTCPeer::GetConnectedPeer(ev);
     if (peer == nullptr) return;
         
-    // TODO
+    auto msg = ev.get_message();
+    if (msg->get_map().find("sources") != msg->get_map().end()) {
+        auto arr = msg->get_map().at("sources");
+        if (arr->get_flag() == sio::message::flag_array) {
+            for (auto one : arr->get_vector()){
+                if (one->get_flag() == sio::message::flag_array) {
+                    peer->addReqWriteSubscription(one->get_vector()[0]->get_string(), one->get_vector()[1]->get_string());
+                }
+            }
+        } 
+    }
+
+    if (ev.need_ack())
+        peer->processSubscriptions(ev.get_msgId(), nullptr); // will emit ack
+    else
+        peer->processSubscriptions(-1, nullptr); // will emit new msg
+}
+
+// peer closing write subscriptions
+void BridgeSocket::onUnsubscribeWrite(sio::event & ev) {
+
+    if (this->config->sio_verbose) {
+        std::cout << "Unsubscribe write request: " << std::endl;
+        std::cout << printMessage(ev.get_message()) << std::endl;
+    }
+
+    auto peer = WRTCPeer::GetConnectedPeer(ev);
+    if (peer == nullptr) return;
+        
+    auto msg = ev.get_message();
+    if (msg->get_map().find("sources") != msg->get_map().end()) {
+        auto arr = msg->get_map().at("sources");
+        if (arr->get_flag() == sio::message::flag_array) {
+            for (auto t : arr->get_vector()){
+                peer->removeReqWriteSubscription(t->get_string());
+            }
+        }
+    }
+
+    if (ev.need_ack())
+        peer->processSubscriptions(ev.get_msgId(), nullptr); // will emit ack
+    else
+        peer->processSubscriptions(-1, nullptr); // will emit new msg
+}
+
+// peer calling a service
+void BridgeSocket::onSDPAnswer(sio::event & ev) {
+
+    // if (this->config->sio_verbose) {
+        std::cout << RED << "!!! (unhandled) Received SDP Answer: !!!" << CLR << std::endl;
+        std::cout << printMessage(ev.get_message()) << std::endl;
+    // }
 
     auto ack = sio::object_message::create();
-    this->client.socket()->ack(ev.get_msgId(), { ack });
+    ack->get_map().emplace("success", sio::int_message::create(0)); // TODO 1 !!
+    BridgeSocket::ack(ev.get_msgId(), { ack });
 }
 
 // report error call via socket.io + rosout
@@ -234,7 +351,7 @@ void BridgeSocket::returnError(std::string message, sio::event const &ev) {
     auto err_ack = sio::object_message::create();
     err_ack->get_map().emplace("err", sio::int_message::create(2));
     err_ack->get_map().emplace("msg", sio::string_message::create(message));
-    this->ack(ev.get_msgId(), {err_ack});
+    BridgeSocket::ack(ev.get_msgId(), {err_ack});
 }
 
 // peer calling a service
@@ -242,25 +359,25 @@ void BridgeSocket::onServiceCall(sio::event & ev) {
 
     if (this->config->sio_verbose) {
         std::cout << "Service call request: " << std::endl;
-        std::cout << PrintMessage(ev.get_message()) << std::endl;
+        std::cout << printMessage(ev.get_message()) << std::endl;
     }
     
-    auto peer = WRTCPeer::GetConnectedPeer(ev, this->shared_ptr);
+    auto peer = WRTCPeer::GetConnectedPeer(ev);
     if (peer == nullptr) return;
 
     auto service_name = ev.get_message()->get_map().at("service")->get_string();
     if (service_name.empty()) {
         return this->returnError("Service id not provided", ev);
     }
-    auto service_type = this->introspection->getService(service_name);
+    auto service_type = Introspection::getService(service_name);
     if (service_type.empty()) {
         return this->returnError("Service '" + service_name + "' not discovered", ev);
     }
 
     // async thread
     std::thread newThread([this, ev, service_name, service_type]() {
-        DataLED::Once();
-        this->node->callGenericService(service_name, service_type, this->shared_ptr, ev);
+        DataLED::once();
+        this->node->callGenericService(service_name, service_type, ev);
     });
     newThread.detach();
 }
@@ -302,7 +419,7 @@ void BridgeSocket::onOtherSocketMessage(sio::event const& ev) {
         return;
     
     std::cout << RED << "UNHANDLED SOCKER MSG '" << ev.get_name() << "': " << CLR << std::endl;
-    std::cout << PrintMessage(ev.get_message()) << std::endl;
+    std::cout << printMessage(ev.get_message()) << std::endl;
 }
 
 void BridgeSocket::onClosed(sio::client::close_reason const& reason) {
@@ -343,18 +460,21 @@ void BridgeSocket::onSocketClose() {
 }
 
 void BridgeSocket::shutdown() {
-    this->shutting_down = true;
+    auto instance = BridgeSocket::instance;
+    if (instance == nullptr)
+        return;
+    instance->shutting_down = true;
     WRTCPeer::OnAllPeersDisconnected();
-    this->client.set_reconnect_attempts(0);
-    this->client.clear_con_listeners();
-    this->client.sync_close();
+    instance->client.set_reconnect_attempts(0);
+    instance->client.clear_con_listeners();
+    instance->client.sync_close();
 }
 
 BridgeSocket::~BridgeSocket() {
-    ConnLED::Off();
+    ConnLED::off();
 }
 
-std::string BridgeSocket::PrintMessage(const sio::message::ptr & message, bool pretty, int indent, std::string indent_prefix) {
+std::string BridgeSocket::printMessage(const sio::message::ptr & message, bool pretty, int indent, std::string indent_prefix) {
     std::string out;
     const int sp = 2;
 
@@ -388,7 +508,7 @@ std::string BridgeSocket::PrintMessage(const sio::message::ptr & message, bool p
                     if (pretty) {
                         out.append(sp*indent, ' ');
                     }
-                    out += p.first + ": " + PrintMessage(p.second, pretty, indent+1, "") + ", ";
+                    out += p.first + ": " + printMessage(p.second, pretty, indent+1, "") + ", ";
                     if (pretty)
                         out += '\n';
                 }
@@ -409,7 +529,7 @@ std::string BridgeSocket::PrintMessage(const sio::message::ptr & message, bool p
                     if (pretty) {
                         out.append(sp*indent, ' ');
                     }
-                    out += PrintMessage(one, pretty, indent+1, "") + ", ";
+                    out += printMessage(one, pretty, indent+1, "") + ", ";
                     if (pretty)
                         out += '\n';
                 }
@@ -437,7 +557,7 @@ std::string BridgeSocket::PrintMessage(const sio::message::ptr & message, bool p
     return out;
 }
 
-sio::message::ptr BridgeSocket::JsonToSioMessage(Json::Value val) {
+sio::message::ptr BridgeSocket::jsonToSioMessage(Json::Value val) {
 
     if (val.isBool()) {
         return sio::bool_message::create(val.asBool());
@@ -456,14 +576,14 @@ sio::message::ptr BridgeSocket::JsonToSioMessage(Json::Value val) {
     } else if (val.isArray()) {
         auto res = sio::array_message::create();
         for (auto & one : val) {
-            res->get_vector().push_back(JsonToSioMessage(one));
+            res->get_vector().push_back(jsonToSioMessage(one));
         }
         return res;
     } else if (val.isObject()) {
         auto res = sio::object_message::create();
         for (auto it = val.begin(); it != val.end(); ++it) {
             const std::string& key = it.key().asString();
-            res->get_map().emplace(key, JsonToSioMessage(*it));
+            res->get_map().emplace(key, jsonToSioMessage(*it));
         }
         return res;
     } else {

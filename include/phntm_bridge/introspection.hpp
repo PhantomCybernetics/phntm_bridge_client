@@ -12,20 +12,21 @@ class BridgeSocket;
 class Introspection {
 
     public:
-        Introspection(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<BridgeSocket> sio, std::shared_ptr<BridgeConfig> config);
-        void start();
-        void stop();
-        void report();
-        bool isRunning() { return this->running; };
-        std::string getService(std::string service);
-        ~Introspection();
-
+        static void init(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<BridgeConfig> config);
+        static void start();
+        static void stop();
+        static void report();
+        static bool isRunning() { return Introspection::instance != nullptr && Introspection::instance->running; };
+        static std::string getService(std::string service); //srv type empty
+        static std::string getTopic(std::string topic); //msg type or empty 
+        
     private:
+        Introspection(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<BridgeConfig> config);
+        ~Introspection();
         static Introspection * instance;
 
         bool running;
 
-        std::shared_ptr<BridgeSocket> sio;
         std::shared_ptr<rclcpp::Node> node;
         std::shared_ptr<BridgeConfig> config;
 

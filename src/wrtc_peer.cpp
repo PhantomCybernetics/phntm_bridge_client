@@ -29,14 +29,14 @@ bool WRTCPeer::IsConnected(std::string id_peer) {
 }
 
 // vaidates peer id, checks if connected, calls error ack if requested
-std::shared_ptr<WRTCPeer> WRTCPeer::GetConnectedPeer(sio::event & ev, std::shared_ptr<BridgeSocket> sio) {
+std::shared_ptr<WRTCPeer> WRTCPeer::GetConnectedPeer(sio::event & ev) {
     auto id_peer = WRTCPeer::GetId(ev.get_message());
     if (id_peer.empty()) {
         if (ev.need_ack()) {
             auto err_ack = sio::object_message::create();
             err_ack->get_map().emplace("err", sio::int_message::create(2));
             err_ack->get_map().emplace("msg", sio::string_message::create("No valid peer id provided"));
-            sio->ack(ev.get_msgId(), { err_ack });
+            BridgeSocket::ack(ev.get_msgId(), { err_ack });
         }
         return nullptr;
     } else if (!WRTCPeer::IsConnected(id_peer)) {
@@ -44,7 +44,7 @@ std::shared_ptr<WRTCPeer> WRTCPeer::GetConnectedPeer(sio::event & ev, std::share
             auto err_ack = sio::object_message::create();
             err_ack->get_map().emplace("err", sio::int_message::create(2));
             err_ack->get_map().emplace("msg", sio::string_message::create("Peer not connected"));
-            sio->ack(ev.get_msgId(), { err_ack });
+            BridgeSocket::ack(ev.get_msgId(), { err_ack });
         }
         return nullptr;
     } else {
@@ -52,7 +52,7 @@ std::shared_ptr<WRTCPeer> WRTCPeer::GetConnectedPeer(sio::event & ev, std::share
     }
 }
 
-void WRTCPeer::OnPeerConnected(std::string id_peer, std::shared_ptr<BridgeSocket> sio, sio::event &ev, std::shared_ptr<BridgeConfig> config) {
+void WRTCPeer::OnPeerConnected(std::string id_peer, sio::event &ev, std::shared_ptr<BridgeConfig> config) {
     std::cout << GREEN << "Peer " << id_peer << " connected..." << CLR << std::endl;
 
     auto data = ev.get_message();
@@ -68,7 +68,6 @@ void WRTCPeer::OnPeerConnected(std::string id_peer, std::shared_ptr<BridgeSocket
         data->get_map()["id_app"]->get_string(),
         data->get_map()["id_instance"]->get_string(),
         id_session,
-        sio,
         config);
     connected_peers.emplace(id_peer, peer);
 
@@ -80,7 +79,7 @@ void WRTCPeer::OnPeerConnected(std::string id_peer, std::shared_ptr<BridgeSocket
             std::cerr << RED << "Write subs provided is not an array" << CLR << std::endl;
         } else {
             for (auto t : arr->get_vector()){
-                peer->req_read_subs.push_back(t->get_string());
+                peer->addReqReadSubscription(t->get_string());
             }
         }
     }
@@ -96,18 +95,67 @@ void WRTCPeer::OnPeerConnected(std::string id_peer, std::shared_ptr<BridgeSocket
                 } else if (tt->get_vector().size() != 2) {
                     std::cerr << RED << "Write sub provided is not 2 items long" << CLR << std::endl;
                 } else {
-                    std::vector<std::string> one;
-                    one.push_back(tt->get_vector()[0]->get_string()); //topic
-                    one.push_back(tt->get_vector()[1]->get_string()); //type
-                    peer->req_write_subs.push_back(one);
+                    peer->addReqWriteSubscription(tt->get_vector()[0]->get_string(), tt->get_vector()[1]->get_string());
                 }
             }
         }   
     }
 
     auto ack = sio::object_message::create();
-    AddUIConfigToMessage(ack, config);
-    peer->processSubscription(ev, ack);
+    AddUIConfigToMessage(ack, config); // adds ui config to reply that is emitted later
+    peer->processSubscriptions(ev.get_msgId(), ack);
+}
+
+bool WRTCPeer::addReqReadSubscription(std::string topic) {
+    if (std::find(this->req_read_subs.begin(), this->req_read_subs.end(), topic) != this->req_read_subs.end())
+        return false;
+    if (this->config->webrtc_debug)
+        std::cout << this->toString() << "Adding read subscription to: " << GREEN << topic << CLR << std::endl;
+    this->req_read_subs.push_back(topic);
+    return true;
+}
+
+bool WRTCPeer::removeReqReadSubscription(std::string topic) {
+    auto pos = std::find(this->req_read_subs.begin(), this->req_read_subs.end(), topic);
+    if (pos == this->req_read_subs.end())
+        return false;
+    if (this->config->webrtc_debug)
+        std::cout << this->toString() << "Removing read subscription to: " << topic << std::endl;
+    this->req_read_subs.erase(pos);
+    return true;
+}
+
+bool WRTCPeer::addReqWriteSubscription(std::string topic, std::string msg_type) {
+    for (size_t i = 0; i <  this->req_write_subs.size(); ) {
+        if (this->req_write_subs[i][0] == topic) {
+            if (this->req_write_subs[i][1] == msg_type)
+                return false; // don't add duplicates
+            this->req_write_subs.erase(this->req_write_subs.begin() + i); // remove and add w new type
+        } else {
+            i++;
+        }
+    }
+    if (this->config->webrtc_debug)
+        std::cout << this->toString() << "Adding write subscription to: " << MAGENTA << topic << " {" << msg_type <<"}" << CLR << std::endl;
+    std::vector<std::string> one;
+    one.push_back(topic);
+    one.push_back(msg_type);
+    this->req_write_subs.push_back(one);
+    return true;
+}
+
+bool WRTCPeer::removeReqWriteSubscription(std::string topic) {
+    for (size_t i = 0; i <  this->req_write_subs.size(); ) {
+        if (this->req_write_subs[i][0] == topic) {
+            if (this->config->webrtc_debug)
+                std::cout << this->toString() << "Removing write subscription to: " << topic << std::endl;
+            this->req_write_subs.erase(this->req_write_subs.begin() + i); // remove and add w new type
+            return true;
+        } else {
+            i++;
+        }
+    }
+    return false;
 }
 
 void WRTCPeer::onDisconnected() {
@@ -115,9 +163,7 @@ void WRTCPeer::onDisconnected() {
     this->req_read_subs.clear(); // empty all subs
     this->req_write_subs.clear();
     this->is_connected = false;
-    sio::message::list list_ignored;
-    sio::event ev_ignored("", "", 0, list_ignored, false);
-    this->processSubscription(ev_ignored, nullptr); // clean up
+    this->processSubscriptions(-1, nullptr); // clean up
     connected_peers.erase(this->id);
 }
 
@@ -135,12 +181,11 @@ std::string WRTCPeer::toString() {
     return "[RTC Peer #" + this->id + "] ";
 }
 
-WRTCPeer::WRTCPeer(std::string id_peer, std::string id_app, std::string id_instance, std::string session, std::shared_ptr<BridgeSocket> sio, std::shared_ptr<BridgeConfig> config) {
+WRTCPeer::WRTCPeer(std::string id_peer, std::string id_app, std::string id_instance, std::string session, std::shared_ptr<BridgeConfig> config) {
     this->id = id_peer;
     this->id_app = id_app;
     this->id_instance = id_instance;
     this->session = session;
-    this->sio = sio;
     this->config = config;
     this->is_connected = true; // false after disconnect is received
 
@@ -171,7 +216,13 @@ void WRTCPeer::onRTCGatheringStateChange(rtc::PeerConnection::GatheringState sta
         std::cout << YELLOW << this->toString() << "Gathering state: " << state << CLR << std::endl;
 }
 
-void WRTCPeer::processSubscription(sio::event &ev, sio::object_message::ptr ack) {
+void WRTCPeer::ProcessAllPeerSubscriptions() {
+    for (auto it = WRTCPeer::connected_peers.begin(); it != WRTCPeer::connected_peers.end(); ++it) {  
+        it->second->processSubscriptions(-1, nullptr);
+    }
+}
+
+void WRTCPeer::processSubscriptions(int ack_msg_id, sio::object_message::ptr ack) {
 
     std::shared_ptr<WRTCPeer> that = nullptr;
     for (auto pair : connected_peers) {
@@ -184,11 +235,11 @@ void WRTCPeer::processSubscription(sio::event &ev, sio::object_message::ptr ack)
         std::cerr << this->toString() << " Ptr not found in connected_peers, not processing subscriptions" << std::endl;
         return;
     }
-    std::thread newThread([that, ev, ack]() {
+    std::thread newThread([that, ack_msg_id, ack]() {
 
         std::lock_guard<std::mutex> lock(that->processing_subscriptions_mutex); // wait until previus pressing completes
     
-        bool disconnected = !that->is_connected || that->pc->state() == rtc::PeerConnection::State::Failed || !that->sio->connected || that->sio->shutting_down;
+        bool disconnected = !that->is_connected || that->pc->state() == rtc::PeerConnection::State::Failed || !BridgeSocket::isConnected() || BridgeSocket::isShuttingDown();
 
         if (that->config->webrtc_debug) {
             std::vector<std::string> req_writes_joined;
@@ -196,21 +247,55 @@ void WRTCPeer::processSubscription(sio::event &ev, sio::object_message::ptr ack)
                 req_writes_joined.push_back(one[0]+" {"+ one[1]+ "}");
             }
             std::cout << that->toString() << "Processing " << (disconnected ? BLUE + "disconnected " + CLR : "") << "subs, "
-            << "read: " << BLUE << "[" << join( that->req_read_subs, ", ") << "] " << CLR
-            << "write: " << RED << "[" << join(req_writes_joined, ", ") << "] " << CLR
+            << "read: " << GREEN << "[" << join( that->req_read_subs, ", ") << "] " << CLR
+            << "write: " << MAGENTA << "[" << join(req_writes_joined, ", ") << "] " << CLR
             << "signalingState=" << YELLOW << that->pc->signalingState() << " " << CLR
             << "iceGatheringState=" << YELLOW << that->pc->gatheringState() << CLR
             << std::endl;
         }
 
+        // open read data and media channels
+        for (auto sub : that->req_read_subs) {
+
+        }
+
+        // open write data channels
+        for (auto sub : that->req_write_subs) {
+            
+        }
+
+        // unsubscribe from data channels
+        // for topic in list(peer.outbound_data_channels.keys()):
+        //     if not topic in peer.read_subs:
+        //         self.get_logger().info(f'{peer} unsubscribing from {topic}')
+        //         await self.unsubscribe_data_topic(topic, peer=peer, msg_callback=None)
+        //         res['read_data_channels'].append([ topic ]) # no id => unsubscribed
+
+        // unsubscribe from video streams
+        // for sub in list(peer.video_tracks.keys()):
+        //     if not sub in peer.read_subs:
+        //         self.get_logger().info(f'{peer} unsubscribing from image topic {sub}')
+        //         await self.unsubscribe_image_topic(sub, peer)
+        //         res['read_video_streams'].append([ sub ]) # no id => unsubscribed
+
+        // close write channels
+        // for topic in list(peer.inbound_data_channels.keys()):
+        //     topic_active = False
+        //     for sub in peer.write_subs:
+        //         if sub[0] == topic:
+        //             topic_active = True
+        //             break
+        //     if not topic_active:
+        //         self.get_logger().info(f'{peer} stopped writing into {topic}')
+        //         await self.close_write_channel(topic, peer)
+        //         res['write_data_channels'].append([ topic ]) # no id => unsubscribed
+
         if (disconnected)
             return; // done here, not producing any reply
 
         sio::object_message::ptr reply;
-        bool emit_new_reply = false;
         if (ack == nullptr) {
             reply = sio::object_message::create();
-            emit_new_reply = true;
         } else {
             reply = ack;
         }
@@ -220,23 +305,44 @@ void WRTCPeer::processSubscription(sio::event &ev, sio::object_message::ptr ack)
         reply->get_map().emplace("read_data_channels", sio::array_message::create());
         reply->get_map().emplace("write_data_channels", sio::array_message::create());
 
-        if (emit_new_reply) { // return as new sio message
+        if (ack_msg_id < 0) { // return as new sio message
 
-            // self.get_logger().info(f'Sending update to {peer}')
-            // if peer.id_app:
-            //     update_data['id_app'] = peer.id_app
-            // if peer.id_instance:
-            //     update_data['id_instance'] = peer.id_instance
-            // # print(update_data)
-            // await self.sio.emit(event='peer:update',
-            //                     data=update_data,
-            //                     callback=peer.on_answer_reply)
+            if (!that->id_app.empty())
+                reply->get_map().emplace("id_app", sio::string_message::create(that->id_app));
+            if (!that->id_instance.empty())
+                reply->get_map().emplace("id_instance", sio::string_message::create(that->id_instance));
+                        
+            BridgeSocket::emit("peer:update", { reply }, std::bind(&WRTCPeer::onAnswerReply, that, std::placeholders::_1)); //no ack
 
         } else { // return as ack
-            that->sio->ack(ev.get_msgId(), { reply });
+            BridgeSocket::ack(ack_msg_id, { reply });
         }
     });
     newThread.detach();
+}
+
+void WRTCPeer::onAnswerReply(sio::message::list const& reply) {
+    if (this->config->sio_verbose) {
+        std::cout << "SIO got reply for peer:update message: " << std::endl
+                  << BridgeSocket::printMessage(reply.at(0)) << std::endl;
+    }
+    auto msg = reply.at(0);
+
+    if (msg->get_map().find("err") != msg->get_map().end()) {
+        std::cerr << RED << "Client returned error for peer:update: " << msg->get_map().at("err")->get_string() << CLR << std::endl;
+        return;
+    }
+
+    // if self.pc.signalingState != 'have-local-offer':
+    //     self.logger.error(f'Not setting SDP answer from {self}, signalingState={self.pc.signalingState}')
+    //     self.processing_subscriptions = False
+    //     return
+    
+    // self.logger.info(c(f'Got peer answer:', 'cyan'))
+    // print(reply_data)
+    // answer = RTCSessionDescription(sdp=reply_data['sdp'], type='answer')
+    // await self.pc.setRemoteDescription(answer)
+    // self.processing_subscriptions = False
 }
 
 void WRTCPeer::AddUIConfigToMessage(sio::object_message::ptr msg, std::shared_ptr<BridgeConfig> config) {
@@ -248,7 +354,7 @@ void WRTCPeer::AddUIConfigToMessage(sio::object_message::ptr msg, std::shared_pt
      msg->get_map().emplace("input_drivers", input_drivers);
 
      // default input mappings json
-     msg->get_map().emplace("input_defaults", BridgeSocket::JsonToSioMessage(config->input_defaults));
+     msg->get_map().emplace("input_defaults", BridgeSocket::jsonToSioMessage(config->input_defaults));
      
      //  custom input driver includes
      auto custom_input_drivers = sio::array_message::create();
@@ -261,7 +367,7 @@ void WRTCPeer::AddUIConfigToMessage(sio::object_message::ptr msg, std::shared_pt
      msg->get_map().emplace("custom_input_drivers", custom_input_drivers);
 
      // pass service buttons json
-     msg->get_map().emplace("service_defaults", BridgeSocket::JsonToSioMessage(config->service_defaults));
+     msg->get_map().emplace("service_defaults", BridgeSocket::jsonToSioMessage(config->service_defaults));
 
      // custom service widget includes
      auto custom_service_widgets = sio::array_message::create();
@@ -280,7 +386,7 @@ void WRTCPeer::AddUIConfigToMessage(sio::object_message::ptr msg, std::shared_pt
          one_msg->get_map().emplace("class", sio::string_message::create(one.class_name));
          one_msg->get_map().emplace("srv", sio::string_message::create(one.service));
          if (one.data) {
-             one_msg->get_map().emplace("data", BridgeSocket::JsonToSioMessage(one.data));
+             one_msg->get_map().emplace("data", BridgeSocket::jsonToSioMessage(one.data));
          }
          service_widgets->get_vector().push_back(one_msg);
      }

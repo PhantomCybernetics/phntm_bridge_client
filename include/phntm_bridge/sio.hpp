@@ -9,33 +9,33 @@
 #include <string>
 #include <json/json.h>
 
-class Introspection;
 class PhntmBridge;
 
 class BridgeSocket
 {
     public:
-        BridgeSocket(std::shared_ptr<BridgeConfig> config, std::shared_ptr<PhntmBridge> node);
-        bool connect();
-        void shutdown();
-        void emit(std::string const& name, sio::message::list const& msglist, std::function<void (sio::message::list const&)> const& ack);
-        void ack(int msg_id, sio::message::list const& msglist);
-        ~BridgeSocket();
-        
-        void setIntrospection(std::shared_ptr<Introspection> introspection) { this->introspection = introspection; };
+        static void init(std::shared_ptr<PhntmBridge> node, std::shared_ptr<BridgeConfig> config);
+        static bool connect();
+        static void shutdown();
+        static void emit(std::string const& name, sio::message::list const& msglist, std::function<void (sio::message::list const&)> const& ack);
+        static void ack(int msg_id, sio::message::list const& msglist);
+        static bool isConnected() { return BridgeSocket::instance != nullptr && BridgeSocket::instance->connected; };
+        static bool isShuttingDown() { return BridgeSocket::instance != nullptr && BridgeSocket::instance->shutting_down; };
 
-        static std::string PrintMessage(const sio::message::ptr & message, bool pretty = true, int indent = 1, std::string indent_prefix = "");
-        static sio::message::ptr JsonToSioMessage(Json::Value val);
+        static std::string printMessage(const sio::message::ptr & message, bool pretty = true, int indent = 1, std::string indent_prefix = "");
+        static sio::message::ptr jsonToSioMessage(Json::Value val);
+
+    private:
+        BridgeSocket(std::shared_ptr<PhntmBridge> node, std::shared_ptr<BridgeConfig> config);
+        ~BridgeSocket();
+        static BridgeSocket * instance;
+
+        std::shared_ptr<PhntmBridge> node;
 
         bool connected, shutting_down;
 
-    private:
-        std::shared_ptr<Introspection> introspection;
-        std::shared_ptr<PhntmBridge> node;
-
         sio::client client;
         sio::socket::ptr socket;
-        std::shared_ptr<BridgeSocket> shared_ptr;
 
         std::shared_ptr<BridgeConfig> config;
         
@@ -60,8 +60,12 @@ class BridgeSocket
         void onIntrospection(sio::event & ev);
 
         void onSubscribeRead(sio::event & ev);
+        void onUnsubscribeRead(sio::event & ev);
         void onSubscribeWrite(sio::event & ev);
+        void onUnsubscribeWrite(sio::event & ev);
         void onServiceCall(sio::event & ev);
+
+        void onSDPAnswer(sio::event & ev);
 
         void onOtherSocketMessage(sio::event const& ev);
 };

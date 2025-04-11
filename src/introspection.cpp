@@ -1,5 +1,6 @@
 #include "phntm_bridge/introspection.hpp"
 #include "phntm_bridge/sio.hpp"
+#include "phntm_bridge/wrtc_peer.hpp"
 #include "sio_message.h"
 #include <ostream>
 #include <iostream>
@@ -13,19 +14,11 @@
 
 Introspection* Introspection::instance = nullptr;
 
-Introspection::Introspection(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<BridgeSocket> sio, std::shared_ptr<BridgeConfig> config) {
-
-    if (instance != nullptr) {
-        std::cerr << RED << "Introspection instance already created" << CLR << std::endl;
-        return;
-    }
+Introspection::Introspection(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<BridgeConfig> config) {
 
     this->node = node;
-    this->sio = sio;
     this->config = config;
     this->running = false;
-
-    instance = this;
 
     // auto my_callback_group = rclcpp::create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
 
@@ -42,31 +35,40 @@ Introspection::Introspection(std::shared_ptr<rclcpp::Node> node, std::shared_ptr
     }
 }
 
+void Introspection::init(std::shared_ptr<rclcpp::Node> node,std::shared_ptr<BridgeConfig> config) {
+    if (Introspection::instance != nullptr) {
+        return;
+    }
+    Introspection::instance = new Introspection(node, config);
+}
+
 void Introspection::start() {
-    if (this->running)
+    auto instance = Introspection::instance;
+    if (instance->running)
         return;
 
-    this->running = true;
+    instance->running = true;
     std::cout << CYAN << "Introspection starting..." << CLR << std::endl;
-    this->reportRunningState();
-
-    this->start_time = node->now();
-    this->introspection_in_progress = false;
-    this->timer = this->node->create_wall_timer(
-        std::chrono::milliseconds((uint) this->config->discovery_period_sec * 1000),
-        std::bind(&Introspection::runIntrospection, this)
+    instance->reportRunningState();
+    
+    instance->start_time = instance->node->now();
+    instance->introspection_in_progress = false;
+    instance->timer = instance->node->create_wall_timer(
+        std::chrono::milliseconds((uint) instance->config->discovery_period_sec * 1000),
+        std::bind(&Introspection::runIntrospection, instance)
     );
 }
 
 void Introspection::stop() {
-    if (!this->running)
+    auto instance = Introspection::instance;
+    if (!instance->running)
         return;
 
-    this->running = false;
+    instance->running = false;
     std::cout << CYAN << "Introspection stopped." << CLR << std::endl;
 
-    this->timer->cancel();
-    this->reportRunningState();
+    instance->timer->cancel();
+    instance->reportRunningState();
 }
 
 void Introspection::runIntrospection() {
@@ -147,7 +149,7 @@ void Introspection::runIntrospection() {
         }
 
         if (this->discovered_topics.find(topic.first) == this->discovered_topics.end()) {
-            std::cout << "Discovered topic " << CYAN << topic.first << CLR << GRAY << " [" << topic.second[0] << "]" << CLR << std::endl;
+            std::cout << "Discovered topic " << CYAN << topic.first << CLR << GRAY << " {" << topic.second[0] << "}" << CLR << std::endl;
             this->discovered_topics.emplace(topic.first, topic.second[0]);
             topics_changed = true;
             idls_changed = this->collectIDLs(topic.second[0]) || idls_changed;
@@ -246,13 +248,16 @@ void Introspection::runIntrospection() {
         this->reportNodes();
     }
 
+    if (topics_changed)
+        WRTCPeer::ProcessAllPeerSubscriptions();
+
     this->introspection_in_progress = false;
-    
+
     // auto stop
     if (this->config->stop_discovery_after_sec > 0.0f) {
         rclcpp::Duration duration = node->now() - start_time;
         if (duration.seconds() > this->config->stop_discovery_after_sec) {
-            this->stop();
+            Introspection::stop();
         }
     }    
 }
@@ -418,16 +423,17 @@ void Introspection::onDockerMonitorMessage(phntm_interfaces::msg::DockerStatus c
         this->reportDocker();
 
         if (!this->running) {
-            this->start();
+            Introspection::start();
         }
     }
 }
 
 void Introspection::report() {
-    this->reportIDLs(); // report defs before others
-    this->reportNodes();
-    this->reportDocker();
-    this->reportRunningState();
+    auto instance = Introspection::instance;
+    instance->reportIDLs(); // report defs before others
+    instance->reportNodes();
+    instance->reportDocker();
+    instance->reportRunningState();
 }
 
 void Introspection::reportIDLs() {
@@ -440,9 +446,9 @@ void Introspection::reportIDLs() {
 
     std::cout << GRAY << "Reporting " << this->discovered_idls.size() << " IDLs" << CLR << std::endl;
     if (this->config->introspection_verbose)
-            std::cout << GRAY << BridgeSocket::PrintMessage(msg) << CLR << std::endl;
+            std::cout << GRAY << BridgeSocket::printMessage(msg) << CLR << std::endl;
 
-    this->sio->emit("idls", { msg } , nullptr);
+    BridgeSocket::emit("idls", { msg } , nullptr);
 }
 
 sio::message::ptr createQoSMessage(rclcpp::QoS qos) {
@@ -500,11 +506,11 @@ void Introspection::reportNodes() {
     if (this->discovered_nodes.size()) {
         std::cout << GRAY << "Reporting " << this->discovered_nodes.size() << " nodes" << CLR << std::endl;
         if (this->config->introspection_verbose)
-            std::cout << GRAY << BridgeSocket::PrintMessage(msg) << CLR << std::endl;
+            std::cout << GRAY << BridgeSocket::printMessage(msg) << CLR << std::endl;
     } else {
         std::cout << GRAY << "Reporting empty nodes" << CLR << std::endl;
     }
-    this->sio->emit("nodes", { msg }, nullptr);
+    BridgeSocket::emit("nodes", { msg }, nullptr);
 }
 
 void Introspection::reportDocker() {
@@ -543,25 +549,36 @@ void Introspection::reportDocker() {
     if (hosts.size()) {
         std::cout << GRAY << "Reporting " << this->discovered_docker_containers.size() << " Docker containers for " << join(hosts) << CLR << std::endl;
         if (this->config->introspection_verbose)
-            std::cout << GRAY << BridgeSocket::PrintMessage(msg) << CLR << std::endl;
+            std::cout << GRAY << BridgeSocket::printMessage(msg) << CLR << std::endl;
     } else {
         std::cout << GRAY << "Reporting empty Docker containers" << CLR << std::endl;
     }
     
-    this->sio->emit("docker", { msg }, nullptr);
+    BridgeSocket::emit("docker", { msg }, nullptr);
 }
 
 void Introspection::reportRunningState() {
     auto msg = sio::bool_message::create(this->running);
-    this->sio->emit("introspection", { msg }, nullptr);
+    BridgeSocket::emit("introspection", { msg }, nullptr);
 }
 
 std::string Introspection::getService(std::string service) {
-    for (auto n : this->discovered_nodes) {
+    auto instance = Introspection::instance;
+    for (auto n : instance->discovered_nodes) {
         for (auto s : n.second.services) {
             if (s.first == service) {
                 return s.second;
             }
+        }
+    }
+    return ""; //not found
+}
+
+std::string Introspection::getTopic(std::string topic) {
+    auto instance = Introspection::instance;
+    for (auto it = instance->discovered_topics.begin(); it != instance->discovered_topics.end(); it++) {
+        if (it->first == topic) {
+            return it->second;
         }
     }
     return ""; //not found
