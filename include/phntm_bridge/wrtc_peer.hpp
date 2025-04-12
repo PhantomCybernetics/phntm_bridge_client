@@ -11,12 +11,12 @@
 class WRTCPeer {
 
     public: 
-        WRTCPeer(std::string id_peer, std::string id_app, std::string id_instance, std::string session, std::shared_ptr<BridgeConfig> config);
+        WRTCPeer(std::shared_ptr<PhntmBridge> node, std::string id_peer, std::string id_app, std::string id_instance, std::string session, std::shared_ptr<BridgeConfig> config);
         ~WRTCPeer();
         static std::string getId(sio::object_message::ptr data);
         static bool isConnected(std::string id_peer);
         static std::shared_ptr<WRTCPeer> getConnectedPeer(sio::event &ev);
-        static void onPeerConnected(std::string id_peer, sio::event &ev, std::shared_ptr<BridgeConfig> config);
+        static void onPeerConnected(std::shared_ptr<PhntmBridge> node, std::string id_peer, sio::event &ev, std::shared_ptr<BridgeConfig> config);
         static void onAllPeersDisconnected();
 
         void onDisconnected();
@@ -42,6 +42,7 @@ class WRTCPeer {
         std::string id_instance;
         std::string session;
         bool is_connected;
+        std::shared_ptr<PhntmBridge> node;
         
         std::shared_ptr<BridgeConfig> config;
 
@@ -52,6 +53,6 @@ class WRTCPeer {
         std::vector<std::string> req_read_subs; // topic ids to subscribe
         std::vector<std::vector<std::string>> req_write_subs; // // [topic_id, msg_type]'s to write to
 
-        sio::array_message::ptr subscribeDataTopic(std::string topic);
-        sio::array_message::ptr subscribeImageOrVideoTopic(std::string topic);
+        sio::array_message::ptr subscribeDataTopic(std::string topic, std::string msg_type);
+        sio::array_message::ptr subscribeImageOrVideoTopic(std::string topic, std::string msg_type);
 };

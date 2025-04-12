@@ -28,6 +28,7 @@ class PhntmBridge : public rclcpp::Node
     ~PhntmBridge();
     void loadConfig(std::shared_ptr<BridgeConfig> config);
     rclcpp::QoS loadTopicQoSConfig(std::string topic);
+    sio::message::ptr loadTopicMsgTypeExtraConfig(std::string topic, std::string msg_type);
     void setupLocalServices();
     void callGenericService(std::string service_name, std::string service_type, sio::event const& ev);
     void readGitRepoHead(std::string repo_path);

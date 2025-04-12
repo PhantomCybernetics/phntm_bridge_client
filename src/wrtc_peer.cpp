@@ -11,6 +11,7 @@
 #include <memory>
 #include <ostream>
 #include <iostream>
+#include <rclcpp/qos.hpp>
 #include <string>
 #include <uuid/uuid.h>
 
@@ -53,7 +54,7 @@ std::shared_ptr<WRTCPeer> WRTCPeer::getConnectedPeer(sio::event & ev) {
     }
 }
 
-void WRTCPeer::onPeerConnected(std::string id_peer, sio::event &ev, std::shared_ptr<BridgeConfig> config) {
+void WRTCPeer::onPeerConnected(std::shared_ptr<PhntmBridge> node, std::string id_peer, sio::event &ev, std::shared_ptr<BridgeConfig> config) {
     std::cout << GREEN << "Peer " << id_peer << " connected..." << CLR << std::endl;
 
     auto data = ev.get_message();
@@ -65,7 +66,9 @@ void WRTCPeer::onPeerConnected(std::string id_peer, sio::event &ev, std::shared_
     auto id_session= replace(session_str, "-", "");
     std::cout << "Generated new session id " << id_session << std::endl;
 
-    auto peer = std::make_shared<WRTCPeer>(id_peer,
+    auto peer = std::make_shared<WRTCPeer>(
+        node,
+        id_peer,
         data->get_map()["id_app"]->get_string(),
         data->get_map()["id_instance"]->get_string(),
         id_session,
@@ -182,12 +185,13 @@ std::string WRTCPeer::toString() {
     return "[RTC Peer #" + this->id + "] ";
 }
 
-WRTCPeer::WRTCPeer(std::string id_peer, std::string id_app, std::string id_instance, std::string session, std::shared_ptr<BridgeConfig> config) {
+WRTCPeer::WRTCPeer(std::shared_ptr<PhntmBridge> node, std::string id_peer, std::string id_app, std::string id_instance, std::string session, std::shared_ptr<BridgeConfig> config) {
     this->id = id_peer;
     this->id_app = id_app;
     this->id_instance = id_instance;
     this->session = session;
     this->config = config;
+    this->node = node;
     this->is_connected = true; // false after disconnect is received
 
     rtc::Configuration rtc_config;
@@ -269,10 +273,10 @@ void WRTCPeer::processSubscriptions(int ack_msg_id, sio::object_message::ptr ack
                 continue; // topic not yet discovered
             }
             if (!isImageOrVideoType(msg_type)) {
-                auto channel_config = that->subscribeDataTopic(topic);
+                auto channel_config = that->subscribeDataTopic(topic, msg_type);
                 reply->get_map().at("read_data_channels")->get_vector().push_back(channel_config);
             } else {
-                auto channel_config = that->subscribeImageOrVideoTopic(topic);
+                auto channel_config = that->subscribeImageOrVideoTopic(topic, msg_type);
                 reply->get_map().at("read_video_streams")->get_vector().push_back(channel_config);
             }
         }
@@ -327,18 +331,30 @@ void WRTCPeer::processSubscriptions(int ack_msg_id, sio::object_message::ptr ack
 }
 
 
-sio::array_message::ptr subscribeDataTopic(std::string topic) {
+sio::array_message::ptr WRTCPeer::subscribeDataTopic(std::string topic, std::string msg_type) {
+    
+    auto qos = this->node->loadTopicQoSConfig(topic);
+    auto topic_conf = this->node->loadTopicMsgTypeExtraConfig(topic, msg_type);
+
+    std::string id_dc = ""; // TODO
+
     auto channel_config = sio::array_message::create();
-    // [topic, id_dc, msg_type, reliability == QoSReliabilityPolicy.RELIABLE, topic_conf]
-    auto qos PhntmBridge::loadTopicQoSConfig(topic);
+    channel_config->get_vector().push_back(sio::string_message::create(topic));
+    channel_config->get_vector().push_back(sio::string_message::create(id_dc));
+    channel_config->get_vector().push_back(sio::bool_message::create(qos.reliability() == rclcpp::ReliabilityPolicy::Reliable));
+    channel_config->get_vector().push_back( topic_conf);
     return channel_config;
 }
 
-sio::array_message::ptr subscribeImageOrVideoTopic(std::string topic) {
-    auto channel_config = sio::array_message::create();
-    // [ topic, id_track ]
-    auto qos PhntmBridge::loadTopicQoSConfig(topic);
+sio::array_message::ptr WRTCPeer::subscribeImageOrVideoTopic(std::string topic, std::string msg_type) {
     
+    auto qos = this->node->loadTopicQoSConfig(topic);
+
+    std::string id_track = ""; // TODO
+
+    auto channel_config = sio::array_message::create();
+    channel_config->get_vector().push_back(sio::string_message::create(topic));
+    channel_config->get_vector().push_back(sio::string_message::create(id_track));
     return channel_config;
 }
 

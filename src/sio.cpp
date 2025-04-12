@@ -192,7 +192,7 @@ void BridgeSocket::onPeerConnected(sio::event &ev) {
         return;
     } 
 
-    WRTCPeer::onPeerConnected(id_peer, ev, this->config);        
+    WRTCPeer::onPeerConnected(this->node, id_peer, ev, this->config);        
 }
 
 // peer disconnected

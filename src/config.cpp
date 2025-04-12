@@ -1,8 +1,9 @@
 #include "phntm_bridge/const.hpp"
 #include "phntm_bridge/config.hpp"
 #include "phntm_bridge/phntm_bridge.hpp"
+#include "sio_message.h"
 #include <fstream>
-
+#include <chrono>
 
 // 'ClassName https://public.url/file.js'
 std::optional<CustomWidgetDef> parseCustomPluginDef(std::string one) {
@@ -321,8 +322,80 @@ void PhntmBridge::loadConfig(std::shared_ptr<BridgeConfig> config) {
 }
 
 rclcpp::QoS PhntmBridge::loadTopicQoSConfig(std::string topic) {
-    rclcpp::QoS qos(rclcpp::KeepLast(10));
+    rclcpp::QoS qos(rclcpp::KeepLast(1)); // keep last 1
     
+    if (!this->has_parameter(topic + ".reliability"))
+        this->declare_parameter(topic + ".reliability", 2); // 0 = system default, 1 = reliable, 2 = best effort
+    if (!this->has_parameter(topic + ".durability"))
+        this->declare_parameter(topic + ".durability", 2); // 0 = system default, 1 = transient local, 2 = volatile
+    if (!this->has_parameter(topic + ".lifespan_sec"))
+        this->declare_parameter(topic + ".lifespan_sec", -1.0f); // num sec as double, -1.0 infinity
+
+    qos.reliability((rclcpp::ReliabilityPolicy) this->get_parameter(topic + ".reliability").as_int());
+    qos.durability((rclcpp::DurabilityPolicy) this->get_parameter(topic + ".durability").as_int());
+    auto lifespan_sec = this->get_parameter(topic + ".lifespan_sec").as_double();
+    if (lifespan_sec < 0.0f) {
+        qos.lifespan(rclcpp::Duration::max());
+    } else {
+        auto lifespan_total_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(lifespan_sec));
+        auto lifespan_sec_part = std::chrono::duration_cast<std::chrono::seconds>(lifespan_total_ns);
+        auto lifespan_ns_part = lifespan_total_ns - lifespan_sec_part;
+        qos.lifespan(lifespan_sec < 0.0 ? rclcpp::Duration::max() : rclcpp::Duration(lifespan_sec_part.count(), lifespan_ns_part.count()));
+    }
 
     return qos;
+}
+
+sio::message::ptr PhntmBridge::loadTopicMsgTypeExtraConfig(std::string topic, std::string msg_type) {
+    auto res = sio::object_message::create();
+
+    // NN Detections
+    if (msg_type == "vision_msgs/msg/Detection2DArray" || msg_type == "vision_msgs/msg/Detection3DArray") { 
+        if (!this->has_parameter(topic + ".input_width"))
+            this->declare_parameter(topic + ".input_width", 416);
+        if (!this->has_parameter(topic + ".input_height"))
+            this->declare_parameter(topic + ".input_height", 416);
+        if (!this->has_parameter(topic + ".label_map"))
+            this->declare_parameter(topic + ".label_map", std::vector<std::string>());  // array of nn class labels
+            
+        res->get_map().emplace("nn_input_w", sio::int_message::create(this->get_parameter(topic + ".input_width").as_int()));
+        res->get_map().emplace("nn_input_h", sio::int_message::create(this->get_parameter(topic + ".input_height").as_int()));
+        auto labels = sio::array_message::create();
+        auto labels_arr = this->get_parameter(topic + ".label_map").as_string_array();
+        for (auto l : labels_arr)
+            labels->get_vector().push_back(sio::string_message::create(l));
+        res->get_map().emplace("nn_detection_labels", labels);
+    }
+
+    // Camera Info
+    else if (msg_type == "sensor_msgs/msg/CameraInfo") {
+        if (!this->has_parameter(topic + ".frustum_color"))
+            this->declare_parameter(topic + ".frustum_color", "cyan");
+        if (!this->has_parameter(topic + ".frustum_near"))
+            this->declare_parameter(topic + ".frustum_near", 0.01f);
+        if (!this->has_parameter(topic + ".frustum_far"))
+            this->declare_parameter(topic + ".frustum_far", 1.0f);
+        if (!this->has_parameter(topic + ".force_frame_id"))
+            this->declare_parameter(topic + ".force_frame_id", "");
+
+        res->get_map().emplace("frustum_color", sio::string_message::create(this->get_parameter(topic + ".frustum_color").as_string()));
+        res->get_map().emplace("frustum_near", sio::double_message::create(this->get_parameter(topic + ".frustum_near").as_double()));
+        res->get_map().emplace("frustum_far", sio::double_message::create(this->get_parameter(topic + ".frustum_far").as_double()));
+        auto force_frame_id = this->get_parameter(topic + ".force_frame_id").as_string();
+        if (!force_frame_id.empty())
+            res->get_map().emplace("force_frame_id", sio::string_message::create(force_frame_id));
+    }
+            
+    // Battery
+    else if (msg_type == "sensor_msgs/msg/BatteryState") {
+        if (!this->has_parameter(topic + ".min_voltage"))
+            this->declare_parameter(topic + ".min_voltage", 0.0f);
+        if (!this->has_parameter(topic + ".max_voltage"))
+            this->declare_parameter(topic + ".max_voltage", 12.0f);
+
+        res->get_map().emplace("min_voltage", sio::double_message::create(this->get_parameter(topic + ".min_voltage").as_double()));
+        res->get_map().emplace("max_voltage", sio::double_message::create(this->get_parameter(topic + ".max_voltage").as_double()));
+    }
+
+    return res;
 }
