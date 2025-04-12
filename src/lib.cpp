@@ -1,4 +1,5 @@
 #include "phntm_bridge/lib.hpp"
+#include "phntm_bridge/const.hpp"
 #include <algorithm>
 
 std::string trim(const std::string str, const char *trim_chars) {
@@ -63,4 +64,14 @@ std::string join(const std::vector<std::string>& vec, const std::string separato
     }
 
     return result;
+}
+
+bool isImageOrVideoType(std::string msg_type) {
+    return msg_type == IMAGE_MSG_TYPE ||
+           msg_type == COMPRESSED_IMAGE_MSG_TYPE ||
+           msg_type == VIDEO_STREAM_MSG_TYPE;
+}
+    
+bool isEncodedVideoType(std::string msg_type) {
+    return msg_type == VIDEO_STREAM_MSG_TYPE;
 }

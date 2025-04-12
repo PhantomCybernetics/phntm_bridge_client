@@ -51,4 +51,7 @@ class WRTCPeer {
 
         std::vector<std::string> req_read_subs; // topic ids to subscribe
         std::vector<std::vector<std::string>> req_write_subs; // // [topic_id, msg_type]'s to write to
+
+        sio::array_message::ptr subscribeDataTopic(std::string topic);
+        sio::array_message::ptr subscribeImageOrVideoTopic(std::string topic);
 };

@@ -93,8 +93,9 @@ RUN . /opt/ros/$ROS_DISTRO/setup.sh && \
 COPY ./ $ROS_WS/src/phntm_bridge
 RUN . /opt/ros/$ROS_DISTRO/setup.sh && \
     . /ros2_ws/install/setup.sh && \
-    rosdep install -i --from-path src/phntm_bridge --rosdistro $ROS_DISTRO -y && \
-    colcon build --symlink-install --packages-select phntm_bridge
+    rosdep install -i --from-path src/phntm_bridge --rosdistro $ROS_DISTRO -y
+    # && \
+    #colcon build --symlink-install --packages-select phntm_bridge
 
 # pimp up prompt with hostame and color
 RUN echo "PS1='\${debian_chroot:+(\$debian_chroot)}\\[\\033[01;35m\\]\\u@\\h\\[\\033[00m\\] \\[\\033[01;34m\\]\\w\\[\\033[00m\\] '"  >> /root/.bashrc

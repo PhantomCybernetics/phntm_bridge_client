@@ -1,4 +1,5 @@
 #include "phntm_bridge/const.hpp"
+#include "phntm_bridge/introspection.hpp"
 #include "phntm_bridge/lib.hpp"
 #include "phntm_bridge/wrtc_peer.hpp"
 #include "phntm_bridge/sio.hpp"
@@ -254,14 +255,32 @@ void WRTCPeer::processSubscriptions(int ack_msg_id, sio::object_message::ptr ack
             << std::endl;
         }
 
-        // open read data and media channels
-        for (auto sub : that->req_read_subs) {
+        sio::object_message::ptr reply = ack == nullptr ? sio::object_message::create() : ack;
+        reply->get_map().emplace("session", sio::string_message::create(that->session));
+        reply->get_map().emplace("read_video_streams", sio::array_message::create());
+        reply->get_map().emplace("read_data_channels", sio::array_message::create());
+        reply->get_map().emplace("write_data_channels", sio::array_message::create());
 
+        // open read data and media channels
+        for (auto topic : that->req_read_subs) {
+            auto msg_type = Introspection::getTopic(topic);
+            if (msg_type.empty()) {
+                std::cout << GRAY << that->toString() << " Topic '"+topic+"' not yet discovered" << CLR << std::endl;
+                continue; // topic not yet discovered
+            }
+            if (!isImageOrVideoType(msg_type)) {
+                auto channel_config = that->subscribeDataTopic(topic);
+                reply->get_map().at("read_data_channels")->get_vector().push_back(channel_config);
+            } else {
+                auto channel_config = that->subscribeImageOrVideoTopic(topic);
+                reply->get_map().at("read_video_streams")->get_vector().push_back(channel_config);
+            }
         }
 
         // open write data channels
         for (auto sub : that->req_write_subs) {
-            
+            auto topic = sub[0];
+            auto msg_type = sub[1];
         }
 
         // unsubscribe from data channels
@@ -293,25 +312,11 @@ void WRTCPeer::processSubscriptions(int ack_msg_id, sio::object_message::ptr ack
         if (disconnected)
             return; // done here, not producing any reply
 
-        sio::object_message::ptr reply;
-        if (ack == nullptr) {
-            reply = sio::object_message::create();
-        } else {
-            reply = ack;
-        }
-        
-        reply->get_map().emplace("session", sio::string_message::create(that->session));
-        reply->get_map().emplace("read_video_streams", sio::array_message::create());
-        reply->get_map().emplace("read_data_channels", sio::array_message::create());
-        reply->get_map().emplace("write_data_channels", sio::array_message::create());
-
         if (ack_msg_id < 0) { // return as new sio message
-
             if (!that->id_app.empty())
                 reply->get_map().emplace("id_app", sio::string_message::create(that->id_app));
             if (!that->id_instance.empty())
                 reply->get_map().emplace("id_instance", sio::string_message::create(that->id_instance));
-                        
             BridgeSocket::emit("peer:update", { reply }, std::bind(&WRTCPeer::onAnswerReply, that, std::placeholders::_1)); //no ack
 
         } else { // return as ack
@@ -320,6 +325,23 @@ void WRTCPeer::processSubscriptions(int ack_msg_id, sio::object_message::ptr ack
     });
     newThread.detach();
 }
+
+
+sio::array_message::ptr subscribeDataTopic(std::string topic) {
+    auto channel_config = sio::array_message::create();
+    // [topic, id_dc, msg_type, reliability == QoSReliabilityPolicy.RELIABLE, topic_conf]
+    auto qos PhntmBridge::loadTopicQoSConfig(topic);
+    return channel_config;
+}
+
+sio::array_message::ptr subscribeImageOrVideoTopic(std::string topic) {
+    auto channel_config = sio::array_message::create();
+    // [ topic, id_track ]
+    auto qos PhntmBridge::loadTopicQoSConfig(topic);
+    
+    return channel_config;
+}
+
 
 void WRTCPeer::onAnswerReply(sio::message::list const& reply) {
     if (this->config->sio_verbose) {

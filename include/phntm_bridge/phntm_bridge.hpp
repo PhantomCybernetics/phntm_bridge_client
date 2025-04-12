@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdio>
+#include <rclcpp/qos.hpp>
 #include <vector>
 #include <fmt/core.h>
 #include <json/json.h>
@@ -26,6 +27,7 @@ class PhntmBridge : public rclcpp::Node
     PhntmBridge(std::string node_name, std::shared_ptr<BridgeConfig> config);
     ~PhntmBridge();
     void loadConfig(std::shared_ptr<BridgeConfig> config);
+    rclcpp::QoS loadTopicQoSConfig(std::string topic);
     void setupLocalServices();
     void callGenericService(std::string service_name, std::string service_type, sio::event const& ev);
     void readGitRepoHead(std::string repo_path);

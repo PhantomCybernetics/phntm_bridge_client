@@ -319,3 +319,10 @@ void PhntmBridge::loadConfig(std::shared_ptr<BridgeConfig> config) {
     this->declare_parameter("webrtc_debug", false);
     config->webrtc_debug = this->get_parameter("webrtc_debug").as_bool(); 
 }
+
+rclcpp::QoS PhntmBridge::loadTopicQoSConfig(std::string topic) {
+    rclcpp::QoS qos(rclcpp::KeepLast(10));
+    
+
+    return qos;
+}
