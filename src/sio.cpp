@@ -12,6 +12,7 @@
 #include "phntm_bridge/const.hpp"
 #include "phntm_bridge/wrtc_peer.hpp"
 #include "phntm_bridge/status_leds.hpp"
+#include "sio_socket.h"
 
 BridgeSocket* BridgeSocket::instance = nullptr;
 
@@ -144,12 +145,12 @@ void BridgeSocket::onDisconnected() {
 
 void BridgeSocket::onIceServers(sio::event const& ev) {
     if (!this->config->use_cloud_ice_config) {
-        std::cout << "Got ICE server config (ignoring)" << std::endl;
+        std::cout << msgDebugHeader(ev) << "Got ICE server config (ignoring)" << std::endl;
         return;
     }
 
     if (this->config->sio_verbose) {
-        std::cout << "Got cloud ICE server config" << std::endl;
+        std::cout << msgDebugHeader(ev) << "Got cloud ICE server config:" << std::endl;
         std::cout << printMessage(ev.get_message()) << std::endl;
     }
 
@@ -178,7 +179,7 @@ void BridgeSocket::onIceServers(sio::event const& ev) {
 // peer connected
 void BridgeSocket::onPeerConnected(sio::event &ev) {
     if (this->config->sio_verbose) {
-        std::cout << "Peer connection request: " << std::endl;
+        std::cout << msgDebugHeader(ev) << "Peer connection request: " << std::endl;
         std::cout << printMessage(ev.get_message()) << std::endl;
     }
     
@@ -198,7 +199,7 @@ void BridgeSocket::onPeerConnected(sio::event &ev) {
 // peer disconnected
 void BridgeSocket::onPeerDisconnected(sio::event & ev) {
     if (this->config->sio_verbose) {
-        std::cout << "Peer disconnect request: " << std::endl;
+        std::cout << msgDebugHeader(ev) << "Peer disconnect request: " << std::endl;
         std::cout << printMessage(ev.get_message()) << std::endl;
     }
     auto peer = WRTCPeer::getConnectedPeer(ev);
@@ -208,6 +209,10 @@ void BridgeSocket::onPeerDisconnected(sio::event & ev) {
 
 // introspection control
 void BridgeSocket::onIntrospection(sio::event & ev) {
+    if (this->config->sio_verbose) {
+        std::cout << msgDebugHeader(ev) << "Introspection request: " << std::endl;
+        std::cout << printMessage(ev.get_message()) << std::endl;
+    }
     auto peer = WRTCPeer::getConnectedPeer(ev);
     if (peer == nullptr) return;
         
@@ -226,7 +231,7 @@ void BridgeSocket::onIntrospection(sio::event & ev) {
 // peer subscribing to stuffs
 void BridgeSocket::onSubscribeRead(sio::event & ev) {
     if (this->config->sio_verbose) {
-        std::cout << "Subscribe read request: " << std::endl;
+        std::cout << msgDebugHeader(ev) << "Subscribe read request: " << std::endl;
         std::cout << printMessage(ev.get_message()) << std::endl;
     }
     
@@ -243,17 +248,16 @@ void BridgeSocket::onSubscribeRead(sio::event & ev) {
         } 
     }
 
+    peer->processSubscriptions(-1, nullptr); // will emit new peer:update msg
     if (ev.need_ack())
-        peer->processSubscriptions(ev.get_msgId(), nullptr); // will emit ack
-    else
-        peer->processSubscriptions(-1, nullptr); // will emit new msg
+        BridgeSocket::returnSuccess(ev);
 }
 
 // peer unsubscribing from stuffs
 void BridgeSocket::onUnsubscribeRead(sio::event & ev) {
 
     if (this->config->sio_verbose) {
-        std::cout << "Unsubscribe read request: " << std::endl;
+        std::cout << msgDebugHeader(ev) << "Unsubscribe read request: " << std::endl;
         std::cout << printMessage(ev.get_message()) << std::endl;
     }
 
@@ -270,17 +274,16 @@ void BridgeSocket::onUnsubscribeRead(sio::event & ev) {
         } 
     }
 
+    peer->processSubscriptions(-1, nullptr); // will emit new peer:update msg
     if (ev.need_ack())
-        peer->processSubscriptions(ev.get_msgId(), nullptr); // will emit ack
-    else
-        peer->processSubscriptions(-1, nullptr); // will emit new msg
+        BridgeSocket::returnSuccess(ev);
 }
 
 // peer requesting write subscriptions
 void BridgeSocket::onSubscribeWrite(sio::event & ev) {
 
     if (this->config->sio_verbose) {
-        std::cout << "Subscribe write request: " << std::endl;
+        std::cout << msgDebugHeader(ev) << "Subscribe write request: " << std::endl;
         std::cout << printMessage(ev.get_message()) << std::endl;
     }
 
@@ -299,17 +302,16 @@ void BridgeSocket::onSubscribeWrite(sio::event & ev) {
         } 
     }
 
+    peer->processSubscriptions(-1, nullptr); // will emit new peer:update msg
     if (ev.need_ack())
-        peer->processSubscriptions(ev.get_msgId(), nullptr); // will emit ack
-    else
-        peer->processSubscriptions(-1, nullptr); // will emit new msg
+        BridgeSocket::returnSuccess(ev);
 }
 
 // peer closing write subscriptions
 void BridgeSocket::onUnsubscribeWrite(sio::event & ev) {
 
     if (this->config->sio_verbose) {
-        std::cout << "Unsubscribe write request: " << std::endl;
+        std::cout << msgDebugHeader(ev) << "Unsubscribe write request: " << std::endl;
         std::cout << printMessage(ev.get_message()) << std::endl;
     }
 
@@ -326,23 +328,33 @@ void BridgeSocket::onUnsubscribeWrite(sio::event & ev) {
         }
     }
 
+    peer->processSubscriptions(-1, nullptr); // will emit new peer:update msg
     if (ev.need_ack())
-        peer->processSubscriptions(ev.get_msgId(), nullptr); // will emit ack
-    else
-        peer->processSubscriptions(-1, nullptr); // will emit new msg
+        BridgeSocket::returnSuccess(ev);
 }
 
 // peer calling a service
 void BridgeSocket::onSDPAnswer(sio::event & ev) {
 
-    // if (this->config->sio_verbose) {
-        std::cout << RED << "!!! (unhandled) Received SDP Answer: !!!" << CLR << std::endl;
+    if (this->config->sio_verbose) {
+        std::cout << msgDebugHeader(ev) << "Got SDP Answer:" << CLR << std::endl;
         std::cout << printMessage(ev.get_message()) << std::endl;
-    // }
+    }
 
-    auto ack = sio::object_message::create();
-    ack->get_map().emplace("success", sio::int_message::create(0)); // TODO 1 !!
-    BridgeSocket::ack(ev.get_msgId(), { ack });
+    auto peer = WRTCPeer::getConnectedPeer(ev);
+    if (peer == nullptr) {
+        if (ev.need_ack()) {
+            auto ack = sio::object_message::create();
+            ack->get_map().emplace("success", sio::int_message::create(0));
+            BridgeSocket::ack(ev.get_msgId(), { ack });
+        }
+        return;
+    }
+
+    peer->onSDPAnswer(ev.get_message());
+
+    if (ev.need_ack())
+        BridgeSocket::returnSuccess(ev);
 }
 
 // report error call via socket.io + rosout
@@ -354,11 +366,17 @@ void BridgeSocket::returnError(std::string message, sio::event const &ev) {
     BridgeSocket::ack(ev.get_msgId(), {err_ack});
 }
 
+void BridgeSocket::returnSuccess(sio::event const &ev, int success) {
+    auto ack = sio::object_message::create();
+    ack->get_map().emplace("success", sio::int_message::create(success));
+    BridgeSocket::ack(ev.get_msgId(), {ack});
+}
+
 // peer calling a service
 void BridgeSocket::onServiceCall(sio::event & ev) {
 
     if (this->config->sio_verbose) {
-        std::cout << "Service call request: " << std::endl;
+        std::cout << msgDebugHeader(ev) << "Service call request: " << std::endl;
         std::cout << printMessage(ev.get_message()) << std::endl;
     }
     
@@ -418,7 +436,7 @@ void BridgeSocket::onOtherSocketMessage(sio::event const& ev) {
     if (this->handled_events.find(ev.get_name().c_str()) != this->handled_events.end())
         return;
     
-    std::cout << RED << "UNHANDLED SOCKER MSG '" << ev.get_name() << "': " << CLR << std::endl;
+    std::cout << RED << msgDebugHeader(ev) << "UNHANDLED SOCKER MSG '" << "': " << CLR << std::endl;
     std::cout << printMessage(ev.get_message()) << std::endl;
 }
 
@@ -555,6 +573,10 @@ std::string BridgeSocket::printMessage(const sio::message::ptr & message, bool p
     }
 
     return out;
+}
+
+std::string BridgeSocket::msgDebugHeader (sio::event const & ev) {
+    return CYAN + "[SIO msg '" + ev.get_name() + "' #" + std::to_string(ev.get_msgId()) + "] " + CLR; 
 }
 
 sio::message::ptr BridgeSocket::jsonToSioMessage(Json::Value val) {

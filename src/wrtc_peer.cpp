@@ -4,6 +4,7 @@
 #include "phntm_bridge/wrtc_peer.hpp"
 #include "phntm_bridge/sio.hpp"
 
+#include "rtc/configuration.hpp"
 #include "rtc/peerconnection.hpp"
 #include "sio_message.h"
 #include "sio_socket.h"
@@ -31,7 +32,7 @@ bool WRTCPeer::isConnected(std::string id_peer) {
 }
 
 // vaidates peer id, checks if connected, calls error ack if requested
-std::shared_ptr<WRTCPeer> WRTCPeer::getConnectedPeer(sio::event & ev) {
+std::shared_ptr<WRTCPeer> WRTCPeer::getConnectedPeer(sio::event const & ev) {
     auto id_peer = WRTCPeer::getId(ev.get_message());
     if (id_peer.empty()) {
         if (ev.need_ack()) {
@@ -193,22 +194,44 @@ WRTCPeer::WRTCPeer(std::shared_ptr<PhntmBridge> node, std::string id_peer, std::
     this->config = config;
     this->node = node;
     this->is_connected = true; // false after disconnect is received
+    this->next_channel_id = 0;
 
     rtc::Configuration rtc_config;
+    rtc_config.disableAutoNegotiation = true;
+    rtc_config.disableAutoGathering = false;
+    rtc_config.certificateType = rtc::CertificateType::Rsa;
+    rtc_config.enableIceUdpMux = true;
+    rtc_config.disableFingerprintVerification = false;
     for (auto & one : this->config->ice_servers) {
         // std::cout << "    " << one << std::endl;
         if (one.compare(0, 5, "turn:") == 0) {
-            auto turn_url = "turn:" + this->config->ice_username + ":" + this->config->ice_secret + "@" +  one.substr(5);
-            if (this->config->webrtc_debug)
+            auto turn_url = "turns://" + this->config->ice_username + ":" + this->config->ice_secret + "@" +  one.substr(5);
+            rtc::IceServer ice_server(turn_url);
+            // ice_server.relayType = rtc::IceServer::RelayType::TurnTls;
+            if (this->config->webrtc_debug) {
                 std::cout << YELLOW << this->toString() << "Config adding: " << turn_url << CLR << std::endl;
-            rtc_config.iceServers.emplace_back(turn_url);
+                std::cout << " => user: " << ice_server.username << " @ " << ice_server.password << std::endl;
+                std::cout << " => type: " << (ice_server.type == rtc::IceServer::Type::Turn ? "TURN" : (ice_server.type == rtc::IceServer::Type::Stun ? "STUN" : "?!"))  << std::endl;
+                std::cout << " => relay type: " << (ice_server.relayType == rtc::IceServer::RelayType::TurnUdp ? "TurnUdp" : (ice_server.relayType == rtc::IceServer::RelayType::TurnTcp ? "TurnTcp" : (ice_server.relayType == rtc::IceServer::RelayType::TurnTls ? "TurnTls" : "?!")))  << std::endl;
+                std::cout << " => hostname: " << ice_server.hostname << ":" << ice_server.port << std::endl;
+            }
+                
+            rtc_config.iceServers.emplace_back(ice_server);
         }
     }
+    
     this->pc = new rtc::PeerConnection(rtc_config);
     this->pc->onStateChange(std::bind(&WRTCPeer::onRTCStateChange, this, std::placeholders::_1));
     this->pc->onGatheringStateChange(std::bind(&WRTCPeer::onRTCGatheringStateChange, this, std::placeholders::_1));
-
+    this->pc->onSignalingStateChange(std::bind(&WRTCPeer::onRTCSignalingStateChange, this, std::placeholders::_1));
+    this->pc->onIceStateChange(std::bind(&WRTCPeer::onIceStateChange, this, std::placeholders::_1));
+    this->pc->onLocalCandidate(std::bind(&WRTCPeer::onLocalCandidate, this, std::placeholders::_1));
     // this->shared_ptr = std::shared_ptr<WRTCPeer>(this);
+}
+
+void WRTCPeer::onLocalCandidate(rtc::Candidate candidate) {
+    if (this->config->webrtc_debug)
+        std::cout << YELLOW << this->toString() << "Local candidate: " << candidate << CLR << std::endl;
 }
 
 void WRTCPeer::onRTCStateChange(rtc::PeerConnection::State state) {
@@ -219,6 +242,16 @@ void WRTCPeer::onRTCStateChange(rtc::PeerConnection::State state) {
 void WRTCPeer::onRTCGatheringStateChange(rtc::PeerConnection::GatheringState state) {
     if (this->config->webrtc_debug)
         std::cout << YELLOW << this->toString() << "Gathering state: " << state << CLR << std::endl;
+}
+
+void WRTCPeer::onRTCSignalingStateChange(rtc::PeerConnection::SignalingState state) {
+    if (this->config->webrtc_debug)
+        std::cout << YELLOW << this->toString() << "Signaling state: " << state << CLR << std::endl;
+}
+
+void WRTCPeer::onIceStateChange(rtc::PeerConnection::IceState state) {
+    if (this->config->webrtc_debug)
+        std::cout << YELLOW << this->toString() << "ICE state: " << state << CLR << std::endl;
 }
 
 void WRTCPeer::processAllPeerSubscriptions() {
@@ -241,108 +274,263 @@ void WRTCPeer::processSubscriptions(int ack_msg_id, sio::object_message::ptr ack
         return;
     }
     std::thread newThread([that, ack_msg_id, ack]() {
+        std::cout << BLUE << that->toString() << "Processing requested [msg #" << ack_msg_id << "]" << CLR << std::endl;
 
-        std::lock_guard<std::mutex> lock(that->processing_subscriptions_mutex); // wait until previus pressing completes
-    
-        bool disconnected = !that->is_connected || that->pc->state() == rtc::PeerConnection::State::Failed || !BridgeSocket::isConnected() || BridgeSocket::isShuttingDown();
+        {
+            std::lock_guard<std::mutex> lock(that->processing_subscriptions_mutex); // wait until previus pressing completes
+            std::cout << BLUE << that->toString() << "Processing peer subs begins [msg #" << ack_msg_id << "]..." << CLR << std::endl;
 
-        if (that->config->webrtc_debug) {
-            std::vector<std::string> req_writes_joined;
-            for (auto one : that->req_write_subs) {
-                req_writes_joined.push_back(one[0]+" {"+ one[1]+ "}");
+            bool disconnected = !that->is_connected || that->pc->state() == rtc::PeerConnection::State::Failed || !BridgeSocket::isConnected() || BridgeSocket::isShuttingDown();
+            that->negotiation_needed = false; // reset
+
+            if (that->config->webrtc_debug) {
+                std::vector<std::string> req_writes_joined;
+                for (auto one : that->req_write_subs) {
+                    req_writes_joined.push_back(one[0]+" {"+ one[1]+ "}");
+                }
+                std::cout << that->toString() << "Processing " << (disconnected ? BLUE + "disconnected " + CLR : "") << "subs, "
+                << "read: " << GREEN << "[" << join( that->req_read_subs, ", ") << "] " << CLR
+                << "write: " << MAGENTA << "[" << join(req_writes_joined, ", ") << "] " << CLR
+                << "signalingState=" << YELLOW << that->pc->signalingState() << " " << CLR
+                << "iceGatheringState=" << YELLOW << that->pc->gatheringState() << CLR
+                << std::endl;
             }
-            std::cout << that->toString() << "Processing " << (disconnected ? BLUE + "disconnected " + CLR : "") << "subs, "
-            << "read: " << GREEN << "[" << join( that->req_read_subs, ", ") << "] " << CLR
-            << "write: " << MAGENTA << "[" << join(req_writes_joined, ", ") << "] " << CLR
-            << "signalingState=" << YELLOW << that->pc->signalingState() << " " << CLR
-            << "iceGatheringState=" << YELLOW << that->pc->gatheringState() << CLR
-            << std::endl;
-        }
 
-        sio::object_message::ptr reply = ack == nullptr ? sio::object_message::create() : ack;
-        reply->get_map().emplace("session", sio::string_message::create(that->session));
-        reply->get_map().emplace("read_video_streams", sio::array_message::create());
-        reply->get_map().emplace("read_data_channels", sio::array_message::create());
-        reply->get_map().emplace("write_data_channels", sio::array_message::create());
+            sio::object_message::ptr reply = ack == nullptr ? sio::object_message::create() : ack;
+            reply->get_map().emplace("session", sio::string_message::create(that->session));
+            reply->get_map().emplace("read_video_streams", sio::array_message::create());
+            reply->get_map().emplace("read_data_channels", sio::array_message::create());
+            reply->get_map().emplace("write_data_channels", sio::array_message::create());
 
-        // open read data and media channels
-        for (auto topic : that->req_read_subs) {
-            auto msg_type = Introspection::getTopic(topic);
-            if (msg_type.empty()) {
-                std::cout << GRAY << that->toString() << " Topic '"+topic+"' not yet discovered" << CLR << std::endl;
-                continue; // topic not yet discovered
+            // open read data and media channels
+            for (auto topic : that->req_read_subs) {
+                auto msg_type = Introspection::getTopic(topic);
+                if (msg_type.empty()) {
+                    std::cout << GRAY << that->toString() << " Topic '"+topic+"' not yet discovered" << CLR << std::endl;
+                    continue; // topic not yet discovered
+                }
+                if (!isImageOrVideoType(msg_type)) {
+                    auto channel_config = that->subscribeDataTopic(topic, msg_type);
+                    reply->get_map().at("read_data_channels")->get_vector().push_back(channel_config);
+                } else {
+                    auto channel_config = that->subscribeImageOrVideoTopic(topic, msg_type);
+                    reply->get_map().at("read_video_streams")->get_vector().push_back(channel_config);
+                }
             }
-            if (!isImageOrVideoType(msg_type)) {
-                auto channel_config = that->subscribeDataTopic(topic, msg_type);
-                reply->get_map().at("read_data_channels")->get_vector().push_back(channel_config);
-            } else {
-                auto channel_config = that->subscribeImageOrVideoTopic(topic, msg_type);
-                reply->get_map().at("read_video_streams")->get_vector().push_back(channel_config);
+
+            // open write data channels
+            for (auto sub : that->req_write_subs) {
+                auto topic = sub[0];
+                auto msg_type = sub[1];
+
+                auto channel_config = that->subscribeWriteDataTopic(topic, msg_type);
+                reply->get_map().at("write_data_channels")->get_vector().push_back(channel_config);
             }
-        }
 
-        // open write data channels
-        for (auto sub : that->req_write_subs) {
-            auto topic = sub[0];
-            auto msg_type = sub[1];
-        }
+            // unsubscribe from data channels
+            // for topic in list(peer.outbound_data_channels.keys()):
+            //     if not topic in peer.read_subs:
+            //         self.get_logger().info(f'{peer} unsubscribing from {topic}')
+            //         await self.unsubscribe_data_topic(topic, peer=peer, msg_callback=None)
+            //         res['read_data_channels'].append([ topic ]) # no id => unsubscribed
 
-        // unsubscribe from data channels
-        // for topic in list(peer.outbound_data_channels.keys()):
-        //     if not topic in peer.read_subs:
-        //         self.get_logger().info(f'{peer} unsubscribing from {topic}')
-        //         await self.unsubscribe_data_topic(topic, peer=peer, msg_callback=None)
-        //         res['read_data_channels'].append([ topic ]) # no id => unsubscribed
+            // unsubscribe from video streams
+            // for sub in list(peer.video_tracks.keys()):
+            //     if not sub in peer.read_subs:
+            //         self.get_logger().info(f'{peer} unsubscribing from image topic {sub}')
+            //         await self.unsubscribe_image_topic(sub, peer)
+            //         res['read_video_streams'].append([ sub ]) # no id => unsubscribed
 
-        // unsubscribe from video streams
-        // for sub in list(peer.video_tracks.keys()):
-        //     if not sub in peer.read_subs:
-        //         self.get_logger().info(f'{peer} unsubscribing from image topic {sub}')
-        //         await self.unsubscribe_image_topic(sub, peer)
-        //         res['read_video_streams'].append([ sub ]) # no id => unsubscribed
+            // close write channels
+            // for topic in list(peer.inbound_data_channels.keys()):
+            //     topic_active = False
+            //     for sub in peer.write_subs:
+            //         if sub[0] == topic:
+            //             topic_active = True
+            //             break
+            //     if not topic_active:
+            //         self.get_logger().info(f'{peer} stopped writing into {topic}')
+            //         await self.close_write_channel(topic, peer)
+            //         res['write_data_channels'].append([ topic ]) # no id => unsubscribed
 
-        // close write channels
-        // for topic in list(peer.inbound_data_channels.keys()):
-        //     topic_active = False
-        //     for sub in peer.write_subs:
-        //         if sub[0] == topic:
-        //             topic_active = True
-        //             break
-        //     if not topic_active:
-        //         self.get_logger().info(f'{peer} stopped writing into {topic}')
-        //         await self.close_write_channel(topic, peer)
-        //         res['write_data_channels'].append([ topic ]) # no id => unsubscribed
+            that->awaiting_peer_reply = false;
+            if (that->negotiation_needed) { // that->pc->negotiationNeeded()
+                if (that->config->webrtc_debug)
+                    std::cout << YELLOW << that->toString() << "RTC negotiation needed" << CLR << std::endl;
 
-        if (disconnected)
-            return; // done here, not producing any reply
+                //auto offer = that->pc->createOffer();
+                std::string sdpBuffer;
+                that->pc->onLocalDescription([&](auto sdp) {
+                     sdpBuffer = std::string(sdp);
+                    //  std::cout << "Local desc: " << std::endl;
+                    //  std::cout << RED << sdpBuffer << CLR << std::endl;
+                });
+                that->pc->setLocalDescription(rtc::Description::Type::Offer);
+                while(sdpBuffer.empty()) { // wait for the offer to be (re-generated)
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                }
+                while(that->pc->gatheringState() != rtc::PeerConnection::GatheringState::Complete) { // wait for the offer
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                }
+                auto local_desc = that->pc->localDescription();
+                auto sdp = local_desc->generateSdp();
+                if (that->config->webrtc_debug) {
+                    std::cout << GRAY << that->toString() << "Generated local SDP offer:" << CLR << std::endl;
+                    std::cout << GRAY << sdp << CLR << std::endl;
+                }
+                reply->get_map().emplace("offer", sio::string_message::create(sdp));
 
-        if (ack_msg_id < 0) { // return as new sio message
-            if (!that->id_app.empty())
-                reply->get_map().emplace("id_app", sio::string_message::create(that->id_app));
-            if (!that->id_instance.empty())
-                reply->get_map().emplace("id_instance", sio::string_message::create(that->id_instance));
-            BridgeSocket::emit("peer:update", { reply }, std::bind(&WRTCPeer::onAnswerReply, that, std::placeholders::_1)); //no ack
+                that->awaiting_peer_reply = true;
+            }
 
-        } else { // return as ack
-            BridgeSocket::ack(ack_msg_id, { reply });
+            if (disconnected)
+                return; // done here, not producing any reply
+
+            if (ack_msg_id < 0) { // return as new sio message
+                if (!that->id_app.empty())
+                    reply->get_map().emplace("id_app", sio::string_message::create(that->id_app));
+                if (!that->id_instance.empty())
+                    reply->get_map().emplace("id_instance", sio::string_message::create(that->id_instance));
+                BridgeSocket::emit("peer:update", { reply }, std::bind(&WRTCPeer::onSIOOfferReply, that, std::placeholders::_1)); //no ack
+
+            } else { // return as ack
+                BridgeSocket::ack(ack_msg_id, { reply });
+            }
+
+            while(that->awaiting_peer_reply) { // block the mutex until reply is processed
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+            
+            std::cout << BLUE << that->toString() << "Processing subs complete [msg #" << ack_msg_id << "]" << CLR << std::endl;
         }
     });
     newThread.detach();
 }
 
+void WRTCPeer::onSIOOfferReply(sio::message::list const& reply) {
+    if (this->config->sio_verbose) {
+        std::cout << "SIO got reply for peer:update message: " << std::endl
+                  << BridgeSocket::printMessage(reply.at(0)) << std::endl;
+    }
+    auto msg = reply.at(0);
+
+    if (msg->get_map().find("err") != msg->get_map().end()) {
+        std::cerr << RED << "Client returned error for peer:update: " << msg->get_map().at("err")->get_string() << CLR << std::endl;
+        this->awaiting_peer_reply = false;
+        return;
+    }
+
+    this->onSDPAnswer(msg);
+}
+
+void WRTCPeer::onSDPAnswer(sio::message::ptr const& msg) {
+    if (this->pc->signalingState() != rtc::PeerConnection::SignalingState::HaveLocalOffer) {
+        std::cerr << RED << this->toString() << "Not setting SDP answer; signalingState=" << this->pc->signalingState() << CLR << std::endl;
+        this->awaiting_peer_reply = false;
+        return;
+    }
+    
+    auto sdp = msg->get_map().at("sdp")->get_string();
+    if (this->config->webrtc_debug) {
+        std::cout << CYAN << this->toString() << "Got peer answer: " << CLR << std::endl;
+        std::cout << CYAN << sdp << CLR << std::endl;
+    }
+
+    rtc::Description answer(sdp, rtc::Description::Type::Answer);
+    this->pc->setRemoteDescription(answer);
+    this->awaiting_peer_reply = false; // unlocks mutex
+}
+
+
+uint16_t WRTCPeer::openDataChannelForTopic(std::string topic, std::string msg_type, bool is_reliable, bool write) {
+    rtc::Reliability reliability;
+    reliability.unordered = !is_reliable;
+    if (!is_reliable)
+        reliability.maxRetransmits = 0;
+
+    rtc::DataChannelInit dc_init;
+    dc_init.reliability = reliability;
+    dc_init.negotiated = true;
+    dc_init.id = ++this->next_channel_id;
+    dc_init.protocol = msg_type;
+
+    std::cout << GRAY << this->toString() << "Opening new DC for " << topic << " {" << msg_type << "} #" << this->next_channel_id << CLR << std::endl;
+
+    auto dc = this->pc->createDataChannel(topic, dc_init);
+
+    dc->onOpen([this, topic, msg_type]() {
+        std::cout << GREEN << this->toString() << "DC is open for " << topic << " {" << msg_type << "}" << CLR << std::endl;
+    });
+
+    if (!write) {
+        this->outbound_data_channels.emplace(topic, dc);
+        return this->outbound_data_channels.at(topic)->id().value();
+    } else {
+
+        dc->onMessage([this, topic, msg_type](std::variant<rtc::binary, rtc::string> message) {
+            // if (std::holds_alternative<rtc::string>(message)) {
+            //     std::cout << "Received: " << get<rtc::string>(message) << std::endl;
+            // }
+            std::cout << GREEN << this->toString() << "DC for " << topic << " got message" << CLR << std::endl;
+        });
+
+        this->inbound_data_channels.emplace(topic, dc);
+        return this->inbound_data_channels.at(topic)->id().value();
+    }
+    
+}
 
 sio::array_message::ptr WRTCPeer::subscribeDataTopic(std::string topic, std::string msg_type) {
     
     auto qos = this->node->loadTopicQoSConfig(topic);
     auto topic_conf = this->node->loadTopicMsgTypeExtraConfig(topic, msg_type);
+    bool is_reliable = qos.reliability() == rclcpp::ReliabilityPolicy::Reliable;
 
-    std::string id_dc = ""; // TODO
+    uint16_t id_dc;
+    bool send_latest = false;
+    if (this->outbound_data_channels.find(topic) != this->outbound_data_channels.end()) {
+        id_dc = this->outbound_data_channels.at(topic)->id().value();
+    } else {
+        id_dc = this->openDataChannelForTopic(topic, msg_type, is_reliable);
+        send_latest = is_reliable;
+        this->negotiation_needed = true;
+    }
 
+    if (send_latest) {
+        // ???
+    }
+
+    // dc config for the peer
     auto channel_config = sio::array_message::create();
     channel_config->get_vector().push_back(sio::string_message::create(topic));
-    channel_config->get_vector().push_back(sio::string_message::create(id_dc));
-    channel_config->get_vector().push_back(sio::bool_message::create(qos.reliability() == rclcpp::ReliabilityPolicy::Reliable));
+    channel_config->get_vector().push_back(sio::int_message::create(id_dc));
+    channel_config->get_vector().push_back(sio::bool_message::create(is_reliable));
     channel_config->get_vector().push_back( topic_conf);
+    return channel_config;
+}
+
+sio::array_message::ptr WRTCPeer::subscribeWriteDataTopic(std::string topic, std::string msg_type) {
+    
+    auto qos = this->node->loadTopicQoSConfig(topic);
+    auto topic_conf = this->node->loadTopicMsgTypeExtraConfig(topic, msg_type);
+    bool is_reliable = qos.reliability() == rclcpp::ReliabilityPolicy::Reliable;
+
+    uint16_t id_dc;
+    if (this->inbound_data_channels.find(topic) != this->inbound_data_channels.end()) {
+        id_dc = this->inbound_data_channels.at(topic)->id().value();
+    } else {
+        id_dc = this->openDataChannelForTopic(topic, msg_type, is_reliable, true);
+        this->negotiation_needed = true;
+
+        
+    }
+
+    // dc config for the peer
+    auto channel_config = sio::array_message::create();
+    channel_config->get_vector().push_back(sio::string_message::create(topic));
+    channel_config->get_vector().push_back(sio::int_message::create(id_dc));
+    channel_config->get_vector().push_back(sio::string_message::create(msg_type));
+    // channel_config->get_vector().push_back( topic_conf);
     return channel_config;
 }
 
@@ -352,35 +540,11 @@ sio::array_message::ptr WRTCPeer::subscribeImageOrVideoTopic(std::string topic, 
 
     std::string id_track = ""; // TODO
 
+    // media stream config for the peer
     auto channel_config = sio::array_message::create();
     channel_config->get_vector().push_back(sio::string_message::create(topic));
     channel_config->get_vector().push_back(sio::string_message::create(id_track));
     return channel_config;
-}
-
-
-void WRTCPeer::onAnswerReply(sio::message::list const& reply) {
-    if (this->config->sio_verbose) {
-        std::cout << "SIO got reply for peer:update message: " << std::endl
-                  << BridgeSocket::printMessage(reply.at(0)) << std::endl;
-    }
-    auto msg = reply.at(0);
-
-    if (msg->get_map().find("err") != msg->get_map().end()) {
-        std::cerr << RED << "Client returned error for peer:update: " << msg->get_map().at("err")->get_string() << CLR << std::endl;
-        return;
-    }
-
-    // if self.pc.signalingState != 'have-local-offer':
-    //     self.logger.error(f'Not setting SDP answer from {self}, signalingState={self.pc.signalingState}')
-    //     self.processing_subscriptions = False
-    //     return
-    
-    // self.logger.info(c(f'Got peer answer:', 'cyan'))
-    // print(reply_data)
-    // answer = RTCSessionDescription(sdp=reply_data['sdp'], type='answer')
-    // await self.pc.setRemoteDescription(answer)
-    // self.processing_subscriptions = False
 }
 
 void WRTCPeer::addUIConfigToMessage(sio::object_message::ptr msg, std::shared_ptr<BridgeConfig> config) {

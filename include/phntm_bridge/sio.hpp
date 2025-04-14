@@ -52,6 +52,7 @@ class BridgeSocket
         void onSocketClose();
         void onSocketError(sio::message::ptr const& message);
         void returnError(std::string message, sio::event const &ev);
+        void returnSuccess(sio::event const &ev, int success = 1);
 
         std::map<std::string, sio::socket::event_listener> handled_events;
         void onIceServers(sio::event const& ev);
@@ -68,4 +69,6 @@ class BridgeSocket
         void onSDPAnswer(sio::event & ev);
 
         void onOtherSocketMessage(sio::event const& ev);
+
+        static std::string msgDebugHeader (sio::event const & ev);
 };
