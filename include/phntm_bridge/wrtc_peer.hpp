@@ -34,6 +34,14 @@ class WRTCPeer {
 
         void onSIOOfferReply(sio::message::list const& reply);
         void onSDPAnswer(sio::message::ptr const& msg);
+
+        static void initLogging(std::shared_ptr<BridgeConfig> config);
+
+        static std::string toString(rtc::PeerConnection::SignalingState state);
+        static std::string toString(rtc::PeerConnection::State state);
+        static std::string toString(rtc::PeerConnection::GatheringState state);
+        static std::string toString(rtc::PeerConnection::IceState state);
+        
     private:
         static std::map<std::string, std::shared_ptr<WRTCPeer>> connected_peers;
         static void addUIConfigToMessage(sio::object_message::ptr msg, std::shared_ptr<BridgeConfig> config);

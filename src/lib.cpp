@@ -1,6 +1,15 @@
 #include "phntm_bridge/lib.hpp"
 #include "phntm_bridge/const.hpp"
 #include <algorithm>
+#include <iostream>
+
+void log(std::string msg, bool error, bool append_endl) {
+    if (error)  {
+        std::cerr << (RED + msg + CLR) + (append_endl ? "\n" : "");
+    } else {
+        std::cout << msg + (append_endl ? "\n" : "");
+    }
+}
 
 std::string trim(const std::string str, const char *trim_chars) {
     size_t start = str.find_first_not_of(trim_chars);

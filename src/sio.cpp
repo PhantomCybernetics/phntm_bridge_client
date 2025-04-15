@@ -25,7 +25,7 @@ BridgeSocket::BridgeSocket(std::shared_ptr<PhntmBridge> node, std::shared_ptr<Br
     ConnLED::fastPulse();
 
     uint reconnect_ms = this->config->sio_connection_retry_sec * 1000;
-    std::cout << "SIO reconenct ms: " << reconnect_ms << std::endl;
+    log("SIO reconenct ms: " + std::to_string(reconnect_ms));
     this->client.set_reconnect_delay(reconnect_ms);
     this->client.set_reconnect_delay_max(reconnect_ms);
     this->client.set_reconnect_attempts(10000000);
@@ -54,7 +54,7 @@ bool BridgeSocket::connect() {
     // self.get_logger().info(f'Socket.io connecting to ')
     auto instance = BridgeSocket::instance;
     if (instance == nullptr) {
-        std::cerr << "BridgeSocket not initialized" << std::endl;
+        log("BridgeSocket not initialized", true);
         return false;
     }
 
@@ -62,7 +62,7 @@ bool BridgeSocket::connect() {
 
     RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Socket.io connecting to %s", instance->socket_url.c_str());
 
-    std::cout << YELLOW << "Connecting id_robot: " << instance->config->id_robot << CLR << std::endl;
+    log(YELLOW + "Connecting id_robot: " + instance->config->id_robot + CLR);
 
     instance->auth_data = sio::object_message::create();
     instance->auth_data->get_map()["id_robot"] = sio::string_message::create(instance->config->id_robot);
@@ -93,12 +93,11 @@ bool BridgeSocket::connect() {
 void BridgeSocket::emit(std::string const& name, sio::message::list const& msglist, std::function<void (sio::message::list const&)> const& ack) {
     auto instance = BridgeSocket::instance;
     if (instance == nullptr || !instance->connected) {
-        std::cout << "Socket.io not connected, ignoring \"" + name << "\"" << std::endl;
+        log("Socket.io not connected, ignoring \"" + name + "\"");
         return;
     }
     if (instance->config->sio_verbose) {
-        std::cout << "SIO emitting '" << name << "':" << std::endl
-                  << printMessage(msglist.at(0)) << std::endl;
+        log("SIO emitting '" + name + "':\n" + printMessage(msglist.at(0)));
     }
     instance->client.socket()->emit(name, msglist, ack);
 }
@@ -106,19 +105,18 @@ void BridgeSocket::emit(std::string const& name, sio::message::list const& msgli
 void BridgeSocket::ack(int msg_id, sio::message::list const& msglist) {
     auto instance = BridgeSocket::instance;
     if (instance == nullptr || !instance->connected) {
-        std::cout << "Socket.io not connected, ignoring ack(" << msg_id << ")" << std::endl;
+        log("Socket.io not connected, ignoring ack(" + std::to_string(msg_id) + ")");
         return;
     }
     if (instance->config->sio_verbose) {
-        std::cout << "SIO sending ack for msg_id=" << std::to_string(msg_id) << ":" << std::endl
-                  << printMessage(msglist.at(0)) << std::endl;
+        log("SIO sending ack for msg_id=" + std::to_string(msg_id) +":\n" + printMessage(msglist.at(0)));
     }
     instance->client.socket()->ack(msg_id, msglist);
 }
 
 // socket connected (before handshale)
 void BridgeSocket::onConnected() {
-    std::cout << "Socket.io client connection established" << std::endl;
+    log("Socket.io client connection established");
 
     for (auto ev : this->handled_events) {
         this->client.socket()->on(ev.first, ev.second);
@@ -130,14 +128,14 @@ void BridgeSocket::onConnected() {
 
 // auth done, socket ready
 void BridgeSocket::onSocketOpen() {
-    std::cout << GREEN << "Socket.io auth successful for #" << this->config->id_robot << CLR << std::endl;
+    log(GREEN + "Socket.io auth successful for #" + this->config->id_robot + CLR);
     this->connected = true;
     ConnLED::on();
     Introspection::report();
 }
 
 void BridgeSocket::onDisconnected() {
-    std::cout << RED << "Socket.io client disconnected" << CLR << std::endl;
+    log(RED + "Socket.io client disconnected" + CLR);
     this->connected = false;
     ConnLED::fastPulse();
     WRTCPeer::onAllPeersDisconnected();
@@ -145,13 +143,13 @@ void BridgeSocket::onDisconnected() {
 
 void BridgeSocket::onIceServers(sio::event const& ev) {
     if (!this->config->use_cloud_ice_config) {
-        std::cout << msgDebugHeader(ev) << "Got ICE server config (ignoring)" << std::endl;
+        log(msgDebugHeader(ev) + "Got ICE server config (ignoring)");
         return;
     }
 
     if (this->config->sio_verbose) {
-        std::cout << msgDebugHeader(ev) << "Got cloud ICE server config:" << std::endl;
-        std::cout << printMessage(ev.get_message()) << std::endl;
+        log(msgDebugHeader(ev) + "Got cloud ICE server config:");
+        log(printMessage(ev.get_message()));
     }
 
     this->config->ice_servers.clear();
@@ -165,12 +163,12 @@ void BridgeSocket::onIceServers(sio::event const& ev) {
     this->config->ice_secret = ev.get_message()->get_map().at("secret")->get_string();
 
     if (this->config->webrtc_debug) {
-        std::cout << CYAN << "Complete ICE config: " << CLR << std::endl;
-        std::cout << "  username: " << this->config->ice_username << std::endl;
-        std::cout << "  secret: " << this->config->ice_secret << std::endl;
-        std::cout << "  servers: " << std::endl;
+        log(CYAN + "Complete ICE config: " + CLR);
+        log("  username: " + this->config->ice_username);
+        log("  secret: " + this->config->ice_secret);
+        log("  servers: ");
         for (auto & one : this->config->ice_servers) {
-            std::cout << "    " << one << std::endl;
+            log("    " + one);
         }
     }
 }
@@ -179,8 +177,8 @@ void BridgeSocket::onIceServers(sio::event const& ev) {
 // peer connected
 void BridgeSocket::onPeerConnected(sio::event &ev) {
     if (this->config->sio_verbose) {
-        std::cout << msgDebugHeader(ev) << "Peer connection request: " << std::endl;
-        std::cout << printMessage(ev.get_message()) << std::endl;
+        log(msgDebugHeader(ev) + "Peer connection request: ");
+        log(printMessage(ev.get_message()));
     }
     
     auto id_peer = WRTCPeer::getId(ev.get_message());
@@ -199,8 +197,8 @@ void BridgeSocket::onPeerConnected(sio::event &ev) {
 // peer disconnected
 void BridgeSocket::onPeerDisconnected(sio::event & ev) {
     if (this->config->sio_verbose) {
-        std::cout << msgDebugHeader(ev) << "Peer disconnect request: " << std::endl;
-        std::cout << printMessage(ev.get_message()) << std::endl;
+        log(msgDebugHeader(ev) + "Peer disconnect request: ");
+        log(printMessage(ev.get_message()));
     }
     auto peer = WRTCPeer::getConnectedPeer(ev);
     if (peer == nullptr) return;
@@ -210,8 +208,8 @@ void BridgeSocket::onPeerDisconnected(sio::event & ev) {
 // introspection control
 void BridgeSocket::onIntrospection(sio::event & ev) {
     if (this->config->sio_verbose) {
-        std::cout << msgDebugHeader(ev) << "Introspection request: " << std::endl;
-        std::cout << printMessage(ev.get_message()) << std::endl;
+        log(msgDebugHeader(ev) + "Introspection request: ");
+        log(printMessage(ev.get_message()));
     }
     auto peer = WRTCPeer::getConnectedPeer(ev);
     if (peer == nullptr) return;
@@ -231,8 +229,8 @@ void BridgeSocket::onIntrospection(sio::event & ev) {
 // peer subscribing to stuffs
 void BridgeSocket::onSubscribeRead(sio::event & ev) {
     if (this->config->sio_verbose) {
-        std::cout << msgDebugHeader(ev) << "Subscribe read request: " << std::endl;
-        std::cout << printMessage(ev.get_message()) << std::endl;
+        log(msgDebugHeader(ev) + "Subscribe read request: ");
+        log(printMessage(ev.get_message()));
     }
     
     auto peer = WRTCPeer::getConnectedPeer(ev);
@@ -257,8 +255,8 @@ void BridgeSocket::onSubscribeRead(sio::event & ev) {
 void BridgeSocket::onUnsubscribeRead(sio::event & ev) {
 
     if (this->config->sio_verbose) {
-        std::cout << msgDebugHeader(ev) << "Unsubscribe read request: " << std::endl;
-        std::cout << printMessage(ev.get_message()) << std::endl;
+        log(msgDebugHeader(ev) + "Unsubscribe read request: ");
+        log(printMessage(ev.get_message()));
     }
 
     auto peer = WRTCPeer::getConnectedPeer(ev);
@@ -283,8 +281,8 @@ void BridgeSocket::onUnsubscribeRead(sio::event & ev) {
 void BridgeSocket::onSubscribeWrite(sio::event & ev) {
 
     if (this->config->sio_verbose) {
-        std::cout << msgDebugHeader(ev) << "Subscribe write request: " << std::endl;
-        std::cout << printMessage(ev.get_message()) << std::endl;
+        log(msgDebugHeader(ev) + "Subscribe write request: ");
+        log(printMessage(ev.get_message()));
     }
 
     auto peer = WRTCPeer::getConnectedPeer(ev);
@@ -311,8 +309,8 @@ void BridgeSocket::onSubscribeWrite(sio::event & ev) {
 void BridgeSocket::onUnsubscribeWrite(sio::event & ev) {
 
     if (this->config->sio_verbose) {
-        std::cout << msgDebugHeader(ev) << "Unsubscribe write request: " << std::endl;
-        std::cout << printMessage(ev.get_message()) << std::endl;
+        log(msgDebugHeader(ev) + "Unsubscribe write request: ");
+        log(printMessage(ev.get_message()));
     }
 
     auto peer = WRTCPeer::getConnectedPeer(ev);
@@ -337,8 +335,8 @@ void BridgeSocket::onUnsubscribeWrite(sio::event & ev) {
 void BridgeSocket::onSDPAnswer(sio::event & ev) {
 
     if (this->config->sio_verbose) {
-        std::cout << msgDebugHeader(ev) << "Got SDP Answer:" << CLR << std::endl;
-        std::cout << printMessage(ev.get_message()) << std::endl;
+        log(msgDebugHeader(ev) + "Got SDP Answer:");
+        log(printMessage(ev.get_message()));
     }
 
     auto peer = WRTCPeer::getConnectedPeer(ev);
@@ -376,8 +374,8 @@ void BridgeSocket::returnSuccess(sio::event const &ev, int success) {
 void BridgeSocket::onServiceCall(sio::event & ev) {
 
     if (this->config->sio_verbose) {
-        std::cout << msgDebugHeader(ev) << "Service call request: " << std::endl;
-        std::cout << printMessage(ev.get_message()) << std::endl;
+        log(msgDebugHeader(ev) + "Service call request: ");
+        log(printMessage(ev.get_message()));
     }
     
     auto peer = WRTCPeer::getConnectedPeer(ev);
@@ -401,34 +399,8 @@ void BridgeSocket::onServiceCall(sio::event & ev) {
 }
 
 void BridgeSocket::onSocketError(sio::message::ptr const& message) {
-    switch (message->get_flag()) {
-        case sio::message::flag::flag_string:
-            std::cout << RED << "SOCKET ERROR: " << message->get_string() << CLR << std::endl;
-            break;
-        case sio::message::flag::flag_null:
-            std::cout << RED << "SOCKET ERROR: NULL" << CLR << std::endl;
-            break;
-        case sio::message::flag::flag_boolean:
-            std::cout << RED << "SOCKET ERROR: " << message->get_bool() << CLR << std::endl;
-            break;
-        case sio::message::flag::flag_integer:
-            std::cout << RED << "SOCKET ERROR: " << message->get_int() << CLR << std::endl;
-            break;
-        case sio::message::flag::flag_double:
-            std::cout << RED << "SOCKET ERROR: " << message->get_double() << CLR << std::endl;
-            break;
-        case sio::message::flag::flag_object:
-            {
-                auto map = message->get_map();
-                for (auto one : map) {
-                    std::cout << RED << "SOCKET ERROR: "  << (one.first == "message" ? "" : one.first + ": ") << one.second->get_string() << CLR << std::endl;
-                }
-                break;
-            }
-        default:
-            std::cout << RED << "SOCKET ERROR: (type=" << message->get_flag() << ")" << CLR << std::endl;
-            break;
-    }
+    log("SOCKET ERROR: ", true);
+    log(printMessage(message), true);
 }
 
 // report unhandled messages
@@ -436,8 +408,8 @@ void BridgeSocket::onOtherSocketMessage(sio::event const& ev) {
     if (this->handled_events.find(ev.get_name().c_str()) != this->handled_events.end())
         return;
     
-    std::cout << RED << msgDebugHeader(ev) << "UNHANDLED SOCKER MSG '" << "': " << CLR << std::endl;
-    std::cout << printMessage(ev.get_message()) << std::endl;
+    log(msgDebugHeader(ev) + "UNHANDLED SOCKER MSG '", true);
+    log(printMessage(ev.get_message()), true);
 }
 
 void BridgeSocket::onClosed(sio::client::close_reason const& reason) {
@@ -448,12 +420,12 @@ void BridgeSocket::onClosed(sio::client::close_reason const& reason) {
         default: reason_hr = std::to_string(reason); break;
     }
     
-    std::cout << RED << "Socket.io client closed (reason " << reason_hr << ")" << CLR << std::endl;
+    log("Socket.io client closed (reason " + reason_hr + ")", true);
     this->client.socket()->off_all();
     this->client.socket()->off_error();
     
     if (!this->shutting_down) {
-        std::cout << "  Attempting to reconnect..." << std::endl;
+        log("  Attempting to reconnect...");
         std::thread([this]() {
             std::this_thread::sleep_for(std::chrono::seconds(1));
             this->client.connect(this->socket_url, this->auth_data);
@@ -462,19 +434,19 @@ void BridgeSocket::onClosed(sio::client::close_reason const& reason) {
 }
 
 void BridgeSocket::onFailed() {
-    std::cout << RED << "Socket.io client failed" << CLR << std::endl;
+    log("Socket.io client failed", true);
 }
 
 void BridgeSocket::onReconnecting() {
-    std::cout << "Socket.io client attempting to reconnect..." << std::endl;
+    log("Socket.io client attempting to reconnect...");
 }
 
 void BridgeSocket::onReconnect(uint attemptCount, uint delay) {
-    std::cout << "Socket.io client reconnected after " << attemptCount << " attempts. Next attempt in " << delay << "ms" << std::endl;
+    log("Socket.io client reconnected after " + std::to_string(attemptCount) + " attempts. Next attempt in " + std::to_string(delay) + "ms");
 }
 
 void BridgeSocket::onSocketClose() {
-    std::cout << RED << "Socket.io socket closed" << CLR << std::endl;
+    log("Socket.io socket closed", true);
 }
 
 void BridgeSocket::shutdown() {
@@ -609,8 +581,8 @@ sio::message::ptr BridgeSocket::jsonToSioMessage(Json::Value val) {
         }
         return res;
     } else {
-        std::cerr << RED << "Invalid Json value type: " << std::endl;
-        std::cerr << val.toStyledString() << std::endl;
+        log("Invalid Json value type: ", true);
+        log(val.toStyledString(), true);
         return sio::null_message::create();
     }
 }

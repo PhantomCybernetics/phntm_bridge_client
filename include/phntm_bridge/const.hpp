@@ -17,3 +17,4 @@ const std::string CLR = "\033[0m";
 const std::string IMAGE_MSG_TYPE = "sensor_msgs/msg/Image";
 const std::string COMPRESSED_IMAGE_MSG_TYPE = "sensor_msgs/msg/CompressedImage";
 const std::string VIDEO_STREAM_MSG_TYPE = "ffmpeg_image_transport_msgs/msg/FFMPEGPacket";
+

@@ -5,11 +5,13 @@
 #include "phntm_bridge/introspection.hpp"
 #include "phntm_bridge/extra_packages.hpp"
 #include "phntm_bridge/status_leds.hpp"
+#include "phntm_bridge/wrtc_peer.hpp"
 
 #include <iostream>
 #include <ostream>
 #include <rclcpp/executors.hpp>
 #include <rclcpp/executors/multi_threaded_executor.hpp>
+#include <string>
 
 PhntmBridge::PhntmBridge(std::string node_name, std::shared_ptr<BridgeConfig> config) : Node(node_name)
 {   
@@ -30,7 +32,7 @@ PhntmBridge::PhntmBridge(std::string node_name, std::shared_ptr<BridgeConfig> co
 std::atomic<bool> g_interrupt_requested(false);
 
 void signal_handler(int signum) {
-    std::cout << RED << "Signal handler got " << signum << CLR << std::endl;
+    log(RED + "Signal handler got " + std::to_string(signum) + CLR);
     g_interrupt_requested.store(true);
 }
 
@@ -44,11 +46,11 @@ int main(int argc, char ** argv)
   (void) argv;
 
   if (installExtraPackages()) {
-    std::cout << MAGENTA << "Restarting..." << CLR << std::endl;
+    log(MAGENTA + "Restarting..." + CLR);
     return 0;
   }
 
-  std::cout << LIME << "Launching the Bridge Node" << CLR << std::endl;
+  log(LIME + "Launching the Bridge Node" + CLR);
 
   rclcpp::init(argc, argv);
   rclcpp::uninstall_signal_handlers();
@@ -60,9 +62,9 @@ int main(int argc, char ** argv)
   auto config = std::make_shared<BridgeConfig>();
 
   config->ros_distro = std::getenv("ROS_DISTRO");
-  std::cout << "ROS distro is: " << YELLOW << config->ros_distro << CLR << std::endl;
+  log("ROS distro is: " + YELLOW + config->ros_distro + CLR);
   readGitRepoHead("/ros2_ws/src/phntm_bridge", config);
-  std::cout << "Git commit: " << YELLOW << config->git_head_sha << CLR << " Tag: " << YELLOW << (config->latest_git_tag.empty() ? "-" : config->latest_git_tag) << CLR << std::endl;
+  log("Git commit: " + YELLOW + config->git_head_sha + CLR + " Tag: "+ YELLOW + (config->latest_git_tag.empty() ? "-" : config->latest_git_tag) + CLR);
 
   auto base_node = std::make_shared<PhntmBridge>("phntm_bridge", config);
   // auto introspection_node = std::make_shared<rclcpp::Node>("phntm_introspection");
@@ -76,24 +78,26 @@ int main(int argc, char ** argv)
   Introspection::start();
   BridgeSocket::connect();
 
+  WRTCPeer::initLogging(config);
+
   while (!g_interrupt_requested.load() && rclcpp::ok()) {
     executor.spin_some();
   }
     
-  std::cout << BLUE << "Shutting down..." << CLR << std::endl;
+  log(BLUE + "Shutting down..." + CLR);
 
   Introspection::stop();
   StatusLEDs::clear();
 
-  std::cout << "Spinning some more..." << std::endl;
+  log("Spinning ROS node some more...");
   executor.spin_some(); // make sure we send out what we need before shutdown
-  std::cout << "Done spinning" << std::endl;
+  log("Done spinning");
 
   BridgeSocket::shutdown();
 
   rclcpp::shutdown();
 
-  std::cout << BLUE << "Rclcpp down..." << CLR << std::endl;
+  log(BLUE + "Rclcpp down..." + CLR);
 
   return 0;
 }

@@ -37,7 +37,7 @@ void PhntmBridge::srvRequestClearFileCache(const std::shared_ptr<std_srvs::srv::
     Json::FastWriter writer;
     std::string payload = writer.write(jsonData);
 
-    std::cout << YELLOW << "Requesting clear server file cache at " << url << CLR << std::endl;
+    log(YELLOW + "Requesting clear server file cache at " + url + CLR);
 
     // response buffer
     std::string responseBuffer;
@@ -74,11 +74,11 @@ void PhntmBridge::srvRequestClearFileCache(const std::shared_ptr<std_srvs::srv::
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &responseCode);
 
     if (responseCode == 200) { // ok
-        std::cout << "Server replied: " << responseBuffer << " (" << std::to_string(responseCode) << ")" << std::endl;
+        log("Server replied: " + responseBuffer + " (" + std::to_string(responseCode) + ")");
         response->success = true;
         response->message = responseBuffer;
     } else {
-        std::cerr << RED << "Server replied: " << responseBuffer << " (" << std::to_string(responseCode) << ")" << CLR << std::endl;
+        log("Server replied: " + responseBuffer + " (" + std::to_string(responseCode) + ")", true);
         response->success = false;
         response->message = responseBuffer;
     }

@@ -10,6 +10,7 @@ std::vector<std::string> split(const std::string& s, char delimiter);
 std::vector<std::string> rsplit(const std::string& str, const char delimiter, int maxsplit = -1);
 bool isImageOrVideoType(std::string msg_type);
 bool isEncodedVideoType(std::string msg_type);
+void log(std::string msg, bool error=false, bool append_endl=true);
 
 struct CustomWidgetDef {
     std::string class_name;

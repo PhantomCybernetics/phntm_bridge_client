@@ -123,7 +123,7 @@ void StatusLEDs::init(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<Bridge
 
     if (config->conn_led_pin > -1 || config->data_led_pin > -1) {
         if (config->conn_led_gpio_chip.empty()) {
-            std::cerr << RED << "conn_led_gpio_chip not set" << CLR << std::endl;
+            log("conn_led_gpio_chip not set in the config file!", true);
             return;
         }
 
@@ -132,7 +132,7 @@ void StatusLEDs::init(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<Bridge
             throw std::runtime_error("Failed to open GPIO chip " + config->conn_led_gpio_chip);
         }
         if (config->conn_led_pin > -1) {
-            std::cout << "Connection LED uses pin " << config->conn_led_pin << std::endl;
+            log("Connection LED uses pin " + std::to_string(config->conn_led_pin));
             try {
                 auto line = chip.get_line((uint) config->conn_led_pin);
                 instance->conn = std::make_shared<StatusLED>(line);
@@ -142,7 +142,7 @@ void StatusLEDs::init(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<Bridge
             }
         }
         if (config->data_led_pin > -1) {
-            std::cout << "Data LED uses pin " << config->data_led_pin << std::endl;
+            log("Data LED uses pin " + std::to_string(config->data_led_pin));
             try {
                 auto line = chip.get_line((uint) config->data_led_pin);
                 instance->data = std::make_shared<StatusLED>(line);
@@ -155,13 +155,13 @@ void StatusLEDs::init(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<Bridge
 
         rclcpp::QoS qos(1);
         if (!config->conn_led_topic.empty()) {
-            std::cout << "Connection LED uses topic " << config->conn_led_topic << std::endl;
+            log("Connection LED uses topic " + config->conn_led_topic);
             auto publisher = node->create_publisher<std_msgs::msg::Bool>(config->conn_led_topic, qos);
             instance->conn = std::make_shared<StatusLED>(publisher);
             instance->leds.push_back(instance->conn);
         }
         if (!config->data_led_topic.empty()) {
-            std::cout << "Data LED uses topic " << config->data_led_topic << std::endl;
+            log("Data LED uses topic " + config->data_led_topic);
             auto publisher = node->create_publisher<std_msgs::msg::Bool>(config->data_led_topic, qos);
             instance->data = std::make_shared<StatusLED>(publisher);
             instance->leds.push_back(instance->data);
@@ -182,14 +182,14 @@ void StatusLEDs::clear() {
 }
 
 void StatusLEDs::loop() {
-    std::cout << "Status LEDs loop running" << std::endl;
+    log("Status LEDs loop running");
     while (this->loop_running) {
         for (auto & led : this->leds) {
            led->update();
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(1)); // 1ms loop
     }
-    std::cout << "Status LEDs loop finished" << std::endl;
+    log("Status LEDs loop finished");
 }
 
 // convenience 

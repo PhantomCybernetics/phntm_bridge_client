@@ -29,7 +29,7 @@ Introspection::Introspection(std::shared_ptr<rclcpp::Node> node, std::shared_ptr
         qos.lifespan(rclcpp::Duration::max());
         // rclcpp::SubscriptionOptions options;
         // options.callback_group = my_callback_group;
-        std::cout << "Subscribing to " << this->config->docker_monitor_topic << std::endl;
+        log("Subscribing to " + this->config->docker_monitor_topic);
         this->docker_sub = this->node->create_subscription<phntm_interfaces::msg::DockerStatus>(this->config->docker_monitor_topic, qos,
             std::bind(&Introspection::onDockerMonitorMessage, this, std::placeholders::_1));
     }
@@ -48,7 +48,7 @@ void Introspection::start() {
         return;
 
     instance->running = true;
-    std::cout << CYAN << "Introspection starting..." << CLR << std::endl;
+    log(CYAN + "Introspection starting..." + CLR);
     instance->reportRunningState();
     
     instance->start_time = instance->node->now();
@@ -65,7 +65,7 @@ void Introspection::stop() {
         return;
 
     instance->running = false;
-    std::cout << CYAN << "Introspection stopped." << CLR << std::endl;
+    log(CYAN + "Introspection stopped." + CLR);
 
     instance->timer->cancel();
     instance->reportRunningState();
@@ -78,7 +78,7 @@ void Introspection::runIntrospection() {
 
     this->introspection_in_progress = true;
     if (this->config->introspection_verbose)
-        std::cout << GRAY << "Introspecting..." << CLR << std::endl;
+        log(GRAY + "Introspecting..." + CLR);
 
     bool nodes_changed = false;
     bool topics_changed = false;
@@ -108,7 +108,7 @@ void Introspection::runIntrospection() {
     // remove not found nodes
     for (auto it = this->discovered_nodes.begin(); it != this->discovered_nodes.end();) {
         if (nodes_and_namespaces.find(it->first) == nodes_and_namespaces.end()) {
-            std::cout << GRAY << "Lost node " << it->first << CLR << std::endl;
+            log(GRAY + "Lost node " + it->first + CLR);
             it = this->discovered_nodes.erase(it);
             nodes_changed = true;
         } else {
@@ -119,7 +119,7 @@ void Introspection::runIntrospection() {
     // add newly found nodes
     for (auto n : nodes_and_namespaces) {
         if (this->discovered_nodes.find(n.first) == this->discovered_nodes.end()) {
-            std::cout << "Discovered node " << MAGENTA << n.first << CLR << " ns=" << n.second << std::endl;
+            log("Discovered node " + MAGENTA + n.first + CLR + " ns=" + n.second);
             DiscoveredNode node;
             node.ns = n.second;
             this->discovered_nodes.emplace(n.first, node);
@@ -133,7 +133,7 @@ void Introspection::runIntrospection() {
     // remove no longer observed topics
     for (auto it = this->discovered_topics.begin(); it != this->discovered_topics.end();) {
         if (topics_and_types.find(it->first) == topics_and_types.end()) {
-            std::cout << GRAY << "Lost topic " << it->first << CLR << std::endl;
+            log(GRAY + "Lost topic " + it->first + CLR);
             it = this->discovered_topics.erase(it);
             topics_changed = true;
         } else {
@@ -149,7 +149,7 @@ void Introspection::runIntrospection() {
         }
 
         if (this->discovered_topics.find(topic.first) == this->discovered_topics.end()) {
-            std::cout << "Discovered topic " << CYAN << topic.first << CLR << GRAY << " {" << topic.second[0] << "}" << CLR << std::endl;
+            log("Discovered topic " + CYAN + topic.first + CLR + GRAY + " {" + topic.second[0] + "}" + CLR);
             this->discovered_topics.emplace(topic.first, topic.second[0]);
             topics_changed = true;
             idls_changed = this->collectIDLs(topic.second[0]) || idls_changed;
@@ -159,7 +159,7 @@ void Introspection::runIntrospection() {
         auto publishers_info = node->get_publishers_info_by_topic(topic.first);
         for (auto pub : publishers_info) {
             if (this->discovered_nodes.find(pub.node_name()) == this->discovered_nodes.end()) {
-                std::cout << RED << "Publisher node " << pub.node_name() << " not found for " << topic.first << CLR << std::endl;
+                log(RED + "Publisher node " + pub.node_name() + " not found for " + topic.first + CLR);
                 continue;
             }
 
@@ -168,7 +168,7 @@ void Introspection::runIntrospection() {
                 NodePubTopic info = { topic.second[0], pub.qos_profile() };
                 node_publishers->emplace(topic.first, info);
                 nodes_changed = true;
-                std::cout << "  " << pub.node_name() << GREEN << " >> " << CLR << topic.first << GRAY << " [" << topic.second[0] << "]" << CLR << std::endl;
+                log("  " + pub.node_name() + GREEN + " >> " + CLR + topic.first + GRAY + " [" + topic.second[0] + "]" + CLR);
             } else { //check qos & type
                 if (node_publishers->at(topic.first).msg_type != topic.second[0]) {
                     node_publishers->at(topic.first).msg_type = topic.second[0];
@@ -185,7 +185,7 @@ void Introspection::runIntrospection() {
         auto subscribers_info = node->get_subscriptions_info_by_topic(topic.first);
         for (auto sub : subscribers_info) {
             if (this->discovered_nodes.find(sub.node_name()) == this->discovered_nodes.end()) {
-                std::cout << RED << "Subscriber node " << sub.node_name() << " not found for " << topic.first << CLR << std::endl;
+                log(RED + "Subscriber node " + sub.node_name() + " not found for " + topic.first + CLR);
                 continue;
             }
 
@@ -194,7 +194,7 @@ void Introspection::runIntrospection() {
                 NodeSubTopic info = { topic.second[0], sub.qos_profile(), "", "" };
                 node_subscribers->emplace(topic.first, info);
                 nodes_changed = true;
-                std::cout << "  " << sub.node_name() << YELLOW << " << " << CLR << topic.first << GRAY << " [" << topic.second[0] << "]" << CLR << std::endl;
+                log("  " + sub.node_name() + YELLOW + " << " + CLR + topic.first + GRAY + " [" + topic.second[0] + "]" + CLR);
             } else { //check qos & type
                 if (node_subscribers->at(topic.first).msg_type != topic.second[0]) {
                     node_subscribers->at(topic.first).msg_type = topic.second[0];
@@ -227,7 +227,7 @@ void Introspection::runIntrospection() {
                 n.second.services.emplace(s.first, s.second[0]);
                 services_changed = true;
                 idls_changed = this->collectIDLs(s.second[0]) || idls_changed;
-                std::cout << "Discovered srv " << n.first << ": " << GREEN << s.first << CLR << GRAY << " [" << s.second[0] << "]" << CLR << std::endl;
+                log("Discovered srv " + n.first + ": " + GREEN + s.first + CLR + GRAY + " [" + s.second[0] + "]" + CLR);
             } else if (n.second.services.at(s.first) != s.second[0]) {
                 n.second.services[s.first] = s.second[0];
                 services_changed = true;
@@ -276,12 +276,12 @@ void Introspection::checkSubscriberQos() {
                     case rclcpp::QoSCompatibility::Error:
                         n.second.subscribers.at(t.first).qos_warning = "";
                         n.second.subscribers.at(t.first).qos_error = res.reason;
-                        std::cout << RED << "Detected QoS compatilibility error for " << n.first << " << " << t.first << ": " << res.reason << CLR << std::endl;
+                        log(RED + "Detected QoS compatilibility error for " + n.first + " << " + t.first + ": " + res.reason + CLR);
                         break;
                     case rclcpp::QoSCompatibility::Warning:
                         n.second.subscribers.at(t.first).qos_warning = res.reason;
                         n.second.subscribers.at(t.first).qos_error = "";
-                        std::cout << RED << "Detected QoS compatilibility warnning for " << n.first << " << " << t.first << ": " << res.reason << CLR << std::endl;
+                        log(RED + "Detected QoS compatilibility warnning for " + n.first + " << " + t.first + ": " + res.reason + CLR);
                         break;
                     default: //ok
                         n.second.subscribers.at(t.first).qos_warning = "";
@@ -296,21 +296,21 @@ void Introspection::checkSubscriberQos() {
 std::string getInterfaceIDLPath(std::string interface_name) {
     auto parts = split(interface_name, '/');
     if (parts.size() < 2) {
-        std::cerr << RED << "Invalid name '" << interface_name << "'. Expected at least two parts separated by '/'" << CLR << std::endl;
+        log("Invalid name '" + interface_name + "'. Expected at least two parts separated by '/'", true);
         return "";
     }
     auto all_non_empty = std::all_of(parts.begin(), parts.end(), [](const std::string& s) { return !s.empty(); });
     if (!all_non_empty) {
-        std::cerr << RED << "Invalid name '" << interface_name << "'. Must not contain empty part" << CLR << std::endl;
+        log("Invalid name '" + interface_name + "'. Must not contain empty part", true);
         return "";
     }
     if (std::find(parts.begin(), parts.end(), "..") != parts.end()) {
-        std::cerr << RED << "Invalid name '" << interface_name << "'. Must not contain '..'" << CLR << std::endl;
+        log("Invalid name '" + interface_name + "'. Must not contain '..'", true);
         return "";
     }
     std::string prefix_path;
     if (!ament_index_cpp::has_resource("packages", parts[0], &prefix_path)) {
-        std::cerr << RED << "Unknown package '" << parts[0] << "'" << CLR << std::endl;
+        log("Unknown package '" + parts[0] + "'", true);
         return "";
     }
 
@@ -321,7 +321,7 @@ std::string getInterfaceIDLPath(std::string interface_name) {
     }
 
     if (!std::filesystem::exists(interface_path)) {
-        std::cerr << RED << "Could not find the interface '" << interface_path << "'" << CLR << std::endl;
+        log("Could not find the interface '" + interface_path.string() + "'", true);
         return "";
     }
     
@@ -338,7 +338,7 @@ bool Introspection::collectIDLs(std::string msg_type) {
 
     auto idl_path = getInterfaceIDLPath(msg_type);
     if (idl_path.empty()) {
-        std::cerr << RED << "IDL path not found for '" << msg_type << "'" << CLR << std::endl;
+        log("IDL path not found for '" + msg_type + "'", true);
         return false;
     }
 
@@ -371,7 +371,7 @@ bool Introspection::collectIDLs(std::string msg_type) {
     }
 
     this->discovered_idls.emplace(msg_type, idl_clear);
-    std::cout << YELLOW << "Loaded " << idl_path << CLR << std::endl;
+    log(YELLOW + "Loaded " + idl_path + CLR);
 
     // load includes
     for (auto inc_msg_type : inluded_message_types) {
@@ -394,7 +394,7 @@ void Introspection::onDockerMonitorMessage(phntm_interfaces::msg::DockerStatus c
             for (auto p : this->discovered_docker_containers) {
                 for (size_t j = 0; j < p.second.containers.size(); j++) {
                     if (msg.containers[i].id == p.second.containers[j].id) { // known container id found under new host
-                        std::cout << "Agent host changed from " << p.first << " to " << host << std::endl;
+                        log("Agent host changed from " + p.first + " to " + host);
                         this->discovered_docker_containers.erase(p.first);
                         break;
                     }
@@ -444,9 +444,9 @@ void Introspection::reportIDLs() {
         msg->get_map().emplace(idl.first, one_idl);
     }
 
-    std::cout << GRAY << "Reporting " << this->discovered_idls.size() << " IDLs" << CLR << std::endl;
+    log(GRAY + "Reporting " + std::to_string(this->discovered_idls.size()) + " IDLs" + CLR);
     if (this->config->introspection_verbose)
-            std::cout << GRAY << BridgeSocket::printMessage(msg) << CLR << std::endl;
+        log(GRAY + BridgeSocket::printMessage(msg) + CLR);
 
     BridgeSocket::emit("idls", { msg } , nullptr);
 }
@@ -504,11 +504,11 @@ void Introspection::reportNodes() {
     }
     
     if (this->discovered_nodes.size()) {
-        std::cout << GRAY << "Reporting " << this->discovered_nodes.size() << " nodes" << CLR << std::endl;
+        log(GRAY + "Reporting " + std::to_string(this->discovered_nodes.size()) + " nodes" + CLR);
         if (this->config->introspection_verbose)
-            std::cout << GRAY << BridgeSocket::printMessage(msg) << CLR << std::endl;
+            log(GRAY + BridgeSocket::printMessage(msg) + CLR);
     } else {
-        std::cout << GRAY << "Reporting empty nodes" << CLR << std::endl;
+        log(GRAY + "Reporting empty nodes" + CLR);
     }
     BridgeSocket::emit("nodes", { msg }, nullptr);
 }
@@ -547,11 +547,11 @@ void Introspection::reportDocker() {
         msg->get_map().emplace(p.first, host_msg);
     }
     if (hosts.size()) {
-        std::cout << GRAY << "Reporting " << this->discovered_docker_containers.size() << " Docker containers for " << join(hosts) << CLR << std::endl;
+        log(GRAY + "Reporting " + std::to_string(this->discovered_docker_containers.size()) + " Docker containers for " + join(hosts) + CLR);
         if (this->config->introspection_verbose)
-            std::cout << GRAY << BridgeSocket::printMessage(msg) << CLR << std::endl;
+            log(GRAY + BridgeSocket::printMessage(msg) + CLR);
     } else {
-        std::cout << GRAY << "Reporting empty Docker containers" << CLR << std::endl;
+        log(GRAY + "Reporting empty Docker containers" + CLR);
     }
     
     BridgeSocket::emit("docker", { msg }, nullptr);

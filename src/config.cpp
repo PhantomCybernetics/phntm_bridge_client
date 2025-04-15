@@ -98,9 +98,9 @@ void PhntmBridge::loadConfig(std::shared_ptr<BridgeConfig> config) {
 
     config->ice_servers_custom = this->get_parameter("ice_servers").as_string_array(); // these get added to cloud config, or used when use_cloud_ice_config=false
     if (config->ice_servers_custom.size()) {
-        std::cout << "Custom ICE servers: " << std::endl;
+        log("Custom ICE servers: ");
         for (size_t i = 0; i < config->ice_servers_custom.size(); ++i) {
-            std::cout << "\t" << config->ice_servers_custom[i] << std::endl;
+            log("\t" + config->ice_servers_custom[i]);
         }
     }
     std::copy(config->ice_servers_custom.begin(), config->ice_servers_custom.end(), std::back_inserter(config->ice_servers)); // server config gets added here
@@ -147,9 +147,9 @@ void PhntmBridge::loadConfig(std::shared_ptr<BridgeConfig> config) {
     this->declare_parameter("blacklist_topics", std::vector<std::string>());
     config->blacklist_topics = this->get_parameter("blacklist_topics").as_string_array();
     if (config->blacklist_topics.size()) {
-        std::cout << "Blacklisted topics: " << std::endl;
+        log("Blacklisted topics:");
         for (size_t i = 0; i < config->blacklist_topics.size(); ++i) {
-            std::cout << "\t" << config->blacklist_topics[i] << std::endl;
+            log("\t" + config->blacklist_topics[i]);
         }
     }
     
@@ -157,9 +157,9 @@ void PhntmBridge::loadConfig(std::shared_ptr<BridgeConfig> config) {
     this->declare_parameter("blacklist_services", std::vector<std::string>());
     config->blacklist_services = this->get_parameter("blacklist_services").as_string_array();
     if (config->blacklist_services.size()) {
-        std::cout << "Blacklisted services: " << std::endl;
+        log("Blacklisted services:");
         for (size_t i = 0; i < config->blacklist_services.size(); ++i) {
-            std::cout << "\t" << config->blacklist_services[i] << std::endl;
+            log("\t" + config->blacklist_services[i]);
         }
     }
 
@@ -169,9 +169,9 @@ void PhntmBridge::loadConfig(std::shared_ptr<BridgeConfig> config) {
     this->declare_parameter("blacklist_msg_types", default_blacklisted_services);
     config->blacklist_msg_types = this->get_parameter("blacklist_msg_types").as_string_array();
     if (config->blacklist_services.size()) {
-        std::cout << "Blacklisted message types: " << std::endl;
+        log("Blacklisted message types:");
         for (size_t i = 0; i < config->blacklist_msg_types.size(); ++i) {
-            std::cout << "\t" << config->blacklist_msg_types[i] << std::endl;
+            log("\t" + config->blacklist_msg_types[i]);
         }
     }
     
@@ -251,7 +251,7 @@ void PhntmBridge::loadConfig(std::shared_ptr<BridgeConfig> config) {
             exit(1);
         }
         config->custom_input_drivers.push_back(def.value());
-        std::cout << "Adding custom input driver: " << def.value().class_name << " from " << def.value().url << std::endl;
+        log("Adding custom input driver: " + def.value().class_name + " from " + def.value().url);
     }
     
     // custom service menu widgets to be injected into the web UI
@@ -266,7 +266,7 @@ void PhntmBridge::loadConfig(std::shared_ptr<BridgeConfig> config) {
             exit(1);
         }
         config->custom_service_widgets.push_back(def.value());
-        std::cout << "Adding custom service widget: " << def.value().class_name << " from " << def.value().url << std::endl;
+        log("Adding custom service widget: " + def.value().class_name + " from " + def.value().url);
     }
     
     // service widget mapping with custom payload
@@ -281,10 +281,14 @@ void PhntmBridge::loadConfig(std::shared_ptr<BridgeConfig> config) {
             exit(1);
         }
         config->service_widgets.push_back(conf.value());
-        std::cout << "Adding service widget mapping: " << conf.value().service << " is " << conf.value().class_name;
-        if (!conf.value().data.empty())
-            std::cout << "; data=" << conf.value().data;
-        std::cout << std::endl;
+        auto d = "Adding service widget mapping: " + conf.value().service + " is " + conf.value().class_name;
+        if (!conf.value().data.empty()) {
+            d += "; data=" + std::string(conf.value().data.toStyledString());
+            log(d, false, false);
+        }
+        else {
+            log(d);
+        }
     }
 
     // default input config for the web UI
@@ -319,6 +323,9 @@ void PhntmBridge::loadConfig(std::shared_ptr<BridgeConfig> config) {
 
     this->declare_parameter("webrtc_debug", false);
     config->webrtc_debug = this->get_parameter("webrtc_debug").as_bool(); 
+
+    this->declare_parameter("webrtc_verbose", false);
+    config->webrtc_verbose = this->get_parameter("webrtc_verbose").as_bool();
 }
 
 rclcpp::QoS PhntmBridge::loadTopicQoSConfig(std::string topic) {
