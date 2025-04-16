@@ -331,12 +331,15 @@ void PhntmBridge::loadConfig(std::shared_ptr<BridgeConfig> config) {
 rclcpp::QoS PhntmBridge::loadTopicQoSConfig(std::string topic) {
     rclcpp::QoS qos(rclcpp::KeepLast(1)); // keep last 1
     
-    if (!this->has_parameter(topic + ".reliability"))
+    try {
         this->declare_parameter(topic + ".reliability", 2); // 0 = system default, 1 = reliable, 2 = best effort
-    if (!this->has_parameter(topic + ".durability"))
+    } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+    try {
         this->declare_parameter(topic + ".durability", 2); // 0 = system default, 1 = transient local, 2 = volatile
-    if (!this->has_parameter(topic + ".lifespan_sec"))
+    } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+    try {
         this->declare_parameter(topic + ".lifespan_sec", -1.0f); // num sec as double, -1.0 infinity
+    } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
 
     qos.reliability((rclcpp::ReliabilityPolicy) this->get_parameter(topic + ".reliability").as_int());
     qos.durability((rclcpp::DurabilityPolicy) this->get_parameter(topic + ".durability").as_int());
@@ -358,12 +361,15 @@ sio::message::ptr PhntmBridge::loadTopicMsgTypeExtraConfig(std::string topic, st
 
     // NN Detections
     if (msg_type == "vision_msgs/msg/Detection2DArray" || msg_type == "vision_msgs/msg/Detection3DArray") { 
-        if (!this->has_parameter(topic + ".input_width"))
+        try {
             this->declare_parameter(topic + ".input_width", 416);
-        if (!this->has_parameter(topic + ".input_height"))
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        try {
             this->declare_parameter(topic + ".input_height", 416);
-        if (!this->has_parameter(topic + ".label_map"))
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        try {
             this->declare_parameter(topic + ".label_map", std::vector<std::string>());  // array of nn class labels
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
             
         res->get_map().emplace("nn_input_w", sio::int_message::create(this->get_parameter(topic + ".input_width").as_int()));
         res->get_map().emplace("nn_input_h", sio::int_message::create(this->get_parameter(topic + ".input_height").as_int()));
@@ -376,14 +382,18 @@ sio::message::ptr PhntmBridge::loadTopicMsgTypeExtraConfig(std::string topic, st
 
     // Camera Info
     else if (msg_type == "sensor_msgs/msg/CameraInfo") {
-        if (!this->has_parameter(topic + ".frustum_color"))
+        try {
             this->declare_parameter(topic + ".frustum_color", "cyan");
-        if (!this->has_parameter(topic + ".frustum_near"))
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        try {
             this->declare_parameter(topic + ".frustum_near", 0.01f);
-        if (!this->has_parameter(topic + ".frustum_far"))
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        try {
             this->declare_parameter(topic + ".frustum_far", 1.0f);
-        if (!this->has_parameter(topic + ".force_frame_id"))
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        try {
             this->declare_parameter(topic + ".force_frame_id", "");
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
 
         res->get_map().emplace("frustum_color", sio::string_message::create(this->get_parameter(topic + ".frustum_color").as_string()));
         res->get_map().emplace("frustum_near", sio::double_message::create(this->get_parameter(topic + ".frustum_near").as_double()));
@@ -395,10 +405,12 @@ sio::message::ptr PhntmBridge::loadTopicMsgTypeExtraConfig(std::string topic, st
             
     // Battery
     else if (msg_type == "sensor_msgs/msg/BatteryState") {
-        if (!this->has_parameter(topic + ".min_voltage"))
+        try {
             this->declare_parameter(topic + ".min_voltage", 0.0f);
-        if (!this->has_parameter(topic + ".max_voltage"))
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        try {
             this->declare_parameter(topic + ".max_voltage", 12.0f);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
 
         res->get_map().emplace("min_voltage", sio::double_message::create(this->get_parameter(topic + ".min_voltage").as_double()));
         res->get_map().emplace("max_voltage", sio::double_message::create(this->get_parameter(topic + ".max_voltage").as_double()));

@@ -11,14 +11,13 @@
 #include <ostream>
 #include <rclcpp/executors.hpp>
 #include <rclcpp/executors/multi_threaded_executor.hpp>
+#include <rclcpp/node.hpp>
+#include <rclcpp/node_options.hpp>
 #include <string>
 
-PhntmBridge::PhntmBridge(std::string node_name, std::shared_ptr<BridgeConfig> config) : Node(node_name)
+PhntmBridge::PhntmBridge(std::string node_name, rclcpp::NodeOptions node_options, std::shared_ptr<BridgeConfig> config) : Node(node_name, node_options)
 {   
     this->config = config;
-
-    this->loadConfig(this->config);
-    this->setupLocalServices();
 
     // this->declare_parameter("topic_prefix", "/picam_ros2/camera_");
     // this->declare_parameter("log_message_every_sec", 5.0); // -1.0 = off
@@ -66,7 +65,11 @@ int main(int argc, char ** argv)
   readGitRepoHead("/ros2_ws/src/phntm_bridge", config);
   log("Git commit: " + YELLOW + config->git_head_sha + CLR + " Tag: "+ YELLOW + (config->latest_git_tag.empty() ? "-" : config->latest_git_tag) + CLR);
 
-  auto base_node = std::make_shared<PhntmBridge>("phntm_bridge", config);
+  rclcpp::NodeOptions node_options;
+  node_options.automatically_declare_parameters_from_overrides(false);
+  auto base_node = std::make_shared<PhntmBridge>("phntm_bridge", node_options, config);
+  base_node->loadConfig(config);
+  base_node->setupLocalServices();
   // auto introspection_node = std::make_shared<rclcpp::Node>("phntm_introspection");
   executor.add_node(base_node);
   // executor.add_node(introspection_node);

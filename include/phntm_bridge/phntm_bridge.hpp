@@ -24,7 +24,7 @@ class BridgeSocket;
 class PhntmBridge : public rclcpp::Node
 {
   public:
-    PhntmBridge(std::string node_name, std::shared_ptr<BridgeConfig> config);
+    PhntmBridge(std::string node_name, rclcpp::NodeOptions node_options, std::shared_ptr<BridgeConfig> config);
     ~PhntmBridge();
     void loadConfig(std::shared_ptr<BridgeConfig> config);
     rclcpp::QoS loadTopicQoSConfig(std::string topic);

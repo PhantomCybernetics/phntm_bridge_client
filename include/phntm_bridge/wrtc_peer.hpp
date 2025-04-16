@@ -72,11 +72,14 @@ class WRTCPeer {
         sio::array_message::ptr subscribeImageOrVideoTopic(std::string topic, std::string msg_type);
         sio::array_message::ptr subscribeWriteDataTopic(std::string topic, std::string msg_type);
 
+        sio::array_message::ptr unsubscribeDataTopic(std::string topic);
+        sio::array_message::ptr unsubscribeWriteDataTopic(std::string topic);
+
         std::map<std::string, std::shared_ptr<rtc::DataChannel>> outbound_data_channels; 
-        uint16_t openDataChannelForTopic(std::string topic, std::string msg_type, bool is_reliable, bool write=false);
-
         std::map<std::string, std::shared_ptr<rtc::DataChannel>> inbound_data_channels; 
-
+        uint16_t openDataChannelForTopic(std::string topic, std::string msg_type, bool is_reliable, bool write=false);
+        void closeDataChannelForTopic(std::string topic, bool write);
+        
         uint16_t next_channel_id;
         bool negotiation_needed;
 };

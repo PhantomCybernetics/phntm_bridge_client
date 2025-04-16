@@ -185,7 +185,7 @@ void WRTCPeer::onDisconnected() {
 void WRTCPeer::onAllPeersDisconnected() {
     std::vector<std::string> user_ids;
     for (const auto& pair : connected_peers) {
-        user_ids.push_back(pair.first); // Access the key
+        user_ids.push_back(pair.first);
     }
     for (auto id_peer : user_ids){
         connected_peers.at(id_peer)->onDisconnected(); // removes from connected_peers
@@ -209,12 +209,12 @@ WRTCPeer::WRTCPeer(std::shared_ptr<PhntmBridge> node, std::string id_peer, std::
     rtc::Configuration rtc_config;
     rtc_config.disableAutoNegotiation = true;
     rtc_config.disableAutoGathering = false;
-    rtc_config.certificateType = rtc::CertificateType::Rsa;
-    rtc_config.enableIceUdpMux = true;
+    rtc_config.certificateType = rtc::CertificateType::Default;
+    rtc_config.enableIceUdpMux = false;
     rtc_config.disableFingerprintVerification = false;
     for (auto & one : this->config->ice_servers) {
         if (one.compare(0, 5, "turn:") == 0) {
-            auto turn_url = "turns://" + this->config->ice_username + ":" + this->config->ice_secret + "@" +  one.substr(5);
+            auto turn_url = "turn://" + this->config->ice_username + ":" + this->config->ice_secret + "@" +  one.substr(5);
             rtc::IceServer ice_server(turn_url);
             // ice_server.relayType = rtc::IceServer::RelayType::TurnTls;
             if (this->config->webrtc_debug) {
@@ -332,16 +332,39 @@ void WRTCPeer::processSubscriptions(int ack_msg_id, sio::object_message::ptr ack
                 auto msg_type = sub[1];
 
                 auto channel_config = that->subscribeWriteDataTopic(topic, msg_type);
-                reply->get_map().at("write_data_channels")->get_vector().push_back(channel_config);
+                reply->get_map().at("write_data_channels")->get_vector().push_back(channel_config); //no id => unsubscribed
             }
 
-            // unsubscribe from data channels
-            // for topic in list(peer.outbound_data_channels.keys()):
-            //     if not topic in peer.read_subs:
-            //         self.get_logger().info(f'{peer} unsubscribing from {topic}')
-            //         await self.unsubscribe_data_topic(topic, peer=peer, msg_callback=None)
-            //         res['read_data_channels'].append([ topic ]) # no id => unsubscribed
+            // close unused read channels
+            std::vector<std::string> dcs_to_close;
+            for (const auto& pair : that->outbound_data_channels)
+                if (std::find(that->req_read_subs.begin(), that->req_read_subs.end(), pair.first) == that->req_read_subs.end())
+                    dcs_to_close.push_back(pair.first);
+            for (auto topic : dcs_to_close) {
+                auto removed_channel_config = that->unsubscribeDataTopic(topic);
+                if (removed_channel_config->get_vector().size())
+                    reply->get_map().at("read_data_channels")->get_vector().push_back(removed_channel_config);                    
+            }
 
+            // close unused write channels
+            dcs_to_close.clear();
+            for (const auto& pair : that->inbound_data_channels) {
+                bool active = false;
+                for (size_t i = 0; i < that->req_write_subs.size(); i++) {
+                    if (that->req_write_subs[i][0] == pair.first) {
+                        active = true;
+                        break;
+                    }
+                }
+                if (!active)
+                    dcs_to_close.push_back(pair.first);
+            }
+            for (auto topic : dcs_to_close) {
+                auto removed_channel_config = that->unsubscribeWriteDataTopic(topic);
+                if (removed_channel_config->get_vector().size())
+                    reply->get_map().at("write_data_channels")->get_vector().push_back(removed_channel_config); // no id => unsubscribed   
+            }
+                
             // unsubscribe from video streams
             // for sub in list(peer.video_tracks.keys()):
             //     if not sub in peer.read_subs:
@@ -349,20 +372,8 @@ void WRTCPeer::processSubscriptions(int ack_msg_id, sio::object_message::ptr ack
             //         await self.unsubscribe_image_topic(sub, peer)
             //         res['read_video_streams'].append([ sub ]) # no id => unsubscribed
 
-            // close write channels
-            // for topic in list(peer.inbound_data_channels.keys()):
-            //     topic_active = False
-            //     for sub in peer.write_subs:
-            //         if sub[0] == topic:
-            //             topic_active = True
-            //             break
-            //     if not topic_active:
-            //         self.get_logger().info(f'{peer} stopped writing into {topic}')
-            //         await self.close_write_channel(topic, peer)
-            //         res['write_data_channels'].append([ topic ]) # no id => unsubscribed
-
             that->awaiting_peer_reply = false;
-            if (that->negotiation_needed) { // that->pc->negotiationNeeded()
+            if (!disconnected && that->negotiation_needed) { // that->pc->negotiationNeeded()
                 if (that->config->webrtc_debug)
                     log(YELLOW + that->toString() + "RTC negotiation needed" + CLR);
 
@@ -388,8 +399,13 @@ void WRTCPeer::processSubscriptions(int ack_msg_id, sio::object_message::ptr ack
                 that->awaiting_peer_reply = true;
             }
 
-            if (disconnected)
+            if (disconnected) {
+                if (that->pc->state() != rtc::PeerConnection::State::Closed && that->pc->state() != rtc::PeerConnection::State::Failed) {
+                    that->pc->close();
+                }
                 return; // done here, not producing any reply
+            }
+                
 
             if (ack_msg_id < 0) { // return as new sio message
                 if (!that->id_app.empty())
@@ -458,7 +474,7 @@ uint16_t WRTCPeer::openDataChannelForTopic(std::string topic, std::string msg_ty
     dc_init.id = ++this->next_channel_id;
     dc_init.protocol = msg_type;
 
-    log(GRAY + this->toString() + "Opening new DC for " + topic + " {" + msg_type + "} #" + std::to_string(this->next_channel_id) + CLR);
+    log(GRAY + this->toString() + "Opening new " +(write?"write":"read")+ " DC for " + topic + " {" + msg_type + "} #" + std::to_string(this->next_channel_id) + CLR);
 
     auto dc = this->pc->createDataChannel(topic, dc_init);
 
@@ -485,7 +501,23 @@ uint16_t WRTCPeer::openDataChannelForTopic(std::string topic, std::string msg_ty
         this->inbound_data_channels.emplace(topic, dc);
         return this->inbound_data_channels.at(topic)->id().value();
     }
-    
+}
+
+void WRTCPeer::closeDataChannelForTopic(std::string topic, bool write) {
+
+    log(GRAY + this->toString() + "Closing " +(write?"write":"read")+ " DC for " + topic + CLR);
+
+    if (!write) {
+        if (this->outbound_data_channels.at(topic)->isOpen()) {
+            this->outbound_data_channels.at(topic)->close();
+        }
+        this->outbound_data_channels.erase(topic);
+     } else {
+        if (this->inbound_data_channels.at(topic)->isOpen()) {
+            this->inbound_data_channels.at(topic)->close();
+        }
+        this->inbound_data_channels.erase(topic);
+     }
 }
 
 sio::array_message::ptr WRTCPeer::subscribeDataTopic(std::string topic, std::string msg_type) {
@@ -517,6 +549,15 @@ sio::array_message::ptr WRTCPeer::subscribeDataTopic(std::string topic, std::str
     return channel_config;
 }
 
+sio::array_message::ptr WRTCPeer::unsubscribeDataTopic(std::string topic) {
+    auto removed_channel_config = sio::array_message::create();
+    if (this->outbound_data_channels.find(topic) != this->outbound_data_channels.end()) {
+        this->closeDataChannelForTopic(topic, false); // removes from outbound_data_channels
+        removed_channel_config->get_vector().push_back(sio::string_message::create(topic));
+    }
+    return removed_channel_config;
+}
+
 sio::array_message::ptr WRTCPeer::subscribeWriteDataTopic(std::string topic, std::string msg_type) {
     
     auto qos = this->node->loadTopicQoSConfig(topic);
@@ -540,6 +581,15 @@ sio::array_message::ptr WRTCPeer::subscribeWriteDataTopic(std::string topic, std
     channel_config->get_vector().push_back(sio::string_message::create(msg_type));
     // channel_config->get_vector().push_back( topic_conf);
     return channel_config;
+}
+
+sio::array_message::ptr WRTCPeer::unsubscribeWriteDataTopic(std::string topic) {
+    auto removed_channel_config = sio::array_message::create();
+    if (this->inbound_data_channels.find(topic) != this->inbound_data_channels.end()) {
+        this->closeDataChannelForTopic(topic, true); // removes from inbound_data_channels
+        removed_channel_config->get_vector().push_back(sio::string_message::create(topic));
+    }
+    return removed_channel_config;
 }
 
 sio::array_message::ptr WRTCPeer::subscribeImageOrVideoTopic(std::string topic, std::string msg_type) {
