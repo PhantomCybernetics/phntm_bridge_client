@@ -174,11 +174,11 @@ bool WRTCPeer::removeReqWriteSubscription(std::string topic) {
 }
 
 void WRTCPeer::onDisconnected() {
-    log(BLUE + this->toString() + "Disconnected." + CLR);
+    log(BLUE + this->toString() + "Disconnected" + CLR);
     this->req_read_subs.clear(); // empty all subs
     this->req_write_subs.clear();
     this->is_connected = false;
-    this->processSubscriptions(-1, nullptr); // clean up
+    this->processSubscriptions(); // clean up
     connected_peers.erase(this->id);
 }
 
@@ -206,66 +206,83 @@ WRTCPeer::WRTCPeer(std::shared_ptr<PhntmBridge> node, std::string id_peer, std::
     this->is_connected = true; // false after disconnect is received
     this->next_channel_id = 0;
 
+    this->createPeerConnection();
+}
+
+void WRTCPeer::createPeerConnection() {
+
+    if (this->config->webrtc_debug)
+        log(GRAY + this->toString() + "Creating a new PC" + CLR);
+
     rtc::Configuration rtc_config;
     rtc_config.disableAutoNegotiation = true;
     rtc_config.disableAutoGathering = false;
     rtc_config.certificateType = rtc::CertificateType::Default;
-    rtc_config.enableIceUdpMux = false;
+    rtc_config.enableIceUdpMux = true;
+    rtc_config.iceTransportPolicy = rtc::TransportPolicy::All;
+    
     rtc_config.disableFingerprintVerification = false;
     for (auto & one : this->config->ice_servers) {
         if (one.compare(0, 5, "turn:") == 0) {
             auto turn_url = "turn://" + this->config->ice_username + ":" + this->config->ice_secret + "@" +  one.substr(5);
+            auto turn_url_log = replace(turn_url, this->config->ice_secret, "*******");
             rtc::IceServer ice_server(turn_url);
             // ice_server.relayType = rtc::IceServer::RelayType::TurnTls;
-            if (this->config->webrtc_debug) {
-                log(YELLOW + this->toString() + "Config adding: " + turn_url + CLR);
-                log(" => user: " + ice_server.username + " @ " + ice_server.password);
-                log(" => type: " + std::string(ice_server.type == rtc::IceServer::Type::Turn ? "TURN" : (ice_server.type == rtc::IceServer::Type::Stun ? "STUN" : "?!")));
-                log(" => relay type: " + std::string(ice_server.relayType == rtc::IceServer::RelayType::TurnUdp ? "TurnUdp" : (ice_server.relayType == rtc::IceServer::RelayType::TurnTcp ? "TurnTcp" : (ice_server.relayType == rtc::IceServer::RelayType::TurnTls ? "TurnTls" : "?!"))));
-                log(" => hostname: " + ice_server.hostname + ":" + std::to_string(ice_server.port));
-            }
+            // if (this->config->webrtc_debug) {
+                log(YELLOW + this->toString() + "Config adding ICE: " + turn_url_log + CLR);
+                // log(" => user: " + ice_server.username + (!ice_server.password.empty() ? " @ ******* " : ""));
+                // log(" => type: " + std::string(ice_server.type == rtc::IceServer::Type::Turn ? "TURN" : (ice_server.type == rtc::IceServer::Type::Stun ? "STUN" : "?!")));
+                // log(" => relay type: " + std::string(ice_server.relayType == rtc::IceServer::RelayType::TurnUdp ? "TurnUdp" : (ice_server.relayType == rtc::IceServer::RelayType::TurnTcp ? "TurnTcp" : (ice_server.relayType == rtc::IceServer::RelayType::TurnTls ? "TurnTls" : "?!"))));
+                // log(" => hostname: " + ice_server.hostname + ":" + std::to_string(ice_server.port));
+            // }
                 
             rtc_config.iceServers.emplace_back(ice_server);
         }
     }
     
     this->pc = new rtc::PeerConnection(rtc_config);
-    this->pc->onStateChange(std::bind(&WRTCPeer::onRTCStateChange, this, std::placeholders::_1));
-    this->pc->onGatheringStateChange(std::bind(&WRTCPeer::onRTCGatheringStateChange, this, std::placeholders::_1));
-    this->pc->onSignalingStateChange(std::bind(&WRTCPeer::onRTCSignalingStateChange, this, std::placeholders::_1));
-    this->pc->onIceStateChange(std::bind(&WRTCPeer::onIceStateChange, this, std::placeholders::_1));
-    this->pc->onLocalCandidate(std::bind(&WRTCPeer::onLocalCandidate, this, std::placeholders::_1));
-    // this->shared_ptr = std::shared_ptr<WRTCPeer>(this);
+    this->pc->onStateChange([&](rtc::PeerConnection::State state){
+        if (this->config->webrtc_debug)
+            log(YELLOW + this->toString() + "PC State: " + toString(state) + CLR);
+    });
+    this->pc->onGatheringStateChange([&](rtc::PeerConnection::GatheringState state){
+        if (this->config->webrtc_debug)
+            log(YELLOW + this->toString() + "Gathering state: " + toString(state) + CLR);
+    });
+    this->pc->onSignalingStateChange([&](rtc::PeerConnection::SignalingState state){
+        if (this->config->webrtc_debug)
+            log(YELLOW + this->toString() + "Signaling state: " + toString(state) + CLR);
+    });
+    this->pc->onLocalCandidate([&](rtc::Candidate candidate){
+        if (this->config->webrtc_debug)
+            log(YELLOW + this->toString() + "Got local candidate: " + std::string(candidate) + CLR);
+    });
+    this->pc->onIceStateChange([&](rtc::PeerConnection::IceState state){
+        if (this->config->webrtc_debug)
+            log(YELLOW + this->toString() + "ICE state: " + toString(state) + CLR);
+
+        if (state == rtc::PeerConnection::IceState::Failed && this->is_connected) {
+            if (this->config->webrtc_debug)
+                log(GRAY + this->toString() + "Reconnecting bcs of ICE failure... " + CLR);
+            this->processSubscriptions(); // new negotiation
+        }
+    });
 }
 
-void WRTCPeer::onLocalCandidate(rtc::Candidate candidate) {
+void WRTCPeer::removePeerConnection() {
     if (this->config->webrtc_debug)
-        log(YELLOW + this->toString() + "Local candidate: " + std::string(candidate) + CLR);
+        log(GRAY + this->toString() + "Removing current PC" + CLR);
+
+    this->pc->resetCallbacks();
+    this->pc->close();
+    delete this->pc;
+    this->pc = nullptr;
 }
 
-void WRTCPeer::onRTCStateChange(rtc::PeerConnection::State state) {
-    if (this->config->webrtc_debug)
-        log(YELLOW + this->toString() + "State: " + toString(state) + CLR);
-}
-
-void WRTCPeer::onRTCGatheringStateChange(rtc::PeerConnection::GatheringState state) {
-    if (this->config->webrtc_debug)
-        log(YELLOW + this->toString() + "Gathering state: " + toString(state) + CLR);
-}
-
-void WRTCPeer::onRTCSignalingStateChange(rtc::PeerConnection::SignalingState state) {
-    if (this->config->webrtc_debug)
-        log(YELLOW + this->toString() + "Signaling state: " + toString(state) + CLR);
-}
-
-void WRTCPeer::onIceStateChange(rtc::PeerConnection::IceState state) {
-    if (this->config->webrtc_debug)
-        log(YELLOW + this->toString() + "ICE state: " + toString(state) + CLR);
-}
 
 void WRTCPeer::processAllPeerSubscriptions() {
     for (auto it = WRTCPeer::connected_peers.begin(); it != WRTCPeer::connected_peers.end(); ++it) {  
-        it->second->processSubscriptions(-1, nullptr);
+        it->second->processSubscriptions();
     }
 }
 
@@ -283,24 +300,25 @@ void WRTCPeer::processSubscriptions(int ack_msg_id, sio::object_message::ptr ack
         return;
     }
     std::thread newThread([that, ack_msg_id, ack]() {
-        log(BLUE + that->toString() + "Processing requested [msg #" + std::to_string(ack_msg_id) + "]" + CLR);
+        log(GRAY + that->toString() + "Requested peer subs processing" + (ack_msg_id > -1 ? " [msg #" + std::to_string(ack_msg_id) + "]" : "") + CLR);
 
         {
             std::lock_guard<std::mutex> lock(that->processing_subscriptions_mutex); // wait until previus pressing completes
-            log(BLUE + that->toString() + "Processing peer subs begins [msg #" + std::to_string(ack_msg_id) + "]..." + CLR);
+            log(BLUE + that->toString() + "Processing peer subs begins" + (ack_msg_id > -1 ? " [msg #" + std::to_string(ack_msg_id) + "]" : "") + " >>" + CLR);
 
-            bool disconnected = !that->is_connected || that->pc->state() == rtc::PeerConnection::State::Failed || !BridgeSocket::isConnected() || BridgeSocket::isShuttingDown();
-            that->negotiation_needed = false; // reset
+            bool is_disconnected = !that->is_connected || !BridgeSocket::isConnected() || BridgeSocket::isShuttingDown();
+            bool is_reconnect = that->is_connected && BridgeSocket::isConnected() && (that->pc->state() == rtc::PeerConnection::State::Failed || that->pc->iceState() == rtc::PeerConnection::IceState::Closed);
+            that->negotiation_needed = is_reconnect; // reset
 
             if (that->config->webrtc_debug) {
                 std::vector<std::string> req_writes_joined;
                 for (auto one : that->req_write_subs) {
                     req_writes_joined.push_back(one[0]+" {"+ one[1]+ "}");
                 }
-                log(that->toString() + "Processing " + (disconnected ? BLUE + "disconnected " + CLR : "") + "subs:\n"
+                log(that->toString() + (!is_disconnected ? "Processing " : "Cleaning up ") + (is_reconnect ? MAGENTA + "re-connect " + CLR : (is_disconnected ? BLUE + "disconnected " + CLR : "")) + "subs:\n"
                     + "    read: " + GREEN + "[" + join( that->req_read_subs, ", ") + "] " + CLR + "\n"
                     + "    write: " + MAGENTA + "[" + join(req_writes_joined, ", ") + "] " + CLR + "\n"
-                    + "    state=" + YELLOW + toString(that->pc->state()) + CLR + " signalingState=" + YELLOW + toString(that->pc->signalingState()) + CLR + " iceGatheringState=" + YELLOW + toString(that->pc->gatheringState()) + CLR
+                    + "    pc state=" + YELLOW + toString(that->pc->state()) + CLR + " signalingState=" + YELLOW + toString(that->pc->signalingState()) + CLR + " iceGatheringState=" + YELLOW + toString(that->pc->gatheringState()) + CLR
                 );
             }
 
@@ -309,6 +327,13 @@ void WRTCPeer::processSubscriptions(int ack_msg_id, sio::object_message::ptr ack
             reply->get_map().emplace("read_video_streams", sio::array_message::create());
             reply->get_map().emplace("read_data_channels", sio::array_message::create());
             reply->get_map().emplace("write_data_channels", sio::array_message::create());
+            
+            if (is_reconnect) {
+                that->removePeerConnection();
+                that->outbound_data_channels.clear();
+                that->inbound_data_channels.clear();
+                that->createPeerConnection();
+            }
 
             // open read data and media channels
             for (auto topic : that->req_read_subs) {
@@ -336,18 +361,18 @@ void WRTCPeer::processSubscriptions(int ack_msg_id, sio::object_message::ptr ack
             }
 
             // close unused read channels
-            std::vector<std::string> dcs_to_close;
+            std::vector<std::string> r_dcs_to_close;
             for (const auto& pair : that->outbound_data_channels)
                 if (std::find(that->req_read_subs.begin(), that->req_read_subs.end(), pair.first) == that->req_read_subs.end())
-                    dcs_to_close.push_back(pair.first);
-            for (auto topic : dcs_to_close) {
+                    r_dcs_to_close.push_back(pair.first);
+            for (auto topic : r_dcs_to_close) {
                 auto removed_channel_config = that->unsubscribeDataTopic(topic);
                 if (removed_channel_config->get_vector().size())
                     reply->get_map().at("read_data_channels")->get_vector().push_back(removed_channel_config);                    
             }
 
             // close unused write channels
-            dcs_to_close.clear();
+            std::vector<std::string> w_dcs_to_close;
             for (const auto& pair : that->inbound_data_channels) {
                 bool active = false;
                 for (size_t i = 0; i < that->req_write_subs.size(); i++) {
@@ -357,9 +382,9 @@ void WRTCPeer::processSubscriptions(int ack_msg_id, sio::object_message::ptr ack
                     }
                 }
                 if (!active)
-                    dcs_to_close.push_back(pair.first);
+                    w_dcs_to_close.push_back(pair.first);
             }
-            for (auto topic : dcs_to_close) {
+            for (auto topic : w_dcs_to_close) {
                 auto removed_channel_config = that->unsubscribeWriteDataTopic(topic);
                 if (removed_channel_config->get_vector().size())
                     reply->get_map().at("write_data_channels")->get_vector().push_back(removed_channel_config); // no id => unsubscribed   
@@ -373,9 +398,9 @@ void WRTCPeer::processSubscriptions(int ack_msg_id, sio::object_message::ptr ack
             //         res['read_video_streams'].append([ sub ]) # no id => unsubscribed
 
             that->awaiting_peer_reply = false;
-            if (!disconnected && that->negotiation_needed) { // that->pc->negotiationNeeded()
+            if (!is_disconnected && that->negotiation_needed) { // that->pc->negotiationNeeded()
                 if (that->config->webrtc_debug)
-                    log(YELLOW + that->toString() + "RTC negotiation needed" + CLR);
+                    log(YELLOW + that->toString() + "RTC negotiation needed, generating local offer..." + CLR);
 
                 //auto offer = that->pc->createOffer();
                 std::string sdpBuffer;
@@ -390,7 +415,7 @@ void WRTCPeer::processSubscriptions(int ack_msg_id, sio::object_message::ptr ack
                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 }
                 auto local_desc = that->pc->localDescription();
-                auto sdp = local_desc->generateSdp();
+                auto sdp = local_desc->generateSdp(); // this includes late discovered candidates, sdpBuffer doesn't
                 if (that->config->webrtc_debug) {
                     log(GRAY + that->toString() + "Generated local SDP offer:\n" + sdp + CLR);
                 }
@@ -399,30 +424,31 @@ void WRTCPeer::processSubscriptions(int ack_msg_id, sio::object_message::ptr ack
                 that->awaiting_peer_reply = true;
             }
 
-            if (disconnected) {
-                if (that->pc->state() != rtc::PeerConnection::State::Closed && that->pc->state() != rtc::PeerConnection::State::Failed) {
-                    that->pc->close();
+            if (is_disconnected && !is_reconnect) { //cleanup and end here
+
+                log(GRAY + that->toString() + "Closing pc" + CLR);
+                that->removePeerConnection();
+
+            } else { // produce update and wait for peer reply
+
+                if (ack_msg_id < 0) { // emit as new sio peer:update message 
+                    if (!that->id_app.empty())
+                        reply->get_map().emplace("id_app", sio::string_message::create(that->id_app));
+                    if (!that->id_instance.empty())
+                        reply->get_map().emplace("id_instance", sio::string_message::create(that->id_instance));
+                    BridgeSocket::emit("peer:update", { reply }, std::bind(&WRTCPeer::onSIOOfferReply, that, std::placeholders::_1)); //no ack
+    
+                } else { // return as ack
+                    BridgeSocket::ack(ack_msg_id, { reply });
                 }
-                return; // done here, not producing any reply
-            }
-                
+    
+                while(that->awaiting_peer_reply) { // block the mutex until reply is received and processed
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                }
 
-            if (ack_msg_id < 0) { // return as new sio message
-                if (!that->id_app.empty())
-                    reply->get_map().emplace("id_app", sio::string_message::create(that->id_app));
-                if (!that->id_instance.empty())
-                    reply->get_map().emplace("id_instance", sio::string_message::create(that->id_instance));
-                BridgeSocket::emit("peer:update", { reply }, std::bind(&WRTCPeer::onSIOOfferReply, that, std::placeholders::_1)); //no ack
-
-            } else { // return as ack
-                BridgeSocket::ack(ack_msg_id, { reply });
-            }
-
-            while(that->awaiting_peer_reply) { // block the mutex until reply is processed
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
             
-            log(BLUE + that->toString() + "Processing subs complete [msg #" + std::to_string(ack_msg_id) + "]" + CLR);
+            log(BLUE + that->toString() + "<< Processing subs finished" + (ack_msg_id > -1 ? " [msg #" + std::to_string(ack_msg_id) + "]" : "") + "." + CLR);
         }
     });
     newThread.detach();
@@ -447,7 +473,7 @@ void WRTCPeer::onSIOOfferReply(sio::message::list const& reply) {
 void WRTCPeer::onSDPAnswer(sio::message::ptr const& msg) {
     if (this->pc->signalingState() != rtc::PeerConnection::SignalingState::HaveLocalOffer) {
         log(this->toString() + "Not setting SDP answer; signalingState=" + toString(this->pc->signalingState()));
-        this->awaiting_peer_reply = false;
+        this->awaiting_peer_reply = false; // unlocks mutex
         return;
     }
     
@@ -491,11 +517,25 @@ uint16_t WRTCPeer::openDataChannelForTopic(std::string topic, std::string msg_ty
         return this->outbound_data_channels.at(topic)->id().value();
     } else {
 
-        dc->onMessage([this, topic, msg_type](std::variant<rtc::binary, rtc::string> message) {
+        dc->onMessage([this, topic, msg_type, dc](std::variant<rtc::binary, rtc::string> message) {
             // if (std::holds_alternative<rtc::string>(message)) {
             //     std::cout << "Received: " << get<rtc::string>(message) << std::endl;
             // }
-            log(GREEN + this->toString() + "DC for " + topic + " got message" + CLR);
+            if (topic == "_heartbeat") {
+                if (std::holds_alternative<rtc::binary>(message)) {
+                    log(MAGENTA + this->toString() + "got BIN heartbeat, returning" + CLR);
+                    rtc::binary& bin = std::get<rtc::binary>(message);
+                    // Use bin
+                    dc->send(bin);
+                } else if (std::holds_alternative<rtc::string>(message)) {
+                    log(MAGENTA + this->toString() + "got STR heartbeat, returning" + CLR);
+                    rtc::string& str = std::get<rtc::string>(message);
+                    // Use str
+                    dc->send(str);
+                }
+            } else {
+                log(GREEN + this->toString() + "DC for " + topic + " got message" + CLR);
+            }
         });
 
         this->inbound_data_channels.emplace(topic, dc);
@@ -686,9 +726,9 @@ WRTCPeer::~WRTCPeer() {
 
 std::string WRTCPeer::toString(rtc::PeerConnection::State state) {
     switch (state) {
-        case rtc::PeerConnection::State::Connected:  return "Connected";
+        case rtc::PeerConnection::State::Connected: return "Connected";
         case rtc::PeerConnection::State::Connecting: return "Connecting";
-        case rtc::PeerConnection::State::Closed:          return "Closed";
+        case rtc::PeerConnection::State::Closed: return "Closed";
         case rtc::PeerConnection::State::Disconnected: return "Disconnected";
         case rtc::PeerConnection::State::Failed: return "Failed";
         case rtc::PeerConnection::State::New: return "New";

@@ -246,7 +246,7 @@ void BridgeSocket::onSubscribeRead(sio::event & ev) {
         } 
     }
 
-    peer->processSubscriptions(-1, nullptr); // will emit new peer:update msg
+    peer->processSubscriptions(); // will emit new peer:update msg
     if (ev.need_ack())
         BridgeSocket::returnSuccess(ev);
 }
@@ -272,7 +272,7 @@ void BridgeSocket::onUnsubscribeRead(sio::event & ev) {
         } 
     }
 
-    peer->processSubscriptions(-1, nullptr); // will emit new peer:update msg
+    peer->processSubscriptions(); // will emit new peer:update msg
     if (ev.need_ack())
         BridgeSocket::returnSuccess(ev);
 }
@@ -300,7 +300,7 @@ void BridgeSocket::onSubscribeWrite(sio::event & ev) {
         } 
     }
 
-    peer->processSubscriptions(-1, nullptr); // will emit new peer:update msg
+    peer->processSubscriptions(); // will emit new peer:update msg
     if (ev.need_ack())
         BridgeSocket::returnSuccess(ev);
 }
@@ -326,7 +326,7 @@ void BridgeSocket::onUnsubscribeWrite(sio::event & ev) {
         }
     }
 
-    peer->processSubscriptions(-1, nullptr); // will emit new peer:update msg
+    peer->processSubscriptions(); // will emit new peer:update msg
     if (ev.need_ack())
         BridgeSocket::returnSuccess(ev);
 }

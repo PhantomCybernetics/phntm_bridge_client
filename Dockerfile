@@ -49,8 +49,18 @@ RUN git clone --single-branch --branch support-new-asio https://github.com/toone
 RUN apt install -y rapidjson-dev
 
 # libdatachannel deps
-RUN apt install -y libnice-dev
+# RUN apt install -y libnice-dev
+RUN apt install -y meson libglib2.0-dev libssl-dev libsrtp2-dev libjansson-dev libgstreamer1.0-dev
+WORKDIR /root
+RUN wget https://libnice.freedesktop.org/releases/libnice-0.1.22.tar.gz
+RUN tar -xvzf libnice-0.1.22.tar.gz
+RUN rm libnice-0.1.22.tar.gz
+WORKDIR /root/libnice-0.1.22/
+RUN meson build
+RUN ninja -C build
+RUN ninja -C build install
 
+# using w libnice bcs libjuice fails on asymetric responses
 WORKDIR /root
 RUN git clone https://github.com/paullouisageneau/libdatachannel.git
 WORKDIR /root/libdatachannel

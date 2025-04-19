@@ -20,11 +20,14 @@ class WRTCPeer {
         static void onPeerConnected(std::shared_ptr<PhntmBridge> node, std::string id_peer, sio::event &ev, std::shared_ptr<BridgeConfig> config);
         static void onAllPeersDisconnected();
 
+        void createPeerConnection();
+        void removePeerConnection();
+
         void onDisconnected();
         std::string toString();
 
         // std::shared_ptr<WRTCPeer> shared_ptr;
-        void processSubscriptions(int ack_msg_id, sio::object_message::ptr ack);
+        void processSubscriptions(int ack_msg_id = -1, sio::object_message::ptr ack = nullptr);
         static void processAllPeerSubscriptions();
         // void processWriteSubscriptions(int ack_msg_id);
         bool addReqReadSubscription(std::string topic);
@@ -59,11 +62,6 @@ class WRTCPeer {
         std::shared_ptr<BridgeConfig> config;
 
         rtc::PeerConnection *pc;
-        void onRTCStateChange(rtc::PeerConnection::State state);
-        void onRTCGatheringStateChange(rtc::PeerConnection::GatheringState state);
-        void onRTCSignalingStateChange(rtc::PeerConnection::SignalingState state);
-        void onIceStateChange(rtc::PeerConnection::IceState state);
-        void onLocalCandidate(rtc::Candidate candidate);
 
         std::vector<std::string> req_read_subs; // topic ids to subscribe
         std::vector<std::vector<std::string>> req_write_subs; // // [topic_id, msg_type]'s to write to
