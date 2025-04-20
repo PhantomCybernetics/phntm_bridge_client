@@ -57,6 +57,7 @@ class BridgeSocket
         std::map<std::string, sio::socket::event_listener> handled_events;
         void onIceServers(sio::event const& ev);
         void onPeerConnected(sio::event &ev);
+        void onPeerWRTCInfo(sio::event & ev);
         void onPeerDisconnected(sio::event & ev);
         void onIntrospection(sio::event & ev);
 

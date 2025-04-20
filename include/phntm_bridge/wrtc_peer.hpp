@@ -22,7 +22,7 @@ class WRTCPeer {
 
         void createPeerConnection();
         void removePeerConnection();
-
+        void onWRTCInfo(sio::object_message::ptr msg);
         void onDisconnected();
         std::string toString();
 
@@ -80,4 +80,5 @@ class WRTCPeer {
         
         uint16_t next_channel_id;
         bool negotiation_needed;
+        bool peer_needs_restart;
 };

@@ -75,6 +75,7 @@ bool BridgeSocket::connect() {
 
     instance->handled_events.emplace("ice-servers", std::bind(&BridgeSocket::onIceServers, instance, std::placeholders::_1));
     instance->handled_events.emplace("peer", std::bind(&BridgeSocket::onPeerConnected, instance, std::placeholders::_1));
+    instance->handled_events.emplace("peer:wrtc-info", std::bind(&BridgeSocket::onPeerWRTCInfo, instance, std::placeholders::_1));
     instance->handled_events.emplace("peer:disconnected", std::bind(&BridgeSocket::onPeerDisconnected, instance, std::placeholders::_1));
     instance->handled_events.emplace("introspection", std::bind(&BridgeSocket::onIntrospection, instance, std::placeholders::_1));
 
@@ -191,7 +192,23 @@ void BridgeSocket::onPeerConnected(sio::event &ev) {
         return;
     } 
 
-    WRTCPeer::onPeerConnected(this->node, id_peer, ev, this->config);        
+    WRTCPeer::onPeerConnected(this->node, id_peer, ev, this->config); //returns ack  
+}
+
+// peer wrtc info
+void BridgeSocket::onPeerWRTCInfo(sio::event & ev) {
+    if (this->config->sio_verbose) {
+        log(msgDebugHeader(ev) + "Peer WRTC info: ");
+        log(printMessage(ev.get_message()));
+    }
+    auto peer = WRTCPeer::getConnectedPeer(ev);
+
+    if (ev.need_ack())
+        BridgeSocket::returnSuccess(ev);
+
+    if (peer == nullptr) return;
+
+    peer->onWRTCInfo(ev.get_message());
 }
 
 // peer disconnected
@@ -201,6 +218,10 @@ void BridgeSocket::onPeerDisconnected(sio::event & ev) {
         log(printMessage(ev.get_message()));
     }
     auto peer = WRTCPeer::getConnectedPeer(ev);
+
+    if (ev.need_ack())
+        BridgeSocket::returnSuccess(ev);
+
     if (peer == nullptr) return;
     peer->onDisconnected();
 }
