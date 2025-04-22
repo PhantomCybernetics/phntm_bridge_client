@@ -245,18 +245,21 @@ void PhntmBridge::callGenericService(std::string service_name, std::string servi
     return this->returnServiceError(fmt::format("Error mapping result data: {}", res_err.c_str()), ev);
   
   // send the reply
-  if (this->config->service_calls_verbose)
-    log("Sending " + service_name + " reply...");
+  // if (this->config->service_calls_verbose)
+  log(MAGENTA + "Sending " + service_name + " reply..." + CLR);
   BridgeSocket::ack(ev.get_msgId(), {ack});
 }
 
 
 std::string SetRequestFieldValue(void *field, const rosidl_typesupport_introspection_cpp::MessageMember *member, sio::message::ptr value, size_t index, bool verbose, int indent) {
   
+  auto is_null = value->get_flag() == value->flag_null;
+
   std::string s_indent;
   s_indent.append(indent*4, ' ');
+
   if (verbose)
-    log(s_indent + "Assigning type " + std::to_string(member->type_id_) + (member->is_array_ ? " Array" : ""));
+    log(s_indent + "Assigning type " + std::to_string(member->type_id_) + (member->is_array_ ? " Array" : "") + (is_null ? " NULL" : ""));
 
   switch (member->type_id_) {
     case rosidl_typesupport_introspection_cpp::ROS_TYPE_BOOL: {
@@ -391,7 +394,7 @@ std::string SetRequestFieldValue(void *field, const rosidl_typesupport_introspec
       if (verbose)
         log(s_indent + GREEN + ">> INT64: ", false, false);
       int64_t *v = new int64_t();
-      *v = value->get_int();
+      *v =  static_cast<int64_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : 0);
       if (verbose)
         log(std::to_string(*v) + CLR);
       if (member->is_array_) {
@@ -418,8 +421,10 @@ std::string SetRequestFieldValue(void *field, const rosidl_typesupport_introspec
     case rosidl_typesupport_introspection_cpp::ROS_TYPE_STRING: {
       if (verbose)
         log(s_indent + GREEN + ">> ROS_TYPE_STRING: ", false, false);
-      std::string *v = new std::string();
-      *v = value->get_string();
+     
+      std::string *v = new std::string(); 
+      *v = value->get_flag() == sio::message::flag::flag_string ? value->get_string() : "";
+      
       auto str_len = (*v).length();
       if (verbose)
         log("'" + *v + "' (" + std::to_string(str_len) + ")" + CLR);
@@ -435,8 +440,10 @@ std::string SetRequestFieldValue(void *field, const rosidl_typesupport_introspec
     case rosidl_typesupport_introspection_cpp::ROS_TYPE_WSTRING: {
       if (verbose)
         log(s_indent + GREEN + ">> ROS_TYPE_WSTRING: ", false, false);
-      std::u16string *v = new std::u16string ();
-      *v = converter.from_bytes(value->get_string());
+      
+      std::u16string *v = new std::u16string();
+      *v = converter.from_bytes(value->get_flag() == sio::message::flag::flag_string ? value->get_string() : "");
+
       auto str_len = (*v).length();
       if (verbose)
         log("'" + converter.to_bytes(*v) + "' (" + std::to_string(str_len) + ")" + CLR);
