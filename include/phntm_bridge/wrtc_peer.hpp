@@ -5,6 +5,7 @@
 
 #include "phntm_bridge/sio.hpp"
 #include "phntm_bridge/config.hpp"
+#include "phntm_bridge/topic_reader_data.hpp"
 
 #include "rtc/datachannel.hpp"
 #include "rtc/rtc.hpp"
@@ -61,7 +62,7 @@ class WRTCPeer {
         
         std::shared_ptr<BridgeConfig> config;
 
-        rtc::PeerConnection *pc;
+        std::shared_ptr<rtc::PeerConnection> pc;
 
         std::vector<std::string> req_read_subs; // topic ids to subscribe
         std::vector<std::vector<std::string>> req_write_subs; // // [topic_id, msg_type]'s to write to

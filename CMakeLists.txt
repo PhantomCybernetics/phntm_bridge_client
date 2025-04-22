@@ -71,6 +71,7 @@ add_executable(phntm_bridge
               src/generic_services.cpp
               src/local_services.cpp
               src/phntm_bridge.cpp
+              src/topic_reader_data.cpp
               src/config.cpp
               src/extra_packages.cpp
               src/wrtc_peer.cpp

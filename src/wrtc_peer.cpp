@@ -239,8 +239,9 @@ void WRTCPeer::createPeerConnection() {
     rtc_config.certificateType = rtc::CertificateType::Default;
     rtc_config.enableIceUdpMux = true;
     rtc_config.iceTransportPolicy = rtc::TransportPolicy::All;
-    
     rtc_config.disableFingerprintVerification = false;
+    rtc_config.enableIceTcp = true;
+
     for (auto & one : this->config->ice_servers) {
         if (one.compare(0, 5, "turn:") == 0) {
             auto turn_url = "turn://" + this->config->ice_username + ":" + this->config->ice_secret + "@" +  one.substr(5);
@@ -259,7 +260,7 @@ void WRTCPeer::createPeerConnection() {
         }
     }
     
-    this->pc = new rtc::PeerConnection(rtc_config);
+    this->pc = std::make_shared<rtc::PeerConnection>(rtc_config);
     this->pc->onStateChange([&](rtc::PeerConnection::State state){
         if (this->config->webrtc_debug)
             log(YELLOW + this->toString() + "PC State: " + toString(state) + CLR);
@@ -297,7 +298,7 @@ void WRTCPeer::removePeerConnection() {
 
     this->pc->resetCallbacks();
     this->pc->close();
-    delete this->pc;
+    this->pc.reset();
     this->pc = nullptr;
 }
 
@@ -515,21 +516,23 @@ void WRTCPeer::onSDPAnswer(sio::message::ptr const& msg) {
 uint16_t WRTCPeer::openDataChannelForTopic(std::string topic, std::string msg_type, bool is_reliable, bool write) {
     rtc::Reliability reliability;
     reliability.unordered = !is_reliable;
-    if (!is_reliable)
-        reliability.maxRetransmits = 0;
+    reliability.maxRetransmits = is_reliable ? 10 : 0;
 
     rtc::DataChannelInit dc_init;
     dc_init.reliability = reliability;
-    dc_init.negotiated = true;
+    dc_init.negotiated = true; // dcs negotiated by the bridge, not webrtc
     dc_init.id = ++this->next_channel_id;
     dc_init.protocol = msg_type;
 
-    log(GRAY + this->toString() + "Opening new " +(write?"write":"read")+ " DC for " + topic + " {" + msg_type + "} #" + std::to_string(this->next_channel_id) + CLR);
+    log(GRAY + this->toString() + "Opening new " +(write?"write":"read") + (is_reliable ? " RELIABLE":"") + " DC for " + topic + " {" + msg_type + "} #" + std::to_string(this->next_channel_id) + CLR);
 
     auto dc = this->pc->createDataChannel(topic, dc_init);
 
     dc->onOpen([this, topic, msg_type]() {
         log(GREEN + this->toString() + "DC is open for " + topic + " {" + msg_type + "}" + CLR);
+        // if (!write) {
+        //     TopicReaderData::onDCOpen(dc, this->pc); // send latest data when available
+        // }
     });
 
     dc->onClosed([this, topic]() {
@@ -586,28 +589,31 @@ void WRTCPeer::closeDataChannelForTopic(std::string topic, bool write) {
 
 sio::array_message::ptr WRTCPeer::subscribeDataTopic(std::string topic, std::string msg_type) {
     
-    auto qos = this->node->loadTopicQoSConfig(topic);
-    auto topic_conf = this->node->loadTopicMsgTypeExtraConfig(topic, msg_type);
+    auto qos = this->node->loadTopicQoSConfig(topic); // get topic qos config from yaml
+    auto topic_conf = this->node->loadTopicMsgTypeExtraConfig(topic, msg_type); // get topic extras from yaml
     bool is_reliable = qos.reliability() == rclcpp::ReliabilityPolicy::Reliable;
 
     uint16_t id_dc;
-    bool send_latest = false;
+    std::shared_ptr<rtc::DataChannel> dc;
+    // bool send_latest = false;
+
     if (this->outbound_data_channels.find(topic) != this->outbound_data_channels.end()) {
-        id_dc = this->outbound_data_channels.at(topic)->id().value();
+        dc = this->outbound_data_channels.at(topic);
+        id_dc = dc->id().value();
     } else {
         id_dc = this->openDataChannelForTopic(topic, msg_type, is_reliable);
-        send_latest = is_reliable;
+        dc = this->outbound_data_channels.at(topic);
+        // send_latest = is_reliable;
         this->negotiation_needed = true;
     }
-
-    if (send_latest) {
-        // ???
-    }
+    auto topic_reader = TopicReaderData::getForTopic(topic, msg_type, this->node, qos);
+    topic_reader->addOutput(dc, this->pc); // only adds once
 
     // dc config for the peer
     auto channel_config = sio::array_message::create();
     channel_config->get_vector().push_back(sio::string_message::create(topic));
     channel_config->get_vector().push_back(sio::int_message::create(id_dc));
+    channel_config->get_vector().push_back(sio::string_message::create(msg_type));
     channel_config->get_vector().push_back(sio::bool_message::create(is_reliable));
     channel_config->get_vector().push_back( topic_conf);
     return channel_config;
@@ -616,6 +622,14 @@ sio::array_message::ptr WRTCPeer::subscribeDataTopic(std::string topic, std::str
 sio::array_message::ptr WRTCPeer::unsubscribeDataTopic(std::string topic) {
     auto removed_channel_config = sio::array_message::create();
     if (this->outbound_data_channels.find(topic) != this->outbound_data_channels.end()) {
+        auto dc = this->outbound_data_channels.at(topic);
+        auto tr = TopicReaderData::getForTopic(topic);
+        if (tr != nullptr) {
+            tr->removeOutput(dc); // stops if no other peer subs left
+        } else {
+            log(RED + "TR not found for " + topic +"!") ;
+        }
+            
         this->closeDataChannelForTopic(topic, false); // removes from outbound_data_channels
         removed_channel_config->get_vector().push_back(sio::string_message::create(topic));
     }
