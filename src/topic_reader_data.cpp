@@ -112,7 +112,7 @@ void TopicReaderData::onData(std::shared_ptr<rclcpp::SerializedMessage> data) {
             continue;
         }
         if (output->num_sent == 0 && output->pc->signalingState() != rtc::PeerConnection::SignalingState::Stable) {
-            log(GRAY + "DC #" + std::to_string(output->dc->id().value()) + " not sendiong yet for " + this->topic + CLR);
+            log(GRAY + "DC #" + std::to_string(output->dc->id().value()) + " not sending msg yet for " + this->topic + CLR);
             continue;
         }
         if (!output->dc->send(this->latest_payload.data(), this->latest_payload_size)) {

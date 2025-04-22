@@ -148,6 +148,7 @@ void Introspection::runIntrospection() {
             continue; // topic blacklisted
         }
 
+        // add new topic
         if (this->discovered_topics.find(topic.first) == this->discovered_topics.end()) {
             log("Discovered topic " + CYAN + topic.first + CLR + GRAY + " {" + topic.second[0] + "}" + CLR);
             this->discovered_topics.emplace(topic.first, topic.second[0]);
@@ -156,8 +157,8 @@ void Introspection::runIntrospection() {
         }
 
         // publishers
-        auto publishers_info = node->get_publishers_info_by_topic(topic.first);
-        for (auto pub : publishers_info) {
+        auto topic_publishers_info = node->get_publishers_info_by_topic(topic.first);
+        for (auto pub : topic_publishers_info) {
             if (this->discovered_nodes.find(pub.node_name()) == this->discovered_nodes.end()) {
                 log(RED + "Publisher node " + pub.node_name() + " not found for " + topic.first + CLR);
                 continue;
@@ -178,12 +179,37 @@ void Introspection::runIntrospection() {
                     node_publishers->at(topic.first).qos = pub.qos_profile();
                     nodes_changed = true;
                 }
-            }            
+            }
+        }
+
+        // remove unused publishers
+        for (auto & node : this->discovered_nodes) {
+            auto node_name = node.first;
+            for (auto it = node.second.publishers.begin(); it != node.second.publishers.end(); ) {
+                if (it->first == topic.first) {
+                    auto found = false;
+                    for (auto new_pub : topic_publishers_info) {
+                        if (new_pub.node_name() == node_name) {
+                            found =  true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        log(GRAY + "Lost publisher " + node_name + " > " + topic.first + CLR);
+                        it = node.second.publishers.erase(it);
+                        nodes_changed = true;
+                    } else {
+                        ++it;
+                    }
+                } else {
+                    ++it;
+                }
+            }
         }
 
         // subscribers
-        auto subscribers_info = node->get_subscriptions_info_by_topic(topic.first);
-        for (auto sub : subscribers_info) {
+        auto topic_subscribers_info = node->get_subscriptions_info_by_topic(topic.first);
+        for (auto sub : topic_subscribers_info) {
             if (this->discovered_nodes.find(sub.node_name()) == this->discovered_nodes.end()) {
                 log(RED + "Subscriber node " + sub.node_name() + " not found for " + topic.first + CLR);
                 continue;
@@ -203,6 +229,31 @@ void Introspection::runIntrospection() {
                 if (node_subscribers->at(topic.first).qos != sub.qos_profile()) {
                     node_subscribers->at(topic.first).qos = sub.qos_profile();
                     nodes_changed = true;
+                }
+            }
+        }
+
+        // remove unused subscribers
+        for (auto & node : this->discovered_nodes) {
+            auto node_name = node.first;
+            for (auto it = node.second.subscribers.begin(); it != node.second.subscribers.end(); ) {
+                if (it->first == topic.first) {
+                    auto found = false;
+                    for (auto new_sub : topic_subscribers_info) {
+                        if (new_sub.node_name() == node_name) {
+                            found =  true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        log(GRAY + "Lost subscriber " + node_name + " < " + topic.first + CLR);
+                        it = node.second.subscribers.erase(it);
+                        nodes_changed = true;
+                    } else {
+                        ++it;
+                    }
+                } else {
+                    ++it;
                 }
             }
         }

@@ -64,7 +64,7 @@ class Introspection {
             std::map<std::string, std::string> services; // service => msg_type
         };
 
-        std::map<std::string, DiscoveredNode> discovered_nodes;
+        std::map<std::string, DiscoveredNode> discovered_nodes; // node id => node
         std::map<std::string, std::string> discovered_topics; // topic => msg_type
 
         bool collectIDLs(std::string msg_type);
