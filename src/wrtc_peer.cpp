@@ -330,7 +330,6 @@ void WRTCPeer::processSubscriptions(int ack_msg_id, sio::object_message::ptr ack
             std::lock_guard<std::mutex> lock(that->processing_subscriptions_mutex); // wait until previus pressing completes
             log(BLUE + that->toString() + "Processing peer subs begins" + (ack_msg_id > -1 ? " [msg #" + std::to_string(ack_msg_id) + "]" : "") + " >>" + CLR);
 
-            bool is_disconnected = !that->is_connected || !BridgeSocket::isConnected() || BridgeSocket::isShuttingDown();
             bool is_reconnect = that->is_connected && BridgeSocket::isConnected() && (that->peer_needs_restart || that->pc == nullptr || that->pc->state() == rtc::PeerConnection::State::Failed || that->pc->iceState() == rtc::PeerConnection::IceState::Closed);
             that->negotiation_needed = is_reconnect; // reset
 
@@ -339,7 +338,7 @@ void WRTCPeer::processSubscriptions(int ack_msg_id, sio::object_message::ptr ack
                 for (auto one : that->req_write_subs) {
                     req_writes_joined.push_back(one[0]+" {"+ one[1]+ "}");
                 }
-                log(that->toString() + (!is_disconnected ? "Processing " : "Cleaning up ") + (is_reconnect ? MAGENTA + "re-connect " + CLR : (is_disconnected ? BLUE + "disconnected " + CLR : "")) + "subs:\n"
+                log(that->toString() + (that->is_connected ? "Processing " : "Cleaning up ") + (is_reconnect ? MAGENTA + "re-connect " + CLR : (!that->is_connected ? BLUE + "disconnected " + CLR : "")) + "subs:\n"
                     + "    read: " + GREEN + "[" + join( that->req_read_subs, ", ") + "] " + CLR + "\n"
                     + "    write: " + MAGENTA + "[" + join(req_writes_joined, ", ") + "] " + CLR + "\n"
                     + "    " + (that->pc != nullptr ? ("pc state=" + YELLOW + toString(that->pc->state()) + CLR + " signalingState=" + YELLOW + toString(that->pc->signalingState()) + CLR + " iceGatheringState=" + YELLOW + toString(that->pc->gatheringState()) + CLR) : "pc = " + RED + "null" + CLR)
@@ -423,7 +422,7 @@ void WRTCPeer::processSubscriptions(int ack_msg_id, sio::object_message::ptr ack
             //         res['read_video_streams'].append([ sub ]) # no id => unsubscribed
 
             that->awaiting_peer_reply = false;
-            if (!is_disconnected && that->negotiation_needed) { // that->pc->negotiationNeeded()
+            if (that->is_connected && that->negotiation_needed) { // that->pc->negotiationNeeded()
                 if (that->config->webrtc_debug)
                     log(YELLOW + that->toString() + "RTC negotiation needed, generating local offer..." + CLR);
 
@@ -433,10 +432,10 @@ void WRTCPeer::processSubscriptions(int ack_msg_id, sio::object_message::ptr ack
                      sdpBuffer = std::string(sdp);
                 });
                 that->pc->setLocalDescription(rtc::Description::Type::Offer);
-                while(sdpBuffer.empty()) { // wait for the offer to be (re-generated)
+                while(sdpBuffer.empty() && that->is_connected) { // wait for the offer to be (re-generated)
                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 }
-                while(that->pc->gatheringState() != rtc::PeerConnection::GatheringState::Complete) { // wait for the offer
+                while(that->pc->gatheringState() != rtc::PeerConnection::GatheringState::Complete && that->is_connected) { // wait for the offer
                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 }
                 auto local_desc = that->pc->localDescription();
@@ -449,12 +448,12 @@ void WRTCPeer::processSubscriptions(int ack_msg_id, sio::object_message::ptr ack
                 that->awaiting_peer_reply = true;
             }
 
-            if (is_disconnected && !is_reconnect) { //cleanup and end here
+            if (!that->is_connected && !is_reconnect) { //cleanup and end here
 
                 log(GRAY + that->toString() + "Closing pc" + CLR);
                 that->removePeerConnection();
 
-            } else { // produce update and wait for peer reply
+            } else if (that->is_connected) { // produce update and wait for peer reply
 
                 if (ack_msg_id < 0) { // emit as new sio peer:update message 
                     if (!that->id_app.empty())
@@ -467,7 +466,7 @@ void WRTCPeer::processSubscriptions(int ack_msg_id, sio::object_message::ptr ack
                     BridgeSocket::ack(ack_msg_id, { reply });
                 }
     
-                while(that->awaiting_peer_reply) { // block the mutex until reply is received and processed
+                while(that->awaiting_peer_reply && that->is_connected) { // block the mutex until reply is received and processed
                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 }
 
