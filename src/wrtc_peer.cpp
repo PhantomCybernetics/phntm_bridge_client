@@ -13,6 +13,7 @@
 #include <memory>
 #include <ostream>
 #include <iostream>
+#include <rclcpp/logging.hpp>
 #include <rclcpp/qos.hpp>
 #include <string>
 #include <uuid/uuid.h>
@@ -66,7 +67,7 @@ std::shared_ptr<WRTCPeer> WRTCPeer::getConnectedPeer(sio::event const & ev) {
 }
 
 void WRTCPeer::onPeerConnected(std::shared_ptr<PhntmBridge> node, std::string id_peer, sio::event &ev, std::shared_ptr<BridgeConfig> config) {
-    log(GREEN + "Peer " + id_peer + " connected..." + CLR);
+    // RCLCPP_INFO(node->get_logger(), "Peer %s connected...", id_peer.c_str());
 
     auto data = ev.get_message();
 
@@ -85,6 +86,7 @@ void WRTCPeer::onPeerConnected(std::shared_ptr<PhntmBridge> node, std::string id
         id_session,
         config);
     connected_peers.emplace(id_peer, peer);
+    RCLCPP_INFO(node->get_logger(), "%s Connected", peer->toString().c_str());
 
     auto msg = ev.get_message();
     peer->req_read_subs.clear();
@@ -192,7 +194,8 @@ bool WRTCPeer::removeReqWriteSubscription(std::string topic) {
 }
 
 void WRTCPeer::onDisconnected() {
-    log(BLUE + this->toString() + "Disconnected" + CLR);
+    RCLCPP_INFO(node->get_logger(), "%s Diconnected", this->toString().c_str());
+    // log(BLUE + this->toString() + "Disconnected" + CLR);
     this->req_read_subs.clear(); // empty all subs
     this->req_write_subs.clear();
     this->is_connected = false;
