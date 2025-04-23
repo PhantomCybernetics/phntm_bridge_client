@@ -175,7 +175,7 @@ void PhntmBridge::callGenericService(std::string service_name, std::string servi
     // prevent another call to the service until previous call finishes
     std::lock_guard<std::mutex> lock(*client_mutex);
 
-    log(MAGENTA + "Calling service: " + service_name + CLR + " {" + service_type + "} msg_id=" + std::to_string(ev.get_msgId()));
+    log(BLUE + "Calling service: " + service_name + CLR + " {" + service_type + "} msg_id=" + std::to_string(ev.get_msgId()));
 
     // send the request
     int64_t sequence_number;
@@ -246,7 +246,7 @@ void PhntmBridge::callGenericService(std::string service_name, std::string servi
   
   // send the reply
   // if (this->config->service_calls_verbose)
-  log(MAGENTA + "Sending " + service_name + " reply..." + CLR);
+  log(BLUE + "Sending " + service_name + " reply..." + CLR);
   BridgeSocket::ack(ev.get_msgId(), {ack});
 }
 

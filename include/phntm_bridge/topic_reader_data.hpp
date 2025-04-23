@@ -21,7 +21,8 @@ class TopicReaderData {
         bool addOutput(std::shared_ptr<rtc::DataChannel> dc, std::shared_ptr<rtc::PeerConnection> pc);
         bool removeOutput(std::shared_ptr<rtc::DataChannel> dc);
         // static void onDCOpen(std::shared_ptr<rtc::DataChannel> dc, std::shared_ptr<rtc::PeerConnection> pc);
-
+        static void onPCSignalingStateChange(std::shared_ptr<rtc::PeerConnection> pc);
+    
         TopicReaderData(std::string topic, std::string msg_type, std::shared_ptr<PhntmBridge> bridge_node, rclcpp::QoS qos);
         ~TopicReaderData();
 
@@ -29,6 +30,7 @@ class TopicReaderData {
             std::shared_ptr<rtc::DataChannel> dc;
             std::shared_ptr<rtc::PeerConnection> pc;
             uint16_t num_sent;
+            bool init_complete;
             bool active;
         };
 

@@ -272,6 +272,8 @@ void WRTCPeer::createPeerConnection() {
     this->pc->onSignalingStateChange([&](rtc::PeerConnection::SignalingState state){
         if (this->config->webrtc_debug)
             log(YELLOW + this->toString() + "Signaling state: " + toString(state) + CLR);
+        
+        TopicReaderData::onPCSignalingStateChange(this->pc);
     });
     this->pc->onLocalCandidate([&](rtc::Candidate candidate){
         if (this->config->webrtc_debug)

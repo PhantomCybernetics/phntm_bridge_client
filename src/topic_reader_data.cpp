@@ -1,5 +1,6 @@
 #include "phntm_bridge/phntm_bridge.hpp"
 #include "phntm_bridge/topic_reader_data.hpp"
+#include "phntm_bridge/wrtc_peer.hpp"
 #include "rtc/peerconnection.hpp"
 #include <string>
 
@@ -60,6 +61,7 @@ bool TopicReaderData::addOutput(std::shared_ptr<rtc::DataChannel> dc, std::share
     output->pc = pc;
     output->num_sent = 0;
     output->active = true;
+    output->init_complete = false; // waits for 1st stable signaling state after dc open
     this->outputs.push_back(output);
     this->start();
 
@@ -68,6 +70,23 @@ bool TopicReaderData::addOutput(std::shared_ptr<rtc::DataChannel> dc, std::share
     }
 
     return true;
+}
+
+void TopicReaderData::onPCSignalingStateChange(std::shared_ptr<rtc::PeerConnection> pc) {
+    if (pc->signalingState() != rtc::PeerConnection::SignalingState::Stable)
+        return;
+        
+    for (auto & tr : TopicReaderData::readers) {
+        for (auto & output : tr.second->outputs) {
+            if (output->pc.get() == pc.get()) {
+                if (!output->init_complete) {
+                    output->init_complete = true;
+                    log(GRAY + "Init complete for DC #" + std::to_string(output->dc->id().value()) + CLR);
+                }
+                break;
+            }
+        }
+    }
 }
 
 bool TopicReaderData::removeOutput(std::shared_ptr<rtc::DataChannel> dc) {
@@ -111,8 +130,8 @@ void TopicReaderData::onData(std::shared_ptr<rclcpp::SerializedMessage> data) {
             log(GRAY + "DC #" + std::to_string(output->dc->id().value()) + " is closed for " + this->topic + CLR);
             continue;
         }
-        if (output->num_sent == 0 && output->pc->signalingState() != rtc::PeerConnection::SignalingState::Stable) {
-            log(GRAY + "DC #" + std::to_string(output->dc->id().value()) + " not sending msg yet for " + this->topic + CLR);
+        if (!output->init_complete) {
+            log(GRAY + "DC #" + std::to_string(output->dc->id().value()) + " not sending msg yet for " + this->topic + " (init incomplete)" + CLR);
             continue;
         }
         if (!output->dc->send(this->latest_payload.data(), this->latest_payload_size)) {
@@ -126,18 +145,17 @@ void TopicReaderData::onData(std::shared_ptr<rclcpp::SerializedMessage> data) {
 void TopicReaderData::sendLatestData(std::shared_ptr<Output> output) {
 
     std::thread sendLatestThread([this, output]() {
-        while (!output->dc->isOpen() && output->active) {
+        while ((!output->dc->isOpen() || !output->init_complete) && output->active) {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
-        while (output->pc->signalingState() != rtc::PeerConnection::SignalingState::Stable && output->num_sent == 0 && output->active) { // after the first channel init, wait for signalling state
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
-        while (this->latest_payload_size == 0 && output->num_sent == 0 && output->active) { // wait for first data
+        while (this->latest_payload_size == 0 && output->num_sent == 0 && output->active) { // wait for first data in
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
         if (!output->active || output->num_sent != 0)
             return;
-        log(MAGENTA + "Sending latest " + this->topic + " into DC #" + std::to_string(output->dc->id().value()) + ", " + std::to_string(this->latest_payload_size)+ " B"+ CLR);
+        log(MAGENTA + "Sending latest " + this->topic + " into DC #" + std::to_string(output->dc->id().value())
+                         + ", " + std::to_string(this->latest_payload_size)+ " B" + CLR
+        );
         if (!output->dc->send(this->latest_payload.data(), this->latest_payload_size)) {
             log(RED + "Sending latest " + this->topic + " into DC #" + std::to_string(output->dc->id().value()) + " failed" + CLR);
         } else {
