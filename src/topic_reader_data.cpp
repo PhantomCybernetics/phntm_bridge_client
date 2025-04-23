@@ -37,7 +37,6 @@ std::shared_ptr<TopicReaderData> TopicReaderData::getForTopic(std::string topic)
 
 TopicReaderData::TopicReaderData(std::string topic, std::string msg_type, std::shared_ptr<PhntmBridge> bridge_node, rclcpp::QoS qos) : topic(topic), msg_type(msg_type), bridge_node(bridge_node), qos(qos) {
     this->is_reliable = qos.reliability() == rclcpp::ReliabilityPolicy::Reliable;
-    this->start();
 }
 
 TopicReaderData::~TopicReaderData() {
@@ -134,10 +133,14 @@ void TopicReaderData::onData(std::shared_ptr<rclcpp::SerializedMessage> data) {
             log(GRAY + "DC #" + std::to_string(output->dc->id().value()) + " not sending msg yet for " + this->topic + " (init incomplete)" + CLR);
             continue;
         }
-        if (!output->dc->send(this->latest_payload.data(), this->latest_payload_size)) {
-            log(RED + "Sending " + this->topic + " into DC #" + std::to_string(output->dc->id().value()) + " failed" + CLR);
-        } else {
-            output->num_sent++;
+        try {
+            if (!output->dc->send(this->latest_payload.data(), this->latest_payload_size)) {
+                log(RED + "Sending " + this->topic + " into DC #" + std::to_string(output->dc->id().value()) + " failed" + CLR);
+            } else {
+                output->num_sent++;
+            }
+        } catch(const std::runtime_error & ex) {
+            log(RED + "Error sending " + this->topic + " into DC #" + std::to_string(output->dc->id().value()) + "" + CLR);
         }
     }
 }
@@ -156,10 +159,14 @@ void TopicReaderData::sendLatestData(std::shared_ptr<Output> output) {
         log(MAGENTA + "Sending latest " + this->topic + " into DC #" + std::to_string(output->dc->id().value())
                          + ", " + std::to_string(this->latest_payload_size)+ " B" + CLR
         );
-        if (!output->dc->send(this->latest_payload.data(), this->latest_payload_size)) {
-            log(RED + "Sending latest " + this->topic + " into DC #" + std::to_string(output->dc->id().value()) + " failed" + CLR);
-        } else {
-            output->num_sent++;
+        try {
+            if (!output->dc->send(this->latest_payload.data(), this->latest_payload_size)) {
+                log(RED + "Sending latest " + this->topic + " into DC #" + std::to_string(output->dc->id().value()) + " failed" + CLR);
+            } else {
+                output->num_sent++;
+            }
+        } catch(const std::runtime_error & ex) {
+            log(RED + "Error sending " + this->topic + " into DC #" + std::to_string(output->dc->id().value()) + "" + CLR);
         }
     });
     sendLatestThread.detach();
@@ -168,8 +175,13 @@ void TopicReaderData::sendLatestData(std::shared_ptr<Output> output) {
 void TopicReaderData::start() {
     if (this->sub != nullptr)
         return;
-    this->sub = this->bridge_node->create_generic_subscription(this->topic, this->msg_type, this->qos, std::bind(&TopicReaderData::onData, this, std::placeholders::_1));
-    log(GREEN + "[" + this->topic + "] Created subscriber" + CLR);
+    try {
+        this->sub = this->bridge_node->create_generic_subscription(this->topic, this->msg_type, this->qos, std::bind(&TopicReaderData::onData, this, std::placeholders::_1));
+        log(GREEN + "[" + this->topic + "] Created subscriber" + CLR);
+    } catch(const std::runtime_error & ex) {
+        this->sub = nullptr;
+        log("Error creating subscriber for " + this->topic + " {"+ this->msg_type +"}: " + ex.what(), true);
+    }
 }
 
 void TopicReaderData::stop() {
