@@ -429,7 +429,7 @@ void BridgeSocket::onOtherSocketMessage(sio::event const& ev) {
     if (this->handled_events.find(ev.get_name().c_str()) != this->handled_events.end())
         return;
     
-    log(msgDebugHeader(ev) + "UNHANDLED SOCKER MSG '", true);
+    log(msgDebugHeader(ev) + "UNHANDLED SOCKER MSG:", true);
     log(printMessage(ev.get_message()), true);
 }
 

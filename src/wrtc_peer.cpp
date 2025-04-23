@@ -446,7 +446,7 @@ void WRTCPeer::processSubscriptions(int ack_msg_id, sio::object_message::ptr ack
                 auto local_desc = that->pc->localDescription();
                 auto sdp = local_desc->generateSdp(); // this includes late discovered candidates, sdpBuffer doesn't
                 if (that->config->webrtc_debug) {
-                    log(GRAY + that->toString() + "Generated local SDP offer:\n" + sdp + CLR);
+                    log(GRAY + that->toString() + "Generated local SDP offer" + (that->config->log_sdp ? ":\n" + sdp : "") + CLR);
                 }
                 reply->get_map().emplace("offer", sio::string_message::create(sdp));
 
@@ -508,7 +508,7 @@ void WRTCPeer::onSDPAnswer(sio::message::ptr const& msg) {
     
     auto sdp = msg->get_map().at("sdp")->get_string();
     if (this->config->webrtc_debug) {
-        log(CYAN + this->toString() + "Got peer answer:\n" + sdp + CLR);
+        log(CYAN + this->toString() + "Got peer answer" + (this->config->log_sdp ? ":\n" + sdp : "") + CLR);
     }
 
     rtc::Description answer(sdp, rtc::Description::Type::Answer);
@@ -547,26 +547,21 @@ uint16_t WRTCPeer::openDataChannelForTopic(std::string topic, std::string msg_ty
         this->outbound_data_channels.emplace(topic, dc);
         return this->outbound_data_channels.at(topic)->id().value();
     } else {
-
-        dc->onMessage([this, topic, msg_type, dc](std::variant<rtc::binary, rtc::string> message) {
-            // if (std::holds_alternative<rtc::string>(message)) {
-            //     std::cout << "Received: " << get<rtc::string>(message) << std::endl;
-            // }
-            if (topic == "_heartbeat") {
-                if (std::holds_alternative<rtc::binary>(message)) {
-                    log(MAGENTA + this->toString() + "got BIN heartbeat, returning" + CLR);
+        bool is_heartbeat = topic == "_heartbeat";
+        dc->onMessage([this, topic, msg_type, dc, is_heartbeat](std::variant<rtc::binary, rtc::string> message) {
+        
+            if (is_heartbeat) {
+                if (std::holds_alternative<rtc::binary>(message)) { // always bin
+                    if (this->config->log_heartbeat) {
+                        log(GRAY + this->toString() + "got heartbeat PING" + CLR);
+                    }
                     rtc::binary& bin = std::get<rtc::binary>(message);
-                    // Use bin
                     dc->send(bin);
-                } else if (std::holds_alternative<rtc::string>(message)) {
-                    log(MAGENTA + this->toString() + "got STR heartbeat, returning" + CLR);
-                    rtc::string& str = std::get<rtc::string>(message);
-                    // Use str
-                    dc->send(str);
                 }
-            } else {
-                log(GREEN + this->toString() + "DC for " + topic + " got message" + CLR);
+                return;
             }
+
+            log(GREEN + this->toString() + "DC for " + topic + " got message" + CLR);
         });
 
         this->inbound_data_channels.emplace(topic, dc);

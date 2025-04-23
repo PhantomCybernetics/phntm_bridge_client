@@ -29,9 +29,14 @@ class TopicReaderData {
         struct Output {
             std::shared_ptr<rtc::DataChannel> dc;
             std::shared_ptr<rtc::PeerConnection> pc;
-            uint16_t num_sent;
-            bool init_complete;
-            bool active;
+            uint16_t num_sent = 0;
+            bool init_complete = false;
+            bool active = true;
+            
+            bool logged_closed = false;
+            bool logged_init_incomplete = false;
+            bool logged_error = false;
+            bool logged_exception = false;
         };
 
     private:

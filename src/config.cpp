@@ -177,7 +177,9 @@ void PhntmBridge::loadConfig(std::shared_ptr<BridgeConfig> config) {
     
     // logging
     this->declare_parameter("log_sdp", false);
+    config->log_sdp = this->get_parameter("log_sdp").as_bool();
     this->declare_parameter("log_heartbeat", false);
+    config->log_heartbeat = this->get_parameter("log_heartbeat").as_bool();
     this->declare_parameter("log_message_every_sec", 10.0f);
     config->log_message_every_sec = this->get_parameter("log_message_every_sec").as_double();
 

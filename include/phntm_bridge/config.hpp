@@ -45,4 +45,5 @@ class BridgeConfig {
         Json::Value input_defaults, service_defaults;
 
         bool webrtc_debug, webrtc_verbose;
+        bool log_heartbeat, log_sdp;
 };

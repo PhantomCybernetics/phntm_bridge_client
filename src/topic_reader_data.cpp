@@ -126,21 +126,39 @@ void TopicReaderData::onData(std::shared_ptr<rclcpp::SerializedMessage> data) {
     std::lock_guard<std::mutex> lock(this->outputs_mutex);
     for (auto output : this->outputs) {
         if (!output->dc->isOpen()) {
-            log(GRAY + "DC #" + std::to_string(output->dc->id().value()) + " is closed for " + this->topic + CLR);
+            if (!output->logged_closed) {
+                output->logged_closed = true;
+                log(GRAY + "DC #" + std::to_string(output->dc->id().value()) + " is closed for " + this->topic + CLR);
+            }
             continue;
         }
         if (!output->init_complete) {
-            log(GRAY + "DC #" + std::to_string(output->dc->id().value()) + " not sending msg yet for " + this->topic + " (init incomplete)" + CLR);
+            if (!output->logged_init_incomplete) {
+                output->logged_init_incomplete = true;
+                log(GRAY + "DC #" + std::to_string(output->dc->id().value()) + " not sending msg yet for " + this->topic + " (init incomplete)" + CLR);
+            }
             continue;
         }
         try {
             if (!output->dc->send(this->latest_payload.data(), this->latest_payload_size)) {
-                log(RED + "Sending " + this->topic + " into DC #" + std::to_string(output->dc->id().value()) + " failed" + CLR);
+                if (!output->logged_error) {
+                    output->logged_error = true;
+                    log(RED + "Sending " + this->topic + " into DC #" + std::to_string(output->dc->id().value()) + " failed" + CLR);
+                }
             } else {
                 output->num_sent++;
+
+                // reset
+                output->logged_closed = false;
+                output->logged_init_incomplete = false;
+                output->logged_error = false;
+                output->logged_exception = false;
             }
         } catch(const std::runtime_error & ex) {
-            log(RED + "Error sending " + this->topic + " into DC #" + std::to_string(output->dc->id().value()) + "" + CLR);
+            if (!output->logged_exception) {
+                output->logged_exception = true;
+                log(RED + "Error sending " + this->topic + " into DC #" + std::to_string(output->dc->id().value()) + "" + CLR);
+            }
         }
     }
 }
@@ -161,12 +179,24 @@ void TopicReaderData::sendLatestData(std::shared_ptr<Output> output) {
         );
         try {
             if (!output->dc->send(this->latest_payload.data(), this->latest_payload_size)) {
-                log(RED + "Sending latest " + this->topic + " into DC #" + std::to_string(output->dc->id().value()) + " failed" + CLR);
+                if (!output->logged_error) {
+                    output->logged_error = true;
+                    log(RED + "Sending latest " + this->topic + " into DC #" + std::to_string(output->dc->id().value()) + " failed" + CLR);
+                }
             } else {
                 output->num_sent++;
+
+                // reset
+                output->logged_closed = false;
+                output->logged_init_incomplete = false;
+                output->logged_error = false;
+                output->logged_exception = false;
             }
         } catch(const std::runtime_error & ex) {
-            log(RED + "Error sending " + this->topic + " into DC #" + std::to_string(output->dc->id().value()) + "" + CLR);
+            if (!output->logged_exception) {
+                output->logged_exception = true;
+                log(RED + "Error sending " + this->topic + " into DC #" + std::to_string(output->dc->id().value()) + "" + CLR);
+            }
         }
     });
     sendLatestThread.detach();
