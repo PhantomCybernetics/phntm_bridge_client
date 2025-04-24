@@ -7,68 +7,72 @@
 #include <rclcpp/qos.hpp>
 #include <rclcpp/timer.hpp>
 
-class BridgeSocket;
+namespace phntm {
 
-class Introspection {
+    class BridgeSocket;
 
-    public:
-        static void init(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<BridgeConfig> config);
-        static void start();
-        static void stop();
-        static void report();
-        static bool isRunning() { return Introspection::instance != nullptr && Introspection::instance->running; };
-        static std::string getService(std::string service); //srv type empty
-        static std::string getTopic(std::string topic); //msg type or empty 
-        
-    private:
-        Introspection(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<BridgeConfig> config);
-        ~Introspection();
-        static Introspection * instance;
+    class Introspection {
 
-        bool running;
+        public:
+            static void init(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<BridgeConfig> config);
+            static void start();
+            static void stop();
+            static void report();
+            static bool isRunning() { return Introspection::instance != nullptr && Introspection::instance->running; };
+            static std::string getService(std::string service); //srv type empty
+            static std::string getTopic(std::string topic); //msg type or empty 
+            
+        private:
+            Introspection(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<BridgeConfig> config);
+            ~Introspection();
+            static Introspection * instance;
 
-        std::shared_ptr<rclcpp::Node> node;
-        std::shared_ptr<BridgeConfig> config;
+            bool running;
 
-        std::map<std::string, phntm_interfaces::msg::DockerStatus>discovered_docker_containers;
+            std::shared_ptr<rclcpp::Node> node;
+            std::shared_ptr<BridgeConfig> config;
 
-        void reportDocker();
-        void reportIDLs();
-        void reportNodes();
-        void reportRunningState();
+            std::map<std::string, phntm_interfaces::msg::DockerStatus>discovered_docker_containers;
 
-        void onDockerMonitorMessage(phntm_interfaces::msg::DockerStatus const & msg);
-        std::shared_ptr<rclcpp::Subscription<phntm_interfaces::msg::DockerStatus>> docker_sub;
+            void reportDocker();
+            void reportIDLs();
+            void reportNodes();
+            void reportRunningState();
 
-        void runIntrospection();
-        rclcpp::TimerBase::SharedPtr timer;
-        bool introspection_in_progress;
-        rclcpp::Time start_time;
+            void onDockerMonitorMessage(phntm_interfaces::msg::DockerStatus const & msg);
+            std::shared_ptr<rclcpp::Subscription<phntm_interfaces::msg::DockerStatus>> docker_sub;
 
-        struct NodePubTopic  {
-            std::string msg_type;
-            rclcpp::QoS qos;
-        };
+            void runIntrospection();
+            rclcpp::TimerBase::SharedPtr timer;
+            bool introspection_in_progress;
+            rclcpp::Time start_time;
 
-        struct NodeSubTopic  {
-            std::string msg_type;
-            rclcpp::QoS qos;
-            std::string qos_error;
-            std::string qos_warning;
-        };
+            struct NodePubTopic  {
+                std::string msg_type;
+                rclcpp::QoS qos;
+            };
 
-        struct DiscoveredNode {
-            std::string ns; //namespace
-            std::map<std::string, NodePubTopic> publishers; // topic => NodeTopic
-            std::map<std::string, NodeSubTopic> subscribers; // topic => NodeTopic
-            std::map<std::string, std::string> services; // service => msg_type
-        };
+            struct NodeSubTopic  {
+                std::string msg_type;
+                rclcpp::QoS qos;
+                std::string qos_error;
+                std::string qos_warning;
+            };
 
-        std::map<std::string, DiscoveredNode> discovered_nodes; // node id => node
-        std::map<std::string, std::string> discovered_topics; // topic => msg_type
+            struct DiscoveredNode {
+                std::string ns; //namespace
+                std::map<std::string, NodePubTopic> publishers; // topic => NodeTopic
+                std::map<std::string, NodeSubTopic> subscribers; // topic => NodeTopic
+                std::map<std::string, std::string> services; // service => msg_type
+            };
 
-        bool collectIDLs(std::string msg_type);
-        std::map<std::string, std::string> discovered_idls; // type => def
-        
-        void checkSubscriberQos();
-};
+            std::map<std::string, DiscoveredNode> discovered_nodes; // node id => node
+            std::map<std::string, std::string> discovered_topics; // topic => msg_type
+
+            bool collectIDLs(std::string msg_type);
+            std::map<std::string, std::string> discovered_idls; // type => def
+            
+            void checkSubscriberQos();
+    };
+
+}

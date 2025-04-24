@@ -15,32 +15,38 @@
 #include <rclcpp/node_options.hpp>
 #include <string>
 
-PhntmBridge::PhntmBridge(std::string node_name, rclcpp::NodeOptions node_options, std::shared_ptr<BridgeConfig> config) : Node(node_name, node_options)
-{   
-    this->config = config;
+namespace phntm {
 
-    // this->declare_parameter("topic_prefix", "/picam_ros2/camera_");
-    // this->declare_parameter("log_message_every_sec", 5.0); // -1.0 = off
-    // this->declare_parameter("log_scroll", false);
-    // this->declare_parameter("calibration_frames_needed", 10);
-    // this->declare_parameter("calibration_pattern_size", std::vector<int>{ 9, 6 });
-    // this->declare_parameter("calibration_square_size_m", 0.019f);
-    // this->declare_parameter("calibration_files", "/calibration/");
-}
+  PhntmBridge::PhntmBridge(std::string node_name, rclcpp::NodeOptions node_options, std::shared_ptr<BridgeConfig> config) : Node(node_name, node_options)
+  {   
+      this->config = config;
 
-std::atomic<bool> g_interrupt_requested(false);
+      // this->declare_parameter("topic_prefix", "/picam_ros2/camera_");
+      // this->declare_parameter("log_message_every_sec", 5.0); // -1.0 = off
+      // this->declare_parameter("log_scroll", false);
+      // this->declare_parameter("calibration_frames_needed", 10);
+      // this->declare_parameter("calibration_pattern_size", std::vector<int>{ 9, 6 });
+      // this->declare_parameter("calibration_square_size_m", 0.019f);
+      // this->declare_parameter("calibration_files", "/calibration/");
+  }
 
-void signal_handler(int signum) {
-    log(RED + "Signal handler got " + std::to_string(signum) + CLR);
-    g_interrupt_requested.store(true);
-}
+  std::atomic<bool> g_interrupt_requested(false);
 
-PhntmBridge::~PhntmBridge() {
-  this->clearServicesCache();
+  void signal_handler(int signum) {
+      log(RED + "Signal handler got " + std::to_string(signum) + CLR);
+      g_interrupt_requested.store(true);
+  }
+
+  PhntmBridge::~PhntmBridge() {
+    this->clearServicesCache();
+  }
+  
 }
 
 int main(int argc, char ** argv)
 {
+  using namespace phntm;
+  
   (void) argc;
   (void) argv;
 
