@@ -4,6 +4,9 @@
 #include "phntm_bridge/wrtc_peer.hpp"
 #include "phntm_bridge/sio.hpp"
 
+#include "phntm_bridge/topic_reader_data.hpp"
+#include "phntm_bridge/topic_writer_data.hpp"
+
 #include "rtc/configuration.hpp"
 #include "rtc/global.hpp"
 #include "rtc/peerconnection.hpp"
@@ -138,7 +141,6 @@ void WRTCPeer::onWRTCInfo(sio::object_message::ptr msg) {
     } else {
         log(this->toString() + "Got unknown WRTC state from the peer", true);
     }
-
 }
 
 bool WRTCPeer::addReqReadSubscription(std::string topic) {
@@ -316,19 +318,19 @@ void WRTCPeer::processAllPeerSubscriptions() {
 
 void WRTCPeer::processSubscriptions(int ack_msg_id, sio::object_message::ptr ack) {
 
-    std::shared_ptr<WRTCPeer> that = nullptr;
-    for (auto pair : connected_peers) {
-        if (pair.second->id == this->id) {
-            that = pair.second;
-            break;
-        }
-    }
-    if (that == nullptr) {
-        log(this->toString() + " Ptr not found in connected_peers, not processing subscriptions", true);
-        return;
-    }
+    // std::shared_ptr<WRTCPeer> that = nullptr;
+    // for (auto pair : connected_peers) {
+    //     if (pair.second->id == this->id) {
+    //         that = pair.second;
+    //         break;
+    //     }
+    // }
+    // if (that == nullptr) {
+    //     log(this->toString() + " Ptr not found in connected_peers, not processing subscriptions", true);
+    //     return;
+    // }
     
-    std::thread newThread([that, ack_msg_id, ack]() {
+    std::thread newThread([that = shared_from_this(), ack_msg_id, ack]() {
         log(GRAY + that->toString() + "Requested peer subs processing" + (ack_msg_id > -1 ? " [msg #" + std::to_string(ack_msg_id) + "]" : "") + CLR);
 
         {
@@ -372,7 +374,7 @@ void WRTCPeer::processSubscriptions(int ack_msg_id, sio::object_message::ptr ack
                     continue; // topic not yet discovered
                 }
                 if (!isImageOrVideoType(msg_type)) {
-                    auto channel_config = that->subscribeDataTopic(topic, msg_type);
+                    auto channel_config = that->subscribeReadDataTopic(topic, msg_type);
                     reply->get_map().at("read_data_channels")->get_vector().push_back(channel_config);
                 } else {
                     auto channel_config = that->subscribeImageOrVideoTopic(topic, msg_type);
@@ -395,7 +397,7 @@ void WRTCPeer::processSubscriptions(int ack_msg_id, sio::object_message::ptr ack
                 if (std::find(that->req_read_subs.begin(), that->req_read_subs.end(), pair.first) == that->req_read_subs.end())
                     r_dcs_to_close.push_back(pair.first);
             for (auto topic : r_dcs_to_close) {
-                auto removed_channel_config = that->unsubscribeDataTopic(topic);
+                auto removed_channel_config = that->unsubscribeReadDataTopic(topic);
                 if (removed_channel_config->get_vector().size())
                     reply->get_map().at("read_data_channels")->get_vector().push_back(removed_channel_config);                    
             }
@@ -455,7 +457,7 @@ void WRTCPeer::processSubscriptions(int ack_msg_id, sio::object_message::ptr ack
 
             if (!that->is_connected && !is_reconnect) { //cleanup and end here
 
-                log(GRAY + that->toString() + "Closing pc" + CLR);
+                log(GRAY + that->toString() + "Disconnected, closing PC" + CLR);
                 that->removePeerConnection();
 
             } else if (that->is_connected) { // produce update and wait for peer reply
@@ -543,11 +545,15 @@ uint16_t WRTCPeer::openDataChannelForTopic(std::string topic, std::string msg_ty
         log(BLUE + this->toString() + "DC is closed for " + topic + CLR);
     });
 
-    if (!write) {
+    if (!write) { // read channels
+
         this->outbound_data_channels.emplace(topic, dc);
         return this->outbound_data_channels.at(topic)->id().value();
-    } else {
-        bool is_heartbeat = topic == "_heartbeat";
+
+    } else { // write channels
+
+        bool is_heartbeat = topic == HEARTBEAT_CHANNEL_ID;
+
         dc->onMessage([this, topic, msg_type, dc, is_heartbeat](std::variant<rtc::binary, rtc::string> message) {
         
             if (is_heartbeat) {
@@ -561,11 +567,14 @@ uint16_t WRTCPeer::openDataChannelForTopic(std::string topic, std::string msg_ty
                 return;
             }
 
-            log(GREEN + this->toString() + "DC for " + topic + " got message" + CLR);
+            if (!TopicWriterData::onData(shared_from_this(), dc, topic, message)) {
+                log(RED + this->toString() + "DC for " + topic + " got unhandled message" + CLR);            
+            }
         });
 
         this->inbound_data_channels.emplace(topic, dc);
         return this->inbound_data_channels.at(topic)->id().value();
+
     }
 }
 
@@ -586,7 +595,7 @@ void WRTCPeer::closeDataChannelForTopic(std::string topic, bool write) {
      }
 }
 
-sio::array_message::ptr WRTCPeer::subscribeDataTopic(std::string topic, std::string msg_type) {
+sio::array_message::ptr WRTCPeer::subscribeReadDataTopic(std::string topic, std::string msg_type) {
     
     auto qos = this->node->loadTopicQoSConfig(topic); // get topic qos config from yaml
     auto topic_conf = this->node->loadTopicMsgTypeExtraConfig(topic, msg_type); // get topic extras from yaml
@@ -594,15 +603,12 @@ sio::array_message::ptr WRTCPeer::subscribeDataTopic(std::string topic, std::str
 
     uint16_t id_dc;
     std::shared_ptr<rtc::DataChannel> dc;
-    // bool send_latest = false;
-
     if (this->outbound_data_channels.find(topic) != this->outbound_data_channels.end()) {
         dc = this->outbound_data_channels.at(topic);
         id_dc = dc->id().value();
     } else {
         id_dc = this->openDataChannelForTopic(topic, msg_type, is_reliable);
         dc = this->outbound_data_channels.at(topic);
-        // send_latest = is_reliable;
         this->negotiation_needed = true;
     }
     auto topic_reader = TopicReaderData::getForTopic(topic, msg_type, this->node, qos);
@@ -618,23 +624,6 @@ sio::array_message::ptr WRTCPeer::subscribeDataTopic(std::string topic, std::str
     return channel_config;
 }
 
-sio::array_message::ptr WRTCPeer::unsubscribeDataTopic(std::string topic) {
-    auto removed_channel_config = sio::array_message::create();
-    if (this->outbound_data_channels.find(topic) != this->outbound_data_channels.end()) {
-        auto dc = this->outbound_data_channels.at(topic);
-        auto tr = TopicReaderData::getForTopic(topic);
-        if (tr != nullptr) {
-            tr->removeOutput(dc); // stops if no other peer subs left
-        } else {
-            log(RED + "TR not found for " + topic +"!") ;
-        }
-            
-        this->closeDataChannelForTopic(topic, false); // removes from outbound_data_channels
-        removed_channel_config->get_vector().push_back(sio::string_message::create(topic));
-    }
-    return removed_channel_config;
-}
-
 sio::array_message::ptr WRTCPeer::subscribeWriteDataTopic(std::string topic, std::string msg_type) {
     
     auto qos = this->node->loadTopicQoSConfig(topic);
@@ -642,15 +631,20 @@ sio::array_message::ptr WRTCPeer::subscribeWriteDataTopic(std::string topic, std
     bool is_reliable = qos.reliability() == rclcpp::ReliabilityPolicy::Reliable;
 
     uint16_t id_dc;
+    std::shared_ptr<rtc::DataChannel> dc;
     if (this->inbound_data_channels.find(topic) != this->inbound_data_channels.end()) {
-        id_dc = this->inbound_data_channels.at(topic)->id().value();
+        dc = this->inbound_data_channels.at(topic);
+        id_dc = dc->id().value();
     } else {
         id_dc = this->openDataChannelForTopic(topic, msg_type, is_reliable, true);
-        this->negotiation_needed = true;
-
-        
+        dc = this->inbound_data_channels.at(topic);
+        this->negotiation_needed = true;        
     }
-
+    if (topic != HEARTBEAT_CHANNEL_ID) {
+        auto topic_writer = TopicWriterData::getForTopic(topic, msg_type, this->node, qos);
+        topic_writer->addInput(dc); // only adds once
+    }
+    
     // dc config for the peer
     auto channel_config = sio::array_message::create();
     channel_config->get_vector().push_back(sio::string_message::create(topic));
@@ -660,9 +654,36 @@ sio::array_message::ptr WRTCPeer::subscribeWriteDataTopic(std::string topic, std
     return channel_config;
 }
 
+sio::array_message::ptr WRTCPeer::unsubscribeReadDataTopic(std::string topic) {
+    auto removed_channel_config = sio::array_message::create();
+    if (this->outbound_data_channels.find(topic) != this->outbound_data_channels.end()) {
+        if (topic != HEARTBEAT_CHANNEL_ID) {
+            auto dc = this->outbound_data_channels.at(topic);
+            auto tr = TopicReaderData::getForTopic(topic);
+            if (tr != nullptr) {
+                tr->removeOutput(dc); // stops if no other peer subs left
+            } else {
+                log(RED + "TopicReader not found for " + topic +"!") ;
+            }
+        }
+        this->closeDataChannelForTopic(topic, false); // removes from outbound_data_channels
+        removed_channel_config->get_vector().push_back(sio::string_message::create(topic));
+    }
+    return removed_channel_config;
+}
+
 sio::array_message::ptr WRTCPeer::unsubscribeWriteDataTopic(std::string topic) {
     auto removed_channel_config = sio::array_message::create();
     if (this->inbound_data_channels.find(topic) != this->inbound_data_channels.end()) {
+        if (topic != HEARTBEAT_CHANNEL_ID) {
+            auto dc = this->inbound_data_channels.at(topic);
+            auto tw = TopicWriterData::getForTopic(topic);
+            if (tw != nullptr) {
+                tw->removeInput(dc); // stops if no other peer subs left
+            } else {
+                log(RED + "TopicWriter not found for " + topic +"!" + CLR) ;
+            }
+        }
         this->closeDataChannelForTopic(topic, true); // removes from inbound_data_channels
         removed_channel_config->get_vector().push_back(sio::string_message::create(topic));
     }
@@ -758,7 +779,7 @@ void WRTCPeer::addUIConfigToMessage(sio::object_message::ptr msg, std::shared_pt
 
 
 WRTCPeer::~WRTCPeer() {
-    
+
 }
 
 std::string WRTCPeer::toString(rtc::PeerConnection::State state) {

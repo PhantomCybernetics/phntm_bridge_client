@@ -5,12 +5,11 @@
 
 #include "phntm_bridge/sio.hpp"
 #include "phntm_bridge/config.hpp"
-#include "phntm_bridge/topic_reader_data.hpp"
 
 #include "rtc/datachannel.hpp"
 #include "rtc/rtc.hpp"
 
-class WRTCPeer {
+class WRTCPeer : public std::enable_shared_from_this<WRTCPeer> {
 
     public: 
         WRTCPeer(std::shared_ptr<PhntmBridge> node, std::string id_peer, std::string id_app, std::string id_instance, std::string session, std::shared_ptr<BridgeConfig> config);
@@ -59,7 +58,7 @@ class WRTCPeer {
         std::string session;
         bool is_connected;
         std::shared_ptr<PhntmBridge> node;
-        
+
         std::shared_ptr<BridgeConfig> config;
 
         std::shared_ptr<rtc::PeerConnection> pc;
@@ -67,11 +66,11 @@ class WRTCPeer {
         std::vector<std::string> req_read_subs; // topic ids to subscribe
         std::vector<std::vector<std::string>> req_write_subs; // // [topic_id, msg_type]'s to write to
 
-        sio::array_message::ptr subscribeDataTopic(std::string topic, std::string msg_type);
+        sio::array_message::ptr subscribeReadDataTopic(std::string topic, std::string msg_type);
         sio::array_message::ptr subscribeImageOrVideoTopic(std::string topic, std::string msg_type);
         sio::array_message::ptr subscribeWriteDataTopic(std::string topic, std::string msg_type);
 
-        sio::array_message::ptr unsubscribeDataTopic(std::string topic);
+        sio::array_message::ptr unsubscribeReadDataTopic(std::string topic);
         sio::array_message::ptr unsubscribeWriteDataTopic(std::string topic);
 
         std::map<std::string, std::shared_ptr<rtc::DataChannel>> outbound_data_channels; 

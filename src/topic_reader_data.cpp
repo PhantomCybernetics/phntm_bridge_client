@@ -24,17 +24,6 @@ std::shared_ptr<TopicReaderData> TopicReaderData::getForTopic(std::string topic)
     }
 }
 
-// std::shared_ptr<TopicReaderData> TopicReaderData::getForDC(std::shared_ptr<rtc::DataChannel> dc) {
-//     for (auto p : readers) {
-//         for (auto dc_search : p.second->dcs) {
-//             if (dc.get() == dc_search.get()) {
-//                 return p.second;
-//             }
-//         }
-//     }
-//     return nullptr;
-// }
-
 TopicReaderData::TopicReaderData(std::string topic, std::string msg_type, std::shared_ptr<PhntmBridge> bridge_node, rclcpp::QoS qos) : topic(topic), msg_type(msg_type), bridge_node(bridge_node), qos(qos) {
     this->is_reliable = qos.reliability() == rclcpp::ReliabilityPolicy::Reliable;
 }
@@ -58,9 +47,6 @@ bool TopicReaderData::addOutput(std::shared_ptr<rtc::DataChannel> dc, std::share
     auto output = std::make_shared<Output>();
     output->dc = dc;
     output->pc = pc;
-    output->num_sent = 0;
-    output->active = true;
-    output->init_complete = false; // waits for 1st stable signaling state after dc open
     this->outputs.push_back(output);
     this->start();
 
@@ -215,11 +201,9 @@ void TopicReaderData::start() {
 }
 
 void TopicReaderData::stop() {
-    if (this->sub == nullptr) {
-        log("[" + this->topic + "] Sub not found");
-        return;
-    }
-    log("[" + this->topic + "] Removing sub");
+    if (this->sub == nullptr)
+        return; // already stopped
+    
     this->sub.reset(); // removes sub
     this->sub = nullptr;
     log(BLUE + "[" + this->topic + "] Removed subscriber" + CLR);
