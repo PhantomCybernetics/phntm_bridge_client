@@ -12,6 +12,7 @@
 #include "phntm_bridge/const.hpp"
 #include "phntm_bridge/wrtc_peer.hpp"
 #include "phntm_bridge/status_leds.hpp"
+#include "phntm_bridge/file_extractor.hpp"
 #include "sio_socket.h"
 
 namespace phntm {
@@ -86,6 +87,7 @@ namespace phntm {
         instance->handled_events.emplace("subscribe:write", std::bind(&BridgeSocket::onSubscribeWrite, instance, std::placeholders::_1));
         instance->handled_events.emplace("unsubscribe:write", std::bind(&BridgeSocket::onUnsubscribeWrite, instance, std::placeholders::_1));
         instance->handled_events.emplace("service", std::bind(&BridgeSocket::onServiceCall, instance, std::placeholders::_1));
+        instance->handled_events.emplace("file", std::bind(&BridgeSocket::onFileRequest, instance, std::placeholders::_1));
         instance->handled_events.emplace("sdp:answer", std::bind(&BridgeSocket::onSDPAnswer, instance, std::placeholders::_1));
 
         instance->client.connect(instance->socket_url, instance->auth_data);
@@ -421,6 +423,27 @@ namespace phntm {
         newThread.detach();
     }
 
+     // cloud bridge requesting a file to be uploaded
+     void BridgeSocket::onFileRequest(sio::event & ev) {
+
+        if (this->config->sio_verbose) {
+            log(msgDebugHeader(ev) + "File upload request: ");
+            log(printMessage(ev.get_message()));
+        }
+        
+        auto search_path = ev.get_message()->get_flag() == ev.get_message()->flag_string ? ev.get_message()->get_string() : "";
+        if (search_path.empty()) {
+            return this->returnError("File path not provided", ev);
+        }
+
+        // async thread
+        auto ack_msg_id = ev.get_msgId();
+        std::thread newThread([this, ack_msg_id, search_path]() {
+            FileExtractor::findAndUploadFile(this->node, search_path, ack_msg_id);
+        });
+        newThread.detach();
+    }
+
     void BridgeSocket::onSocketError(sio::message::ptr const& message) {
         log("SOCKET ERROR: ", true);
         log(printMessage(message), true);
@@ -431,7 +454,7 @@ namespace phntm {
         if (this->handled_events.find(ev.get_name().c_str()) != this->handled_events.end())
             return;
         
-        log(msgDebugHeader(ev) + "UNHANDLED SOCKER MSG:", true);
+        log(msgDebugHeader(ev) + "UNHANDLED SOCKET '"+ev.get_name()+"' MSG:", true);
         log(printMessage(ev.get_message()), true);
     }
 

@@ -48,6 +48,8 @@ namespace phntm {
 
             bool webrtc_debug, webrtc_verbose;
             bool log_heartbeat, log_sdp;
+
+            std::string file_chunks_topic;
     };
 
 }

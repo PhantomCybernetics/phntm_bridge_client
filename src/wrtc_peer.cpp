@@ -149,7 +149,7 @@ namespace phntm {
         if (std::find(this->req_read_subs.begin(), this->req_read_subs.end(), topic) != this->req_read_subs.end())
             return false;
         if (this->config->webrtc_debug)
-        log(this->toString() + "Adding read subscription to: " + GREEN + topic + CLR);
+            log(this->toString() + "Adding read subscription to: " + GREEN + topic + CLR);
         this->req_read_subs.push_back(topic);
         return true;
     }

@@ -77,6 +77,7 @@ add_executable(phntm_bridge
               src/extra_packages.cpp
               src/wrtc_peer.cpp
               src/status_leds.cpp
+              src/file_extractor.cpp
               ${SIOCLIENT_SRC}
               # ${ASIO_SRC}
               )

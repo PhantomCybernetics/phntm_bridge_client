@@ -86,5 +86,12 @@ namespace phntm {
     bool isEncodedVideoType(std::string msg_type) {
         return msg_type == VIDEO_STREAM_MSG_TYPE;
     }
+
+     // receives CURL response data
+     size_t CURLResponseCallback(void* contents, size_t size, size_t nmemb, std::string* out) {
+        size_t totalSize = size * nmemb;
+        out->append((char*)contents, totalSize);
+        return totalSize;
+    }
     
 }

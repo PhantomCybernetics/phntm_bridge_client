@@ -112,6 +112,11 @@ namespace phntm {
             if (nodes_and_namespaces.find(it->first) == nodes_and_namespaces.end()) {
                 log(GRAY + "Lost node " + it->first + CLR);
                 it = this->discovered_nodes.erase(it);
+
+                if (this->discovered_file_extractors.find(it->first) != this->discovered_file_extractors.end()) {
+                    this->discovered_file_extractors.erase(it->first);
+                }
+
                 nodes_changed = true;
             } else {
                 ++it;
@@ -272,6 +277,15 @@ namespace phntm {
 
             for (auto s : node_services) {
 
+                // fing agent nodes with file extraction service enabled
+                if (s.second[0] == "phntm_interfaces/srv/FileRequest") {
+                    if (this->discovered_file_extractors.find(n.first) == this->discovered_file_extractors.end()) {
+                        auto client = node->create_client<phntm_interfaces::srv::FileRequest>(s.first);
+                        this->discovered_file_extractors.emplace(n.first, client); //id node => srv id
+                        log("Discovered " + GREEN + "file extractor" + CLR + " node " + n.first + ": " + GREEN + s.first + CLR);
+                    }
+                }
+
                 if (std::find(this->config->blacklist_services.begin(), this->config->blacklist_services.end(), s.first) != this->config->blacklist_services.end()) {
                     continue; // service blacklisted
                 }
@@ -344,6 +358,12 @@ namespace phntm {
                 }
             }
         }
+    }
+
+    std::map<std::string, rclcpp::Client<phntm_interfaces::srv::FileRequest>::SharedPtr> Introspection::getFileExtractors() {
+        if (instance == nullptr)
+            return {};
+        return instance->discovered_file_extractors;
     }
 
     std::string getInterfaceIDLPath(std::string interface_name) {

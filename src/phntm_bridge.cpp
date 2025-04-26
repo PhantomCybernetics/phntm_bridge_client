@@ -6,6 +6,7 @@
 #include "phntm_bridge/extra_packages.hpp"
 #include "phntm_bridge/status_leds.hpp"
 #include "phntm_bridge/wrtc_peer.hpp"
+#include "phntm_bridge/file_extractor.hpp"
 
 #include <iostream>
 #include <ostream>
@@ -87,6 +88,8 @@ int main(int argc, char ** argv)
   Introspection::start();
   BridgeSocket::connect();
 
+  FileExtractor::init(base_node);
+
   WRTCPeer::initLogging(config);
 
   while (!g_interrupt_requested.load() && rclcpp::ok()) {
@@ -94,6 +97,8 @@ int main(int argc, char ** argv)
   }
     
   log(BLUE + "Shutting down..." + CLR);
+
+  FileExtractor::stop();
 
   Introspection::stop();
   StatusLEDs::clear();

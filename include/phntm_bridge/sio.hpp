@@ -68,6 +68,7 @@ namespace phntm {
             void onSubscribeWrite(sio::event & ev);
             void onUnsubscribeWrite(sio::event & ev);
             void onServiceCall(sio::event & ev);
+            void onFileRequest(sio::event & ev);
 
             void onSDPAnswer(sio::event & ev);
 

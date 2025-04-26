@@ -13,7 +13,8 @@ namespace phntm {
     bool isImageOrVideoType(std::string msg_type);
     bool isEncodedVideoType(std::string msg_type);
     void log(std::string msg, bool error=false, bool append_endl=true);
-
+    size_t CURLResponseCallback(void* contents, size_t size, size_t nmemb, std::string* out);
+    
     struct CustomWidgetDef {
         std::string class_name;
         std::string url;

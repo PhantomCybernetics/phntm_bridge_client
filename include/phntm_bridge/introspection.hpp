@@ -4,6 +4,7 @@
 #include "config.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "phntm_interfaces/msg/docker_status.hpp"
+#include "phntm_interfaces/srv/file_request.hpp"
 #include <rclcpp/qos.hpp>
 #include <rclcpp/timer.hpp>
 
@@ -21,6 +22,7 @@ namespace phntm {
             static bool isRunning() { return Introspection::instance != nullptr && Introspection::instance->running; };
             static std::string getService(std::string service); //srv type empty
             static std::string getTopic(std::string topic); //msg type or empty 
+            static std::map<std::string, rclcpp::Client<phntm_interfaces::srv::FileRequest>::SharedPtr> getFileExtractors();
             
         private:
             Introspection(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<BridgeConfig> config);
@@ -68,6 +70,7 @@ namespace phntm {
 
             std::map<std::string, DiscoveredNode> discovered_nodes; // node id => node
             std::map<std::string, std::string> discovered_topics; // topic => msg_type
+            std::map<std::string, rclcpp::Client<phntm_interfaces::srv::FileRequest>::SharedPtr> discovered_file_extractors; // node id => service client
 
             bool collectIDLs(std::string msg_type);
             std::map<std::string, std::string> discovered_idls; // type => def

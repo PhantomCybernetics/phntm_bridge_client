@@ -330,6 +330,9 @@ namespace phntm {
 
         this->declare_parameter("webrtc_verbose", false);
         config->webrtc_verbose = this->get_parameter("webrtc_verbose").as_bool();
+
+        this->declare_parameter("file_chunks_topic", "/file_chunks");
+        config->file_chunks_topic = this->get_parameter("file_chunks_topic").as_string();
     }
 
     rclcpp::QoS PhntmBridge::loadTopicQoSConfig(std::string topic) {
