@@ -26,9 +26,8 @@ namespace phntm {
                 log(GRAY + "     " + res + CLR);
             }
         }
-        pclose(pipe);
+        auto status = pclose(pipe);
 
-        bool err = false;
         FILE* pipe_err = fopen(err_out.c_str(), "r");
         if (pipe_err) {
             while (fgets(buffer.data(), buffer.size(), pipe_err) != nullptr) {
@@ -36,13 +35,27 @@ namespace phntm {
                 if (!res.empty()) {
                     log("     " + res, true);
                 }
-                err = true;
             }
             fclose(pipe_err);
             std::filesystem::remove(err_out);
         }
 
-        return err ? false : true;
+        // did it exit normally?
+        if (WIFEXITED(status)) {
+            int exitCode = WEXITSTATUS(status);
+            if (exitCode != 0) {
+                log("Command '" + cmd + "' exited with code " + std::to_string(exitCode), true);
+                return false;
+            }
+            return true; // success
+        }
+        // was it killed by a signal?
+        if (WIFSIGNALED(status)) {
+            int sig = WTERMSIG(status);
+            log("Command '" + cmd + "' killed by signal " + std::to_string(sig), true);
+            return false;
+        }
+        return false; // err
     }
 
     bool checkPackage(std::string extra_pkg) {
