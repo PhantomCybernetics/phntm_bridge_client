@@ -55,7 +55,9 @@ namespace phntm {
             log("Command '" + cmd + "' killed by signal " + std::to_string(sig), true);
             return false;
         }
-        return false; // err
+
+        log("Command '" + cmd + "' did not terminate normally", true);
+        return false;
     }
 
     bool checkPackage(std::string extra_pkg) {
