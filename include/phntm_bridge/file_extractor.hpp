@@ -24,7 +24,7 @@ namespace phntm {
             static std::mutex uploaded_chunks_mutex;
         
         private:
-            static void markChunkResult(std::string file_path, int chunk_number, bool success);
+            static void markChunkResult(std::string file_path, const int chunk_number, bool success);
     };
 
 }
