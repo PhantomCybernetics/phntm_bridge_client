@@ -51,21 +51,29 @@ namespace phntm {
 
             struct NodePubTopic  {
                 std::string msg_type;
+                std::vector<rclcpp::QoS> qos; // there can be multiple pubs to the same topic on one node
+            };
+
+            struct SubQoS {
                 rclcpp::QoS qos;
+                std::string error; // errors from QoS compatibility check
+                std::string warning;
             };
 
             struct NodeSubTopic  {
                 std::string msg_type;
-                rclcpp::QoS qos;
-                std::string qos_error;
-                std::string qos_warning;
+                std::vector<SubQoS> qos; // there can be multiple subs to the same topic on one node
             };
 
             struct DiscoveredNode {
                 std::string ns; //namespace
-                std::map<std::string, NodePubTopic> publishers; // topic => NodeTopic
-                std::map<std::string, NodeSubTopic> subscribers; // topic => NodeTopic
+                std::map<std::string, NodePubTopic> publishers; // topic => NodePubTopic
+                std::map<std::string, NodeSubTopic> subscribers; // topic => NodeSubTopic
                 std::map<std::string, std::string> services; // service => msg_type
+
+                std::map<std::string, NodePubTopic> tmp_publishers; // topic => NodePubTopic; 1st pass
+                std::map<std::string, NodeSubTopic> tmp_subscribers; // topic => NodeSubTopic; 1st pass
+                bool needs_subscribers_qos_check;
             };
 
             std::map<std::string, DiscoveredNode> discovered_nodes; // node id => node
@@ -75,7 +83,7 @@ namespace phntm {
             bool collectIDLs(std::string msg_type);
             std::map<std::string, std::string> discovered_idls; // type => def
             
-            void checkSubscriberQos();
+            void checkSubscriberQos(std::string id_subscriber, DiscoveredNode *subscriber_node);
     };
 
 }

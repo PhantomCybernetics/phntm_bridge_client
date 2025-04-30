@@ -2,6 +2,7 @@
 #include "phntm_bridge/topic_reader_data.hpp"
 #include "phntm_bridge/wrtc_peer.hpp"
 #include "rtc/peerconnection.hpp"
+#include <stdexcept>
 #include <string>
 
 namespace phntm {
@@ -131,7 +132,7 @@ namespace phntm {
                 if (!output->dc->send(this->latest_payload.data(), this->latest_payload_size)) {
                     if (!output->logged_error) {
                         output->logged_error = true;
-                        log(RED + "Sending " + this->topic + " into DC #" + std::to_string(output->dc->id().value()) + " failed" + CLR);
+                        RCLCPP_ERROR(this->bridge_node->get_logger(), "Sending %s into DC #%i failed", this->topic.c_str(), output->dc->id().value());
                     }
                 } else {
                     output->num_sent++;
@@ -145,7 +146,12 @@ namespace phntm {
             } catch(const std::runtime_error & ex) {
                 if (!output->logged_exception) {
                     output->logged_exception = true;
-                    log(RED + "Error sending " + this->topic + " into DC #" + std::to_string(output->dc->id().value()) + "" + CLR);
+                    RCLCPP_ERROR(this->bridge_node->get_logger(), "Error sending %s into DC #%i: %s", this->topic.c_str(), output->dc->id().value(), ex.what());
+                }
+            } catch(const std::invalid_argument & ex) {
+                if (!output->logged_exception) {
+                    output->logged_exception = true;
+                    RCLCPP_ERROR(this->bridge_node->get_logger(), "Error sending %s into DC #%i: %s", this->topic.c_str(), output->dc->id().value(), ex.what());
                 }
             }
         }

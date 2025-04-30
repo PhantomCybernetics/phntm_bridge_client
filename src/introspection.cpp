@@ -88,11 +88,11 @@ namespace phntm {
         bool services_changed = false;
 
         // fresh nodes
-        auto nodes = this->node->get_node_names();
+        auto observed_nodes = this->node->get_node_names();
 
         // split namespace from node name
         std::map<std::string, std::string> nodes_and_namespaces;
-        for (auto n : nodes) {
+        for (auto n : observed_nodes) {
             size_t pos = n.rfind('/');
             std::string ns, node;
             if (pos != std::string::npos) {
@@ -132,14 +132,19 @@ namespace phntm {
                 this->discovered_nodes.emplace(n.first, node);
                 nodes_changed = true;
             }
+
+            // reset
+            this->discovered_nodes[n.first].tmp_publishers.clear();
+            this->discovered_nodes[n.first].tmp_subscribers.clear();
+            this->discovered_nodes[n.first].needs_subscribers_qos_check = false;
         }
 
         // fresh topics
-        auto topics_and_types = this->node->get_topic_names_and_types();
+        auto observed_topics_and_types = this->node->get_topic_names_and_types();
 
         // remove no longer observed topics
         for (auto it = this->discovered_topics.begin(); it != this->discovered_topics.end();) {
-            if (topics_and_types.find(it->first) == topics_and_types.end()) {
+            if (observed_topics_and_types.find(it->first) == observed_topics_and_types.end()) {
                 log(GRAY + "Lost topic " + it->first + CLR);
                 it = this->discovered_topics.erase(it);
                 topics_changed = true;
@@ -149,10 +154,13 @@ namespace phntm {
         }
 
         // add newly found topics
-        for (auto topic : topics_and_types) {
+        for (auto topic : observed_topics_and_types) {
 
             if (std::find(this->config->blacklist_topics.begin(), this->config->blacklist_topics.end(), topic.first) != this->config->blacklist_topics.end()) {
                 continue; // topic blacklisted
+            }
+            if (std::find(this->config->blacklist_topics.begin(), this->config->blacklist_topics.end(), topic.second[0]) != this->config->blacklist_topics.end()) {
+                continue; // topic type blacklisted
             }
 
             // add new topic
@@ -163,107 +171,151 @@ namespace phntm {
                 idls_changed = this->collectIDLs(topic.second[0]) || idls_changed;
             }
 
-            // publishers
-            auto topic_publishers_info = node->get_publishers_info_by_topic(topic.first);
-            for (auto pub : topic_publishers_info) {
+            // topic publishers to nodes
+            auto observed_topic_publishers = node->get_publishers_info_by_topic(topic.first);
+            for (auto pub : observed_topic_publishers) {
                 if (this->discovered_nodes.find(pub.node_name()) == this->discovered_nodes.end()) {
                     log(RED + "Publisher node " + pub.node_name() + " not found for " + topic.first + CLR);
                     continue;
                 }
 
-                auto node_publishers = &this->discovered_nodes.at(pub.node_name()).publishers;
-                if (node_publishers->find(topic.first) == node_publishers->end()) {
-                    NodePubTopic info = { topic.second[0], pub.qos_profile() };
-                    node_publishers->emplace(topic.first, info);
-                    nodes_changed = true;
-                    log("  " + pub.node_name() + GREEN + " >> " + CLR + topic.first + GRAY + " [" + topic.second[0] + "]" + CLR);
-                } else { //check qos & type
-                    if (node_publishers->at(topic.first).msg_type != topic.second[0]) {
-                        node_publishers->at(topic.first).msg_type = topic.second[0];
-                        nodes_changed = true;
-                    }
-                    if (node_publishers->at(topic.first).qos != pub.qos_profile()) {
-                        node_publishers->at(topic.first).qos = pub.qos_profile();
-                        nodes_changed = true;
-                    }
+                auto node_tmp_publishers = &this->discovered_nodes.at(pub.node_name()).tmp_publishers;
+                if (node_tmp_publishers->find(topic.first) == node_tmp_publishers->end()) {
+
+                    std::vector<rclcpp::QoS> qos_list;
+                    qos_list.push_back(pub.qos_profile());
+                    NodePubTopic info = { topic.second[0], qos_list };
+                    node_tmp_publishers->emplace(topic.first, info);
+
+                } else { // another publisher to the same topic on this node
+                    node_tmp_publishers->at(topic.first).qos.push_back(pub.qos_profile());
                 }
             }
 
-            // remove unused publishers
-            for (auto & node : this->discovered_nodes) {
-                auto node_name = node.first;
-                for (auto it = node.second.publishers.begin(); it != node.second.publishers.end(); ) {
-                    if (it->first == topic.first) {
-                        auto found = false;
-                        for (auto new_pub : topic_publishers_info) {
-                            if (new_pub.node_name() == node_name) {
-                                found =  true;
-                                break;
-                            }
-                        }
-                        if (!found) {
-                            log(GRAY + "Lost publisher " + node_name + " > " + topic.first + CLR);
-                            it = node.second.publishers.erase(it);
-                            nodes_changed = true;
-                        } else {
-                            ++it;
-                        }
-                    } else {
-                        ++it;
-                    }
-                }
-            }
-
-            // subscribers
-            auto topic_subscribers_info = node->get_subscriptions_info_by_topic(topic.first);
-            for (auto sub : topic_subscribers_info) {
+            // topic subscribers to nodes
+            auto observed_topic_subscribers = node->get_subscriptions_info_by_topic(topic.first);
+            for (auto sub : observed_topic_subscribers) {
                 if (this->discovered_nodes.find(sub.node_name()) == this->discovered_nodes.end()) {
                     log(RED + "Subscriber node " + sub.node_name() + " not found for " + topic.first + CLR);
                     continue;
                 }
 
-                auto node_subscribers = &this->discovered_nodes.at(sub.node_name()).subscribers;
-                if (node_subscribers->find(topic.first) == node_subscribers->end()) {
-                    NodeSubTopic info = { topic.second[0], sub.qos_profile(), "", "" };
-                    node_subscribers->emplace(topic.first, info);
-                    nodes_changed = true;
-                    log("  " + sub.node_name() + YELLOW + " << " + CLR + topic.first + GRAY + " [" + topic.second[0] + "]" + CLR);
-                } else { //check qos & type
-                    if (node_subscribers->at(topic.first).msg_type != topic.second[0]) {
-                        node_subscribers->at(topic.first).msg_type = topic.second[0];
-                        nodes_changed = true;
-                    }
-                    if (node_subscribers->at(topic.first).qos != sub.qos_profile()) {
-                        node_subscribers->at(topic.first).qos = sub.qos_profile();
-                        nodes_changed = true;
+                auto node_tmp_subscribers = &this->discovered_nodes.at(sub.node_name()).tmp_subscribers;
+                if (node_tmp_subscribers->find(topic.first) == node_tmp_subscribers->end()) {
+                    std::vector<SubQoS> qos_list;
+                    SubQoS qos = { sub.qos_profile(), "", "" };
+                    qos_list.push_back(qos);
+                    NodeSubTopic info = { topic.second[0], qos_list};
+                    node_tmp_subscribers->emplace(topic.first, info);
+                    
+                } else {  // another subscriber to the same topic on this node
+                    SubQoS qos = { sub.qos_profile(), "", "" };
+                    node_tmp_subscribers->at(topic.first).qos.push_back(qos);
+                }
+            }
+        }
+
+        // check nodes for pub/sub changes
+        for (auto &n : this->discovered_nodes) {
+
+            auto pubs_changed = false;
+            auto subs_changed = false;
+            auto node_name = n.first;
+
+            // check new pubs
+            for (auto pub : n.second.tmp_publishers) {
+                auto pub_topic = pub.first;
+                if (n.second.publishers.find(pub_topic) == n.second.publishers.end()) {
+                    pubs_changed = true;
+                    log("  " + node_name + GREEN + " >> " + CLR + pub_topic + GRAY + " {" + pub.second.msg_type + "}" + CLR);
+                }
+            }
+
+            // check existing pubs
+            for (auto pub : n.second.publishers) {
+                auto pub_topic = pub.first;
+                if (n.second.tmp_publishers.find(pub_topic) == n.second.tmp_publishers.end()) {
+                    pubs_changed = true;
+                    log(GRAY + node_name + "Stopped publishing >> " + pub_topic + CLR);
+                } else { // publister existed
+                    auto tmp = n.second.tmp_publishers[pub_topic];
+                    auto old = pub.second;
+                    if (tmp.msg_type != old.msg_type) {
+                        pubs_changed = true;
+                        log("Message type changed for " + node_name + GREEN + " >> " + CLR + pub_topic + GRAY + " {" + old.msg_type + "} > {" + tmp.msg_type + "}" + CLR);
+                    } else if (tmp.qos.size() != old.qos.size()) {
+                        pubs_changed = true;
+                        log("Changed number of publishers " + node_name + GREEN + " >> " + CLR + pub_topic + GRAY + " {" + tmp.msg_type + "}"+ (tmp.qos.size() > 1 ? "[" + std::to_string(tmp.qos.size()) + "]" : "") + CLR);
+                    } else {
+                        for (size_t i = 0; i < tmp.qos.size(); i++) {
+                            if (tmp.qos[i] != old.qos[i]) {
+                                pubs_changed = true;
+                                log("Changed publisger QoS "+(tmp.qos.size() > 1 ? std::to_string(i)+"/"+std::to_string(tmp.qos.size()) : "")+" of " + node_name + GREEN + " >> " + CLR + pub_topic + GRAY + " {" + tmp.msg_type + "}" + CLR);
+                            }
+                        }
                     }
                 }
             }
 
-            // remove unused subscribers
-            for (auto & node : this->discovered_nodes) {
-                auto node_name = node.first;
-                for (auto it = node.second.subscribers.begin(); it != node.second.subscribers.end(); ) {
-                    if (it->first == topic.first) {
-                        auto found = false;
-                        for (auto new_sub : topic_subscribers_info) {
-                            if (new_sub.node_name() == node_name) {
-                                found =  true;
-                                break;
+            // check new subs
+            for (auto sub : n.second.tmp_subscribers) {
+                auto sub_topic = sub.first;
+                if (n.second.subscribers.find(sub_topic) == n.second.subscribers.end()) {
+                    subs_changed = true;
+                    log("  " + node_name  + YELLOW + " << " + CLR + sub_topic + GRAY + " {" + sub.second.msg_type + "}" + CLR);
+                }
+            }
+
+            // check existing subs
+            for (auto sub : n.second.subscribers) {
+                auto sub_topic = sub.first;
+                if (n.second.tmp_subscribers.find(sub_topic) == n.second.tmp_subscribers.end()) {
+                    subs_changed = true;
+                    log(GRAY + "Lost subscriber " + node_name + " << " + sub_topic + CLR);
+                } else { // subscriber existed
+                    auto tmp = n.second.tmp_subscribers[sub_topic];
+                    auto old = sub.second;
+                    if (tmp.msg_type != old.msg_type) {
+                        subs_changed = true;
+                        log("Message type changed for " + node_name + GREEN + " << " + CLR + sub_topic + GRAY + " {" + old.msg_type + "} > {" + tmp.msg_type + "}" + CLR);
+                    } else if (tmp.qos.size() != old.qos.size()) {
+                        subs_changed = true;
+                        log("Changed number of subscribers " + node_name + GREEN + " << " + CLR + sub_topic + GRAY + " {" + tmp.msg_type + "}" + (tmp.qos.size() > 1 ? "[" + std::to_string(tmp.qos.size()) + "]" : "") + CLR);
+                    } else {
+                        for (size_t i = 0; i < tmp.qos.size(); i++) {
+                            if (tmp.qos[i].qos != old.qos[i].qos) {
+                                subs_changed = true;
+                                log("Changed subscriber QoS "+(tmp.qos.size() > 1 ? std::to_string(i)+"/"+std::to_string(tmp.qos.size()) : "")+" of " + node_name + GREEN + " << " + CLR + sub_topic + GRAY + " {" + tmp.msg_type + "}" + CLR);
+                            } else {
+                                tmp.qos[i].error = old.qos[i].error; // copy on no change
+                                tmp.qos[i].warning = old.qos[i].warning;
                             }
                         }
-                        if (!found) {
-                            log(GRAY + "Lost subscriber " + node_name + " < " + topic.first + CLR);
-                            it = node.second.subscribers.erase(it);
-                            nodes_changed = true;
-                        } else {
-                            ++it;
-                        }
-                    } else {
-                        ++it;
                     }
                 }
             }
+
+            n.second.publishers.clear();
+            for (auto pub : n.second.tmp_publishers)
+                n.second.publishers.emplace(pub.first, pub.second);
+            n.second.subscribers.clear();
+            for (auto sub : n.second.tmp_subscribers)
+                n.second.subscribers.emplace(sub.first, sub.second);
+
+            if (subs_changed)
+                n.second.needs_subscribers_qos_check = true; // check when all other nodes have publishers updated
+
+            if (subs_changed || pubs_changed)
+                nodes_changed = true; // generateupdate
+        
+        }
+
+        // check nide subscriber QoS
+        for (auto &n : this->discovered_nodes) {
+            if (!n.second.needs_subscribers_qos_check)
+                continue;
+            this->checkSubscriberQos(n.first,&n.second);
+            n.second.needs_subscribers_qos_check = false;
         }
 
         // force adding Byte to IDLs as we use it on the client to send heartbeat (but don't produce into a topic so it might not get discovered)
@@ -273,11 +325,11 @@ namespace phntm {
         for (auto &n : this->discovered_nodes) {
 
             // fresh services
-            auto node_services = this->node->get_service_names_and_types_by_node(n.first, n.second.ns);
+            auto observed_node_services = this->node->get_service_names_and_types_by_node(n.first, n.second.ns);
 
-            for (auto s : node_services) {
+            for (auto s : observed_node_services) {
 
-                // fing agent nodes with file extraction service enabled
+                // fing agent nodes with file extraction service enabled (before blacklisting)
                 if (s.second[0] == "phntm_interfaces/srv/FileRequest") {
                     if (this->discovered_file_extractors.find(n.first) == this->discovered_file_extractors.end()) {
                         auto client = node->create_client<phntm_interfaces::srv::FileRequest>(s.first);
@@ -289,26 +341,26 @@ namespace phntm {
                 if (std::find(this->config->blacklist_services.begin(), this->config->blacklist_services.end(), s.first) != this->config->blacklist_services.end()) {
                     continue; // service blacklisted
                 }
+                if (std::find(this->config->blacklist_services.begin(), this->config->blacklist_services.end(), s.second[0]) != this->config->blacklist_services.end()) {
+                    continue; // service type blacklisted
+                }
 
                 if (n.second.services.find(s.first) == n.second.services.end()) { // new service
                     n.second.services.emplace(s.first, s.second[0]);
                     services_changed = true;
                     idls_changed = this->collectIDLs(s.second[0]) || idls_changed;
-                    log("Discovered srv " + n.first + ": " + GREEN + s.first + CLR + GRAY + " [" + s.second[0] + "]" + CLR);
+                    log("Discovered srv " + n.first + ": " + GREEN + s.first + CLR + GRAY + " {" + s.second[0] + "}" + CLR);
                 } else if (n.second.services.at(s.first) != s.second[0]) {
                     n.second.services[s.first] = s.second[0];
                     services_changed = true;
                     idls_changed = this->collectIDLs(s.second[0]) || idls_changed;
+                    log("Message type changed for srv " + n.first + ": " + GREEN + s.first + CLR + GRAY + " {" + s.second[0] + "}" + CLR);
                 }
             }
         }
 
         if (idls_changed) {
             this->reportIDLs(); // report defs before others
-        }
-
-        if (nodes_changed || topics_changed) {
-            this->checkSubscriberQos();
         }
 
         if (nodes_changed || topics_changed || services_changed) {
@@ -329,31 +381,35 @@ namespace phntm {
         }    
     }
 
-    void Introspection::checkSubscriberQos() {
-        for (auto &n : this->discovered_nodes) {
-            for (auto &t : n.second.subscribers) {
-                for (auto &nn : this->discovered_nodes) {
-                    if (nn.second.publishers.find(t.first) == nn.second.publishers.end())
-                        continue;
-                    auto pub_qos = nn.second.publishers.at(t.first).qos;
-                    auto sub_qos = n.second.subscribers.at(t.first).qos;
+    void Introspection::checkSubscriberQos(std::string id_subscriber, DiscoveredNode *subscriber_node) {
+        for (auto &sub : subscriber_node->subscribers) {
+            auto sub_topic = sub.first;
 
-                    auto res = rclcpp::qos_check_compatible(pub_qos, sub_qos);
-                    switch (res.compatibility) {
-                        case rclcpp::QoSCompatibility::Error:
-                            n.second.subscribers.at(t.first).qos_warning = "";
-                            n.second.subscribers.at(t.first).qos_error = res.reason;
-                            log(RED + "Detected QoS compatilibility error for " + n.first + " << " + t.first + ": " + res.reason + CLR);
-                            break;
-                        case rclcpp::QoSCompatibility::Warning:
-                            n.second.subscribers.at(t.first).qos_warning = res.reason;
-                            n.second.subscribers.at(t.first).qos_error = "";
-                            log(RED + "Detected QoS compatilibility warnning for " + n.first + " << " + t.first + ": " + res.reason + CLR);
-                            break;
-                        default: //ok
-                            n.second.subscribers.at(t.first).qos_warning = "";
-                            n.second.subscribers.at(t.first).qos_error = "";
-                            break;
+            for (auto & sub_qos : sub.second.qos) {
+                sub_qos.error = ""; // reset
+                sub_qos.warning = "";
+
+                for (auto &pub_node : this->discovered_nodes) {
+                    if (pub_node.second.publishers.find(sub_topic) == pub_node.second.publishers.end())
+                        continue; // not publishing topic
+
+                    for (auto pub_qos : pub_node.second.publishers.at(sub_topic).qos) {
+                        auto res = rclcpp::qos_check_compatible(pub_qos, sub_qos.qos);
+
+                        switch (res.compatibility) {
+                            case rclcpp::QoSCompatibility::Error:
+                                sub_qos.warning = "";
+                                sub_qos.error = res.reason;
+                                log(RED + "Detected QoS compatilibility error for " + id_subscriber + " << " + sub_topic + ": " + res.reason + CLR);
+                                break;
+                            case rclcpp::QoSCompatibility::Warning:
+                                sub_qos.warning = res.reason;
+                                sub_qos.error = "";
+                                log(RED + "Detected QoS compatilibility warnning for " + id_subscriber + " << " + sub_topic + ": " + res.reason + CLR);
+                                break;
+                            default: // ignore (last error or warning will be reported)
+                                break;
+                        }
                     }
                 }
             }
@@ -549,7 +605,11 @@ namespace phntm {
             for (auto &pub : n.second.publishers) {
                 auto t_msg = sio::object_message::create();
                 t_msg->get_map().emplace("msg_type", sio::string_message::create(pub.second.msg_type));
-                t_msg->get_map().emplace("qos", createQoSMessage(pub.second.qos));
+                auto qos_list = sio::array_message::create(); //allowing multiple pubs to one topic from the same node
+                for (auto qos : pub.second.qos) {
+                    qos_list->get_vector().push_back(createQoSMessage(qos));
+                }
+                t_msg->get_map().emplace("qos", qos_list);
                 n_pub_msg->get_map().emplace(pub.first, t_msg);
             }
             n_msg->get_map().emplace("publishers", n_pub_msg);
@@ -558,11 +618,17 @@ namespace phntm {
             for (auto &sub : n.second.subscribers) {
                 auto t_msg = sio::object_message::create();
                 t_msg->get_map().emplace("msg_type", sio::string_message::create(sub.second.msg_type));
-                t_msg->get_map().emplace("qos", createQoSMessage(sub.second.qos));
-                if (!sub.second.qos_error.empty())
-                    t_msg->get_map().emplace("qos_error", sio::string_message::create(sub.second.qos_error));
-                if (!sub.second.qos_warning.empty())
-                    t_msg->get_map().emplace("qos_warning", sio::string_message::create(sub.second.qos_warning));
+                auto qos_list = sio::array_message::create(); //allowing multiple subs to one topic from the same node
+                for (auto qos : sub.second.qos) {
+                    auto q_msg = sio::object_message::create();
+                    q_msg->get_map().emplace("qos", createQoSMessage(qos.qos));
+                    if (!qos.error.empty())
+                        q_msg->get_map().emplace("error", sio::string_message::create(qos.error));
+                    if (!qos.warning.empty())
+                        q_msg->get_map().emplace("warning", sio::string_message::create(qos.warning));
+                    qos_list->get_vector().push_back(q_msg);
+                }           
+                t_msg->get_map().emplace("qos", qos_list);
                 n_sub_msg->get_map().emplace(sub.first, t_msg);
             }
             n_msg->get_map().emplace("subscribers", n_sub_msg);

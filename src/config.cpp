@@ -170,7 +170,7 @@ namespace phntm {
         std::vector<std::string> default_blacklisted_services { "sensor_msgs/PointCloud", "sensor_msgs/msg/PointCloud2", "cost_map_msgs/CostMap", "nav_msgs/msg/OccupancyGrid" };
         this->declare_parameter("blacklist_msg_types", default_blacklisted_services);
         config->blacklist_msg_types = this->get_parameter("blacklist_msg_types").as_string_array();
-        if (config->blacklist_services.size()) {
+        if (config->blacklist_msg_types.size()) {
             log("Blacklisted message types:");
             for (size_t i = 0; i < config->blacklist_msg_types.size(); ++i) {
                 log("\t" + config->blacklist_msg_types[i]);
