@@ -1,4 +1,5 @@
 #include "phntm_bridge/phntm_bridge.hpp"
+#include "phntm_bridge/status_leds.hpp"
 #include "phntm_bridge/topic_reader_data.hpp"
 #include "phntm_bridge/wrtc_peer.hpp"
 #include "rtc/peerconnection.hpp"
@@ -112,6 +113,7 @@ namespace phntm {
             this->logged_receiving = true;
         }
 
+        auto msg_sent = false;
         std::lock_guard<std::mutex> lock(this->outputs_mutex);
         for (auto output : this->outputs) {
             if (!output->dc->isOpen()) {
@@ -136,6 +138,7 @@ namespace phntm {
                     }
                 } else {
                     output->num_sent++;
+                    msg_sent = true; // flash LED
 
                     // reset
                     output->logged_closed = false;
@@ -155,6 +158,9 @@ namespace phntm {
                 }
             }
         }
+
+        if (msg_sent)
+            DataLED::once();
     }
 
     void TopicReaderData::sendLatestData(std::shared_ptr<Output> output) {

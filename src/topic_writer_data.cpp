@@ -1,6 +1,7 @@
 #include "phntm_bridge/phntm_bridge.hpp"
 #include "phntm_bridge/topic_writer_data.hpp"
 #include "phntm_bridge/wrtc_peer.hpp"
+#include "phntm_bridge/status_leds.hpp"
 #include "rtc/peerconnection.hpp"
 #include <string>
 
@@ -120,8 +121,10 @@ namespace phntm {
         std::memcpy(serialized_msg.get_rcl_serialized_message().buffer, bin.data(), bin.size());
         serialized_msg.get_rcl_serialized_message().buffer_length = bin.size(); // Important!
 
-        if (tw->pub)
+        if (tw->pub) {
             tw->pub->publish(serialized_msg);
+            DataLED::once();   
+        }
 
         return true; // handled
     }
