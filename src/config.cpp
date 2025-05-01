@@ -133,21 +133,46 @@ namespace phntm {
         this->declare_parameter("sio_verbose", false); // prints received and sent messages
 
         // services collapsed in the ui menu (still operational, parameneter services by default)
+        std::vector<std::string> collapse_services_default = { "rcl_interfaces/srv/DescribeParameters", // we have UI for better access to parameteres
+                                                               "rcl_interfaces/srv/GetParameterTypes",
+                                                               "rcl_interfaces/srv/GetParameters",
+                                                               "rcl_interfaces/srv/ListParameters",
+                                                               "rcl_interfaces/srv/SetParameters",
+                                                               "rcl_interfaces/srv/SetParametersAtomically"
+                                                             };
+        this->declare_parameter("collapse_services_default", collapse_services_default);
+        config->collapse_services = this->get_parameter("collapse_services_default").as_string_array(); // system defaults
         rcl_interfaces::msg::ParameterDescriptor collapse_services_descriptor;
         collapse_services_descriptor.description = "The UI will collapse these services";
         collapse_services_descriptor.additional_constraints="Service id or type";
-        std::vector<std::string> default_collapsed_services {"rcl_interfaces/srv/DescribeParameters", "rcl_interfaces/srv/GetParameterTypes", "rcl_interfaces/srv/GetParameters", "rcl_interfaces/srv/ListParameters", "rcl_interfaces/srv/SetParameters", "rcl_interfaces/srv/SetParametersAtomically" };
-        this->declare_parameter("collapse_services", default_collapsed_services, collapse_services_descriptor);
-        config->collapse_services = this->get_parameter("collapse_services").as_string_array();
+        this->declare_parameter("collapse_services", std::vector<std::string>(), collapse_services_descriptor); // custom - will be added to defauls
+        auto collapse_services_val = this->get_parameter("collapse_services").as_string_array();
+        for (auto srv : collapse_services_val) {
+            if (std::find(config->collapse_services.begin(), config->collapse_services.end(), srv) == config->collapse_services.end()) {
+                config->collapse_services.push_back(srv);
+            }
+        }
 
+        // UI will collapse services we can't handle
         rcl_interfaces::msg::ParameterDescriptor collape_unhandled_services_descriptor;
         collape_unhandled_services_descriptor.description = "The UI will collapse services with unsupported message types";
         this->declare_parameter("collapse_unhandled_services", true, collape_unhandled_services_descriptor);
         config->collapse_unhandled_services = this->get_parameter("collapse_unhandled_services").as_bool();
 
         // blacklist topics from discovery (msg type or full topic id)
-        this->declare_parameter("blacklist_topics", std::vector<std::string>());
-        config->blacklist_topics = this->get_parameter("blacklist_topics").as_string_array();
+        std::vector<std::string> blacklist_topics_default { }; // no system defaults here
+        this->declare_parameter("blacklist_topics_default", blacklist_topics_default); 
+        config->blacklist_topics = this->get_parameter("blacklist_topics_default").as_string_array(); // system default
+        rcl_interfaces::msg::ParameterDescriptor blacklist_topics_descriptor;
+        blacklist_topics_descriptor.description = "Blacklist topics from discovery";
+        blacklist_topics_descriptor.additional_constraints="Topic id or type";
+        this->declare_parameter("blacklist_topics", std::vector<std::string>(), blacklist_topics_descriptor);
+        auto blacklist_topics_val = this->get_parameter("blacklist_topics").as_string_array();
+        for (auto t : blacklist_topics_val) {
+            if (std::find(config->blacklist_topics.begin(), config->blacklist_topics.end(), t) == config->blacklist_services.end()) {
+                config->blacklist_topics.push_back(t);
+            }
+        }
         if (config->blacklist_topics.size()) {
             log("Blacklisted topics:");
             for (size_t i = 0; i < config->blacklist_topics.size(); ++i) {
@@ -155,9 +180,20 @@ namespace phntm {
             }
         }
         
-        // blacklist services from discovery (msg type or full topic id)
-        this->declare_parameter("blacklist_services", std::vector<std::string>());
-        config->blacklist_services = this->get_parameter("blacklist_services").as_string_array();
+        // blacklist services from discovery (msg type or full service id)
+        std::vector<std::string> blacklist_services_default { "phntm_interfaces/srv/FileRequest" }; // FileRequest srv only intended for internal use between Bridge and Agents
+        this->declare_parameter("blacklist_services_default", blacklist_services_default);
+        config->blacklist_services = this->get_parameter("blacklist_services_default").as_string_array(); // system defaults
+        rcl_interfaces::msg::ParameterDescriptor blacklist_services_descriptor;
+        blacklist_services_descriptor.description = "Blacklist services from discovery";
+        blacklist_services_descriptor.additional_constraints="Service id or type";
+        this->declare_parameter("blacklist_services", std::vector<std::string>(), blacklist_services_descriptor);
+        auto blacklist_services_val = this->get_parameter("blacklist_services").as_string_array();
+        for (auto srv : blacklist_services_val) {
+            if (std::find(config->blacklist_services.begin(), config->blacklist_services.end(), srv) == config->blacklist_services.end()) {
+                config->blacklist_services.push_back(srv);
+            }
+        }
         if (config->blacklist_services.size()) {
             log("Blacklisted services:");
             for (size_t i = 0; i < config->blacklist_services.size(); ++i) {
@@ -166,10 +202,24 @@ namespace phntm {
         }
 
         // blacklist msg types (topics/services are discovered but not deserialized or serialized)
-        // pointcloud and costmap are here until fully suported (until then break browsers with too much unoptimized data)
-        std::vector<std::string> default_blacklisted_services { "sensor_msgs/PointCloud", "sensor_msgs/msg/PointCloud2", "cost_map_msgs/CostMap", "nav_msgs/msg/OccupancyGrid" };
-        this->declare_parameter("blacklist_msg_types", default_blacklisted_services);
-        config->blacklist_msg_types = this->get_parameter("blacklist_msg_types").as_string_array();
+        std::vector<std::string> blacklist_msg_types_default { "sensor_msgs/PointCloud", // pointclouds need compression before streaming, not supported yet
+                                                                "sensor_msgs/msg/PointCloud2",
+                                                                "cost_map_msgs/CostMap", // cost map needs compression before streaming, not supported yet
+                                                                "nav_msgs/msg/OccupancyGrid",
+                                                                "phntm_interfaces/msg/FileChunk" // only intended for internal use between Bridge and Agents
+                                                              };
+        this->declare_parameter("blacklist_msg_types_default", blacklist_msg_types_default);
+        config->blacklist_msg_types = this->get_parameter("blacklist_msg_types_default").as_string_array(); // system defaults;
+        rcl_interfaces::msg::ParameterDescriptor blacklist_msg_types_descriptor;
+        blacklist_msg_types_descriptor.description = "Blacklist message types discovery";
+        blacklist_msg_types_descriptor.additional_constraints="Topic or service type";
+        this->declare_parameter("blacklist_msg_types", std::vector<std::string>(), blacklist_msg_types_descriptor);
+        auto blacklist_msg_types_val = this->get_parameter("blacklist_msg_types").as_string_array();
+        for (auto msg_type : blacklist_msg_types_val) {
+            if (std::find(config->blacklist_msg_types.begin(), config->blacklist_msg_types.end(), msg_type) == config->blacklist_services.end()) {
+                config->blacklist_msg_types.push_back(msg_type);
+            }
+        }
         if (config->blacklist_msg_types.size()) {
             log("Blacklisted message types:");
             for (size_t i = 0; i < config->blacklist_msg_types.size(); ++i) {
