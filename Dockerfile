@@ -95,14 +95,32 @@ WORKDIR $ROS_WS
 # allow to read git repo sha/tag without warnings
 RUN git config --system --add safe.directory '*'
 
-# clone and install phntm interfaces
+# clone and install Phntm Interfaces
 RUN git clone https://github.com/PhantomCybernetics/phntm_interfaces.git /ros2_ws/src/phntm_interfaces
 RUN . /opt/ros/$ROS_DISTRO/setup.sh && \
     rosdep update --rosdistro $ROS_DISTRO && \
     rosdep install -i --from-path src/phntm_interfaces --rosdistro $ROS_DISTRO -y && \
     colcon build --symlink-install --packages-select phntm_interfaces
 
-# install phntm bridge and agent
+# install Agent deps
+RUN apt-get install -y pkg-config
+RUN pip install termcolor \
+                PyEventEmitter
+                # docker ctrl
+RUN pip install docker
+RUN apt-get install -y iw wireless-tools libiw-dev
+RUN pip install iwlib
+RUN apt-get install -y wpasupplicant
+
+# clone and install Phntm Agent
+RUN git clone https://github.com/PhantomCybernetics/phntm_agent.git /ros2_ws/src/phntm_agent
+RUN . /opt/ros/$ROS_DISTRO/setup.sh && \
+    . /ros2_ws/install/setup.sh && \
+    rosdep update --rosdistro $ROS_DISTRO && \
+    rosdep install -i --from-path src/phntm_agent --rosdistro $ROS_DISTRO -y && \
+    colcon build --symlink-install --packages-select phntm_agent
+
+# install Phntm Bridge
 COPY ./ $ROS_WS/src/phntm_bridge
 RUN . /opt/ros/$ROS_DISTRO/setup.sh && \
     . /ros2_ws/install/setup.sh && \

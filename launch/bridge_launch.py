@@ -15,7 +15,8 @@ def generate_launch_description():
         Node(
             package='phntm_bridge',
             executable='phntm_bridge',
-            prefix=['gdbserver localhost:3000'],
+            # prefix=['gdbserver localhost:3000'],
+            emulate_tty=True,
             output='screen',
             parameters=[config],
         )
