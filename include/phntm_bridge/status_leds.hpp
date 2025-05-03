@@ -6,6 +6,7 @@
 #include <thread>
 #include <chrono>
 
+#include "phntm_bridge/phntm_bridge.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/bool.hpp"
 
@@ -63,7 +64,7 @@ namespace phntm {
     class StatusLEDs {
 
         public:
-            static void init(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<BridgeConfig> config);
+            static void init(std::shared_ptr<PhntmBridge> node, std::shared_ptr<BridgeConfig> config);
             static void clear();
             static StatusLEDs * getInstance() { return instance; }
             std::shared_ptr<StatusLED> conn;

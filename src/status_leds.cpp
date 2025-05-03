@@ -117,7 +117,7 @@ namespace phntm {
 
     StatusLEDs* StatusLEDs::instance = nullptr;
 
-    void StatusLEDs::init(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<BridgeConfig> config) {
+    void StatusLEDs::init(std::shared_ptr<PhntmBridge> node, std::shared_ptr<BridgeConfig> config) {
 
         if (instance == nullptr) {
             instance = new StatusLEDs();
@@ -155,14 +155,15 @@ namespace phntm {
             }
         } else if (!config->conn_led_topic.empty() || !config->data_led_topic.empty()) {
 
-            rclcpp::QoS qos(1);
             if (!config->conn_led_topic.empty()) {
+                rclcpp::QoS qos = node->loadTopicQoSConfig(config->conn_led_topic);
                 log("Connection LED uses topic " + config->conn_led_topic);
                 auto publisher = node->create_publisher<std_msgs::msg::Bool>(config->conn_led_topic, qos);
                 instance->conn = std::make_shared<StatusLED>(publisher);
                 instance->leds.push_back(instance->conn);
             }
             if (!config->data_led_topic.empty()) {
+                rclcpp::QoS qos = node->loadTopicQoSConfig(config->data_led_topic);
                 log("Data LED uses topic " + config->data_led_topic);
                 auto publisher = node->create_publisher<std_msgs::msg::Bool>(config->data_led_topic, qos);
                 instance->data = std::make_shared<StatusLED>(publisher);

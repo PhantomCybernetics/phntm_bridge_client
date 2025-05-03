@@ -385,17 +385,17 @@ namespace phntm {
         config->file_chunks_topic = this->get_parameter("file_chunks_topic").as_string();
     }
 
-    rclcpp::QoS PhntmBridge::loadTopicQoSConfig(std::string topic) {
-        rclcpp::QoS qos(rclcpp::KeepLast(1)); // keep last 1
+    rclcpp::QoS PhntmBridge::loadTopicQoSConfig(std::string topic, size_t default_depth, int default_reliability, int default_durability, float default_lifespan_sec) {
+        rclcpp::QoS qos(default_depth); // keep last 1
         
         try {
-            this->declare_parameter(topic + ".reliability", 2); // 0 = system default, 1 = reliable, 2 = best effort
+            this->declare_parameter(topic + ".reliability", default_reliability); // 0 = system default, 1 = reliable, 2 = best effort (default)
         } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         try {
-            this->declare_parameter(topic + ".durability", 2); // 0 = system default, 1 = transient local, 2 = volatile
+            this->declare_parameter(topic + ".durability", default_durability); // 0 = system default, 1 = transient local, 2 = volatile (default)
         } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         try {
-            this->declare_parameter(topic + ".lifespan_sec", -1.0f); // num sec as double, -1.0 infinity
+            this->declare_parameter(topic + ".lifespan_sec", default_lifespan_sec); // num sec as double, -1.0 infinity (default)
         } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
 
         qos.reliability((rclcpp::ReliabilityPolicy) this->get_parameter(topic + ".reliability").as_int());
