@@ -41,7 +41,6 @@ namespace phntm {
   PhntmBridge::~PhntmBridge() {
     this->clearServicesCache();
   }
-  
 }
 
 int main(int argc, char ** argv)

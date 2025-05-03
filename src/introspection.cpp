@@ -111,12 +111,10 @@ namespace phntm {
         for (auto it = this->discovered_nodes.begin(); it != this->discovered_nodes.end();) {
             if (nodes_and_namespaces.find(it->first) == nodes_and_namespaces.end()) {
                 log(GRAY + "Lost node " + it->first + CLR);
-                it = this->discovered_nodes.erase(it);
-
                 if (this->discovered_file_extractors.find(it->first) != this->discovered_file_extractors.end()) {
                     this->discovered_file_extractors.erase(it->first);
                 }
-
+                it = this->discovered_nodes.erase(it);
                 nodes_changed = true;
             } else {
                 ++it;
