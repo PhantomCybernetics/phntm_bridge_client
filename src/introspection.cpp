@@ -88,7 +88,14 @@ namespace phntm {
         bool services_changed = false;
 
         // fresh nodes
-        auto observed_nodes = this->node->get_node_names();
+        std::vector<std::string> observed_nodes;
+        try {
+            observed_nodes = this->node->get_node_names();
+        } catch (const std::runtime_error & ex) {
+            log(RED + "Failed to get fresh nodes, skipping  introslection..." + CLR);
+            this->introspection_in_progress = false;
+            return;
+        }
 
         // split namespace from node name
         std::map<std::string, std::string> nodes_and_namespaces;
@@ -138,8 +145,15 @@ namespace phntm {
         }
 
         // fresh topics
-        auto observed_topics_and_types = this->node->get_topic_names_and_types();
-
+        std::map<std::string, std::vector<std::string>> observed_topics_and_types;
+        try {
+            observed_topics_and_types = this->node->get_topic_names_and_types();
+        } catch (const std::runtime_error & ex) {
+            log(RED + "Failed to get fresh topics, skipping  introslection..." + CLR);
+            this->introspection_in_progress = false;
+            return;
+        }
+        
         // remove no longer observed topics
         for (auto it = this->discovered_topics.begin(); it != this->discovered_topics.end();) {
             if (observed_topics_and_types.find(it->first) == observed_topics_and_types.end()) {
@@ -170,7 +184,13 @@ namespace phntm {
             }
 
             // topic publishers to nodes
-            auto observed_topic_publishers = node->get_publishers_info_by_topic(topic.first);
+            std::vector<rclcpp::TopicEndpointInfo> observed_topic_publishers;
+            try {
+                observed_topic_publishers = node->get_publishers_info_by_topic(topic.first);
+            } catch (const std::runtime_error & ex) {
+                log(RED + "Failed getting publishers of " + topic.first + ", skipping..." + CLR);
+                continue;
+            }
             for (auto pub : observed_topic_publishers) {
                 if (this->discovered_nodes.find(pub.node_name()) == this->discovered_nodes.end()) {
                     log(RED + "Publisher node " + pub.node_name() + " not found for " + topic.first + CLR);
@@ -191,7 +211,13 @@ namespace phntm {
             }
 
             // topic subscribers to nodes
-            auto observed_topic_subscribers = node->get_subscriptions_info_by_topic(topic.first);
+            std::vector<rclcpp::TopicEndpointInfo> observed_topic_subscribers;
+            try {
+                observed_topic_subscribers = node->get_subscriptions_info_by_topic(topic.first);
+            } catch (const std::runtime_error & ex) {
+                log(RED + "Failed getting subscribers of " + topic.first + ", skipping..." + CLR);
+                continue;
+            }
             for (auto sub : observed_topic_subscribers) {
                 if (this->discovered_nodes.find(sub.node_name()) == this->discovered_nodes.end()) {
                     log(RED + "Subscriber node " + sub.node_name() + " not found for " + topic.first + CLR);
@@ -323,7 +349,13 @@ namespace phntm {
         for (auto &n : this->discovered_nodes) {
 
             // fresh services
-            auto observed_node_services = this->node->get_service_names_and_types_by_node(n.first, n.second.ns);
+            std::map<std::string, std::vector<std::string>> observed_node_services;
+            try {
+                observed_node_services = this->node->get_service_names_and_types_by_node(n.first, n.second.ns);
+            } catch (const std::runtime_error & ex) {
+                log(RED + "Failed getting services of " + n.first + ", skipping..." + CLR);
+                continue;
+            }
 
             for (auto s : observed_node_services) {
 
