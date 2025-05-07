@@ -126,7 +126,7 @@ namespace phntm {
         
         // socket.io config
         this->declare_parameter("sio_port", 1337);
-        this->declare_parameter("sio_path", "/robot/socket.io");
+        this->declare_parameter("sio_path", "/robot/socket.io/"); // needs to end with /
         this->declare_parameter("sio_connection_retry_sec", 2.0);
         this->declare_parameter("sio_ssl_verify", true);
         this->declare_parameter("sio_debug", false); // prints internal sio debug
