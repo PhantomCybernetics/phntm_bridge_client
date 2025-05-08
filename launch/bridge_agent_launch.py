@@ -13,7 +13,7 @@ def launch_setup(context, *args, **kwargs):
     bridge_config = os.path.join(
         '/ros2_ws/',
         'phntm_bridge_params.yaml'
-        )
+    )
 
     bridge_use_gdb_server = LaunchConfiguration("use_gdb_server", default="false")
     bridge_launch_prefix = ""
@@ -23,7 +23,6 @@ def launch_setup(context, *args, **kwargs):
     bridge_node = Node(
         package='phntm_bridge',
         executable='phntm_bridge',
-        name='phntm_bridge',
         prefix=[bridge_launch_prefix],
         output='screen',
         emulate_tty=True,
@@ -33,16 +32,15 @@ def launch_setup(context, *args, **kwargs):
     agent_config = os.path.join(
         '/ros2_ws/',
         'phntm_agent_params.yaml'
-        )
+    )
     
     agent_node = Node(
-            package='phntm_agent',
-            executable='agent',
-            name='phntm_agent',
-            output='screen',
-            emulate_tty=True,
-            parameters=[agent_config]
-        )
+        package='phntm_agent',
+        executable='agent',
+        output='screen',
+        emulate_tty=True,
+        parameters=[agent_config]
+    )
     
     return [
         bridge_node,
