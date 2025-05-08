@@ -7,6 +7,7 @@
 #include "rosidl_typesupport_introspection_cpp/message_introspection.hpp"
 #include "rosidl_typesupport_introspection_cpp/service_type_support_decl.hpp"
 #include "sio_message.h"
+#include <cstddef>
 #include <cstdint>
 #include <dlfcn.h>
 #include <fmt/core.h>
@@ -160,7 +161,12 @@ namespace phntm {
     if (this->config->service_calls_verbose)
       log(YELLOW + "Request initial alloc ok (" + std::to_string(request_members->size_of_) + "B) for " + service_name + CLR);
     auto request_data = ev.get_message()->get_map()["msg"];
-    
+    if (request_data == nullptr) { // mepty or trigger may send this => init as null message type
+      if (this->config->service_calls_verbose)
+        log("Service call message was null");
+      request_data = sio::null_message::create();
+    }
+
     auto req_err = MapSocketMessageToRequest(request_data, request_msg, request_members, this->config->service_calls_verbose);
     if (!req_err.empty())
       return this->returnServiceError(fmt::format("Error mapping request data: {}", req_err.c_str()), ev);

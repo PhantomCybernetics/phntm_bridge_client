@@ -55,10 +55,7 @@ sudo usermod -aG docker ${USER}
 cd ~
 git clone git@github.com:PhantomCybernetics/phntm_bridge.git phntm_bridge
 cd phntm_bridge
-ROS_DISTRO=humble; \
-docker build -f Dockerfile -t phntm/bridge:$ROS_DISTRO \
-  --build-arg ROS_DISTRO=$ROS_DISTRO \
-  .
+ROS_DISTRO=humble; docker build -f Dockerfile -t phntm/bridge:$ROS_DISTRO --build-arg ROS_DISTRO=$ROS_DISTRO .
 ```
 
 ### Register a new Robot on the Cloud Bridge
