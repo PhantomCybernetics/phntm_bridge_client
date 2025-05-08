@@ -171,9 +171,11 @@ namespace phntm {
             }
         }
 
-        instance->loop_running = true;
-        instance->loop_thread = std::thread(&StatusLEDs::loop, instance);
-        instance->loop_thread.detach();
+        if (instance->data != nullptr || instance->conn != nullptr) {
+            instance->loop_running = true;
+            instance->loop_thread = std::thread(&StatusLEDs::loop, instance);
+            instance->loop_thread.detach();
+        }
     }
 
     void StatusLEDs::clear() {
@@ -197,20 +199,35 @@ namespace phntm {
 
     // convenience 
     void ConnLED::on() {
-        StatusLEDs::getInstance()->conn->on();
+        auto inst = StatusLEDs::getInstance();
+        if (inst == nullptr) return;
+        if (inst->conn == nullptr) return;
+        inst->conn->on();
     }
     void ConnLED::fastPulse() {
-        StatusLEDs::getInstance()->conn->fastPulse();
+        auto inst = StatusLEDs::getInstance();
+        if (inst == nullptr) return;
+        if (inst->conn == nullptr) return;
+        inst->conn->fastPulse();
     }
     void ConnLED::off() {
-        StatusLEDs::getInstance()->conn->off();
+        auto inst = StatusLEDs::getInstance();
+        if (inst == nullptr) return;
+        if (inst->conn == nullptr) return;
+        inst->conn->off();
     }
 
     void DataLED::once() {
-        StatusLEDs::getInstance()->data->once();
+        auto inst = StatusLEDs::getInstance();
+        if (inst == nullptr) return;
+        if (inst->data == nullptr) return;
+        inst->data->once();
     }
     void DataLED::off() {
-        StatusLEDs::getInstance()->data->off();
+        auto inst = StatusLEDs::getInstance();
+        if (inst == nullptr) return;
+        if (inst->data == nullptr) return;
+        inst->data->off();
     }
     
 }
