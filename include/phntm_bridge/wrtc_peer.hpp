@@ -77,7 +77,9 @@ namespace phntm {
 
             std::map<std::string, std::shared_ptr<rtc::DataChannel>> outbound_data_channels; 
             std::map<std::string, std::shared_ptr<rtc::DataChannel>> inbound_data_channels; 
+            std::map<std::string, std::shared_ptr<rtc::Track>> outbound_media_tracks; 
             uint16_t openDataChannelForTopic(std::string topic, std::string msg_type, bool is_reliable, bool write=false);
+            std::string openMediaTrackForTopic(std::string topic, std::string msg_type);
             void closeDataChannelForTopic(std::string topic, bool write);
             
             uint16_t next_channel_id;

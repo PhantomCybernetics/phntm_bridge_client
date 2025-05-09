@@ -13,6 +13,7 @@
 #include "sio_message.h"
 #include "sio_socket.h"
 #include <algorithm>
+#include <cstdint>
 #include <memory>
 #include <ostream>
 #include <iostream>
@@ -248,6 +249,7 @@ namespace phntm {
         rtc_config.iceTransportPolicy = rtc::TransportPolicy::All;
         rtc_config.disableFingerprintVerification = false;
         rtc_config.enableIceTcp = true;
+        rtc_config.forceMediaTransport = true;
 
         for (auto & one : this->config->ice_servers) {
             if (one.compare(0, 5, "turn:") == 0) {
@@ -576,8 +578,26 @@ namespace phntm {
 
             this->inbound_data_channels.emplace(topic, dc);
             return this->inbound_data_channels.at(topic)->id().value();
-
         }
+    }
+
+    std::string WRTCPeer::openMediaTrackForTopic(std::string topic, std::string msg_type) {
+        rtc::SSRC ssrc = ++this->next_channel_id;;
+        rtc::Description::Video media("video", rtc::Description::Direction::SendOnly);
+		media.addH264Codec(96); // Must match the payload type of the external h264 RTP stream
+		media.addSSRC(ssrc, topic, topic, topic);
+		auto track = this->pc->addTrack(media);
+        this->outbound_media_tracks.emplace(topic, track);
+
+        track->onOpen([topic](){
+            log(GREEN+"Media track open for "+topic+CLR);
+        });
+
+        track->onClosed([topic](){
+            log(BLUE+"Media track closed for "+topic+CLR);
+        });
+
+        return topic;
     }
 
     void WRTCPeer::closeDataChannelForTopic(std::string topic, bool write) {
@@ -596,6 +616,8 @@ namespace phntm {
             this->inbound_data_channels.erase(topic);
         }
     }
+
+    
 
     sio::array_message::ptr WRTCPeer::subscribeReadDataTopic(std::string topic, std::string msg_type) {
         
@@ -695,13 +717,23 @@ namespace phntm {
     sio::array_message::ptr WRTCPeer::subscribeImageOrVideoTopic(std::string topic, std::string msg_type) {
         
         auto qos = this->node->loadTopicQoSConfig(topic);
+        auto topic_conf = this->node->loadTopicMsgTypeExtraConfig(topic, msg_type); // get topic extras from yaml
 
-        std::string id_track = ""; // TODO
+        std::string track_id;
+        std::shared_ptr<rtc::Track> track;
+        if (this->outbound_media_tracks.find(topic) != this->outbound_media_tracks.end()) {
+             track = this->outbound_media_tracks.at(topic);
+             track_id = topic;
+        } else {
+            track_id = this->openMediaTrackForTopic(topic, msg_type);
+            this->negotiation_needed = true;
+        }
 
         // media stream config for the peer
         auto channel_config = sio::array_message::create();
         channel_config->get_vector().push_back(sio::string_message::create(topic));
-        channel_config->get_vector().push_back(sio::string_message::create(id_track));
+        auto ssrcs_msg = sio::string_message::create(track_id);
+        channel_config->get_vector().push_back(ssrcs_msg);
         return channel_config;
     }
 
