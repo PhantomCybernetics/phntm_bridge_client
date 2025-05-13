@@ -19,8 +19,8 @@ namespace phntm {
 
             void on();
             void off();
-            void once(int on_ms = 2);
-            void interval(int on_ms, int interval_ms);
+            void once(uint on_ms = 10);
+            void interval(uint on_ms, uint interval_ms);
             void fastPulse();
 
             void update();
@@ -45,8 +45,9 @@ namespace phntm {
         private:
             Mode mode;
             State state;
-            float on_ms;
-            float interval_ms;
+            uint on_ms;
+            uint interval_ms;
+            uint min_off_ms = 80;
 
             bool current_state;
             std::chrono::steady_clock::time_point last_on_time;

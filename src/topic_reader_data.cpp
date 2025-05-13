@@ -220,6 +220,7 @@ namespace phntm {
         
         this->sub.reset(); // removes sub
         this->sub = nullptr;
+        this->logged_receiving = false;
         log(BLUE + "[" + this->topic + "] Removed subscriber" + CLR);
     }
 

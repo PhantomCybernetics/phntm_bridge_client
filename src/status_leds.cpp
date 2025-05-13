@@ -38,12 +38,12 @@ namespace phntm {
         this->state = State::OFF;
     }
 
-    void StatusLED::once(int on_ms) {
+    void StatusLED::once(uint on_ms) {
         this->state = State::BLINK_ONCE;
         this->on_ms = on_ms;
     }
 
-    void StatusLED::interval(int on_ms, int interval_ms) {
+    void StatusLED::interval(uint on_ms, uint interval_ms) {
         this->state = State::BLINKING;
         this->on_ms = on_ms;
         this->interval_ms = interval_ms;
@@ -69,7 +69,7 @@ namespace phntm {
                 break;
 
             case StatusLED::State::BLINK_ONCE:
-                if (this->current_state != true) {
+                if (this->current_state != true && std::chrono::duration_cast<std::chrono::milliseconds>(now - this->last_off_time).count() > this->min_off_ms) {
                     this->setState(true);
                 } else if (this->current_state == true && std::chrono::duration_cast<std::chrono::milliseconds>(now - this->last_on_time).count() > this->on_ms) {
                     this->off();

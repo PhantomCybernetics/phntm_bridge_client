@@ -6,6 +6,7 @@
 
 #include "phntm_bridge/topic_reader_data.hpp"
 #include "phntm_bridge/topic_writer_data.hpp"
+#include "phntm_bridge/topic_reader_h264.hpp"
 
 #include "rtc/configuration.hpp"
 #include "rtc/global.hpp"
@@ -283,6 +284,7 @@ namespace phntm {
                 log(YELLOW + this->toString() + "Signaling state: " + toString(state) + CLR);
             
             TopicReaderData::onPCSignalingStateChange(this->pc);
+            TopicReaderH264::onPCSignalingStateChange(this->pc);
         });
         this->pc->onLocalCandidate([&](rtc::Candidate candidate){
             if (this->config->webrtc_debug)
@@ -381,7 +383,7 @@ namespace phntm {
                         auto channel_config = that->subscribeReadDataTopic(topic, msg_type);
                         reply->get_map().at("read_data_channels")->get_vector().push_back(channel_config);
                     } else {
-                        auto channel_config = that->subscribeImageOrVideoTopic(topic, msg_type);
+                        auto channel_config = that->subscribeMediaTopic(topic, msg_type);
                         reply->get_map().at("read_video_streams")->get_vector().push_back(channel_config);
                     }
                 }
@@ -392,7 +394,7 @@ namespace phntm {
                     auto msg_type = sub[1];
 
                     auto channel_config = that->subscribeWriteDataTopic(topic, msg_type);
-                    reply->get_map().at("write_data_channels")->get_vector().push_back(channel_config); //no id => unsubscribed
+                    reply->get_map().at("write_data_channels")->get_vector().push_back(channel_config); 
                 }
 
                 // close unused read channels
@@ -403,7 +405,18 @@ namespace phntm {
                 for (auto topic : r_dcs_to_close) {
                     auto removed_channel_config = that->unsubscribeReadDataTopic(topic);
                     if (removed_channel_config->get_vector().size())
-                        reply->get_map().at("read_data_channels")->get_vector().push_back(removed_channel_config);                    
+                        reply->get_map().at("read_data_channels")->get_vector().push_back(removed_channel_config); // no id => unsubscribed                 
+                }
+
+                // unsubscribe from unused media streams
+                std::vector<std::string> r_media_tracks_to_close;
+                for (const auto& pair : that->outbound_media_tracks)
+                    if (std::find(that->req_read_subs.begin(), that->req_read_subs.end(), pair.first) == that->req_read_subs.end())
+                        r_media_tracks_to_close.push_back(pair.first);
+                for (auto topic : r_media_tracks_to_close) {
+                    auto removed_channel_config = that->unsubscribeMediaTopic(topic);
+                    if (removed_channel_config->get_vector().size())
+                        reply->get_map().at("read_video_streams")->get_vector().push_back(removed_channel_config); // no id => unsubscribed               
                 }
 
                 // close unused write channels
@@ -424,13 +437,6 @@ namespace phntm {
                     if (removed_channel_config->get_vector().size())
                         reply->get_map().at("write_data_channels")->get_vector().push_back(removed_channel_config); // no id => unsubscribed   
                 }
-                    
-                // unsubscribe from video streams
-                // for sub in list(peer.video_tracks.keys()):
-                //     if not sub in peer.read_subs:
-                //         self.get_logger().info(f'{peer} unsubscribing from image topic {sub}')
-                //         await self.unsubscribe_image_topic(sub, peer)
-                //         res['read_video_streams'].append([ sub ]) # no id => unsubscribed
 
                 that->awaiting_peer_reply = false;
                 if (that->is_connected && that->negotiation_needed) { // that->pc->negotiationNeeded()
@@ -581,23 +587,72 @@ namespace phntm {
         }
     }
 
-    std::string WRTCPeer::openMediaTrackForTopic(std::string topic, std::string msg_type) {
-        rtc::SSRC ssrc = ++this->next_channel_id;;
-        rtc::Description::Video media("video", rtc::Description::Direction::SendOnly);
-		media.addH264Codec(96); // Must match the payload type of the external h264 RTP stream
-		media.addSSRC(ssrc, topic, topic, topic);
-		auto track = this->pc->addTrack(media);
-        this->outbound_media_tracks.emplace(topic, track);
+    // /// Send previous key frame so browser can show something to user
+    // /// @param stream Stream
+    // /// @param video Video track data
+    // void sendInitialNalus(std::shared_ptr<rtc::Track> track, std::shared_ptr<rtc::ClientTrackData> video) {
+    //     auto h264 = track->
+        
+    //     video.get()
+    //     auto initialNalus = h264->initialNALUS();
 
-        track->onOpen([topic](){
-            log(GREEN+"Media track open for "+topic+CLR);
+    //     // send previous NALU key frame so users don't have to wait to see stream works
+    //     if (!initialNalus.empty()) {
+    //         const double frameDuration_s = double(h264->getSampleDuration_us()) / (1000 * 1000);
+    //         const uint32_t frameTimestampDuration = video->sender->rtpConfig->secondsToTimestamp(frameDuration_s);
+    //         video->sender->rtpConfig->timestamp = video->sender->rtpConfig->startTimestamp - frameTimestampDuration * 2;
+    //         video->track->send(initialNalus);
+    //         video->sender->rtpConfig->timestamp += frameTimestampDuration;
+    //         // Send initial NAL units again to start stream in firefox browser
+    //         video->track->send(initialNalus);
+    //     }
+    // }
+
+    std::string WRTCPeer::openMediaTrackForTopic(std::string topic) {
+        rtc::SSRC ssrc = ++this->next_channel_id;;
+        auto payload_type = 96;
+        auto cname = topic;
+        auto msid = topic;
+        auto mid = "stream-" + std::to_string(ssrc); // must be unique per stream and < 16 chars in order to open a new stream
+                                                         // when adding audio, it should use the same mid to be added to the same stream (?!)
+        rtc::Description::Video media(mid, rtc::Description::Direction::SendOnly);
+		media.addH264Codec(payload_type); // Must match the payload type of the external h264 RTP stream
+		media.addSSRC(ssrc, cname, msid, topic); //track id is used to identify streams by the client
+		auto track = this->pc->addTrack(media);
+
+        // create RTP configuration
+        auto rtpConfig = std::make_shared<rtc::RtpPacketizationConfig>(ssrc, cname, payload_type, rtc::H264RtpPacketizer::ClockRate);
+        // create packetizer
+        auto packetizer = std::make_shared<rtc::H264RtpPacketizer>(rtc::NalUnit::Separator::StartSequence, rtpConfig);
+        // add RTCP SR handler
+        auto srReporter = std::make_shared<rtc::RtcpSrReporter>(rtpConfig);
+        packetizer->addToChain(srReporter);
+        // add RTCP NACK handler
+        auto nackResponder = std::make_shared<rtc::RtcpNackResponder>();
+        packetizer->addToChain(nackResponder);
+        // set handler
+        track->setMediaHandler(packetizer);
+
+        auto track_info = std::make_shared<MediaTrackInfo>(MediaTrackInfo {track, rtpConfig} );
+        this->outbound_media_tracks.emplace(topic, track_info);
+
+        track->onOpen([this, topic](){
+            log(GREEN + this->toString() + "Media track open for " + topic + CLR);
         });
 
-        track->onClosed([topic](){
-            log(BLUE+"Media track closed for "+topic+CLR);
+        track->onClosed([this, topic](){
+            log(BLUE + this->toString() + "Media track closed for "+topic + CLR);
         });
 
         return topic;
+    }
+
+    void WRTCPeer::closeMediaTrackForTopic(std::string topic) {
+        log(GRAY + this->toString() + "Closing media track for " + topic + CLR);
+        if (this->outbound_media_tracks.at(topic)->track->isOpen()) {
+            this->outbound_media_tracks.at(topic)->track->close();
+        }
+        this->outbound_media_tracks.erase(topic);
     }
 
     void WRTCPeer::closeDataChannelForTopic(std::string topic, bool write) {
@@ -714,19 +769,27 @@ namespace phntm {
         return removed_channel_config;
     }
 
-    sio::array_message::ptr WRTCPeer::subscribeImageOrVideoTopic(std::string topic, std::string msg_type) {
+    sio::array_message::ptr WRTCPeer::subscribeMediaTopic(std::string topic, std::string msg_type) {
         
         auto qos = this->node->loadTopicQoSConfig(topic);
         auto topic_conf = this->node->loadTopicMsgTypeExtraConfig(topic, msg_type); // get topic extras from yaml
 
         std::string track_id;
-        std::shared_ptr<rtc::Track> track;
+        std::shared_ptr<MediaTrackInfo> track_info;
         if (this->outbound_media_tracks.find(topic) != this->outbound_media_tracks.end()) {
-             track = this->outbound_media_tracks.at(topic);
-             track_id = topic;
+            track_info = this->outbound_media_tracks.at(topic);
+            track_id = topic;
         } else {
-            track_id = this->openMediaTrackForTopic(topic, msg_type);
+            track_id = this->openMediaTrackForTopic(topic);
+            track_info = this->outbound_media_tracks.at(topic);
             this->negotiation_needed = true;
+        }
+
+        if (isEncodedVideoType(msg_type)) {
+            auto topic_reader = TopicReaderH264::getForTopic(topic, this->node, qos);
+            topic_reader->addOutput(track_info, this->pc); // only adds once
+        } else {
+            //TODO Image topics
         }
 
         // media stream config for the peer
@@ -735,6 +798,27 @@ namespace phntm {
         auto ssrcs_msg = sio::string_message::create(track_id);
         channel_config->get_vector().push_back(ssrcs_msg);
         return channel_config;
+    }
+
+    sio::array_message::ptr WRTCPeer::unsubscribeMediaTopic(std::string topic) {
+        auto removed_channel_config = sio::array_message::create();
+        if (this->outbound_media_tracks.find(topic) != this->outbound_media_tracks.end()) {
+            
+            auto track_info = this->outbound_media_tracks.at(topic);
+
+            if (TopicReaderH264::getForTopic(topic) != nullptr) {
+                auto tr = TopicReaderH264::getForTopic(topic);
+                tr->removeOutput(track_info); // stops if no other peer subs left
+            } else if (false) {
+                //TODO Image topics
+            } else {
+                log(RED + "Topic reader not found for " + topic +"!" + CLR) ;
+            }
+            
+            this->closeMediaTrackForTopic(topic); // removes from outbound_media_tracks
+            removed_channel_config->get_vector().push_back(sio::string_message::create(topic));
+        }
+        return removed_channel_config;
     }
 
     void WRTCPeer::addUIConfigToMessage(sio::object_message::ptr msg, std::shared_ptr<BridgeConfig> config) {

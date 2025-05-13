@@ -75,6 +75,7 @@ add_executable(phntm_bridge
               src/local_services.cpp
               src/phntm_bridge.cpp
               src/topic_reader_data.cpp
+              src/topic_reader_h264.cpp
               src/topic_writer_data.cpp
               src/config.cpp
               src/extra_packages.cpp

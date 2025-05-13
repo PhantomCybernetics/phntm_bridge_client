@@ -47,6 +47,11 @@ namespace phntm {
             static std::string toString(rtc::PeerConnection::GatheringState state);
             static std::string toString(rtc::PeerConnection::IceState state);
             
+            struct MediaTrackInfo {
+                std::shared_ptr<rtc::Track> track;
+                std::shared_ptr<rtc::RtpPacketizationConfig> rtpConfig;
+            };
+
         private:
             static std::map<std::string, std::shared_ptr<WRTCPeer>> connected_peers;
             static void addUIConfigToMessage(sio::object_message::ptr msg, std::shared_ptr<BridgeConfig> config);
@@ -69,18 +74,21 @@ namespace phntm {
             std::vector<std::vector<std::string>> req_write_subs; // // [topic_id, msg_type]'s to write to
 
             sio::array_message::ptr subscribeReadDataTopic(std::string topic, std::string msg_type);
-            sio::array_message::ptr subscribeImageOrVideoTopic(std::string topic, std::string msg_type);
+            sio::array_message::ptr subscribeMediaTopic(std::string topic, std::string msg_type);
             sio::array_message::ptr subscribeWriteDataTopic(std::string topic, std::string msg_type);
 
             sio::array_message::ptr unsubscribeReadDataTopic(std::string topic);
             sio::array_message::ptr unsubscribeWriteDataTopic(std::string topic);
+            sio::array_message::ptr unsubscribeMediaTopic(std::string topic);
 
             std::map<std::string, std::shared_ptr<rtc::DataChannel>> outbound_data_channels; 
             std::map<std::string, std::shared_ptr<rtc::DataChannel>> inbound_data_channels; 
-            std::map<std::string, std::shared_ptr<rtc::Track>> outbound_media_tracks; 
+            std::map<std::string, std::shared_ptr<MediaTrackInfo>> outbound_media_tracks;
+
             uint16_t openDataChannelForTopic(std::string topic, std::string msg_type, bool is_reliable, bool write=false);
-            std::string openMediaTrackForTopic(std::string topic, std::string msg_type);
             void closeDataChannelForTopic(std::string topic, bool write);
+            std::string openMediaTrackForTopic(std::string topic);
+            void closeMediaTrackForTopic(std::string topic);
             
             uint16_t next_channel_id;
             bool negotiation_needed;
