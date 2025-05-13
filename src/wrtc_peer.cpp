@@ -246,7 +246,7 @@ namespace phntm {
         rtc_config.disableAutoNegotiation = true;
         rtc_config.disableAutoGathering = false;
         rtc_config.certificateType = rtc::CertificateType::Default;
-        rtc_config.enableIceUdpMux = true;
+        rtc_config.enableIceUdpMux = false;
         rtc_config.iceTransportPolicy = rtc::TransportPolicy::All;
         rtc_config.disableFingerprintVerification = false;
         rtc_config.enableIceTcp = true;
@@ -740,7 +740,9 @@ namespace phntm {
                 auto dc = this->outbound_data_channels.at(topic);
                 auto tr = TopicReaderData::getForTopic(topic);
                 if (tr != nullptr) {
-                    tr->removeOutput(dc); // stops if no other peer subs left
+                    if (tr->removeOutput(dc)) { // stops if no other peer subs left, returns true of empty
+                        TopicReaderData::destroy(topic);
+                    }
                 } else {
                     log(RED + "TopicReader not found for " + topic +"!") ;
                 }
@@ -786,7 +788,7 @@ namespace phntm {
         }
 
         if (isEncodedVideoType(msg_type)) {
-            auto topic_reader = TopicReaderH264::getForTopic(topic, this->node, qos);
+            auto topic_reader = TopicReaderH264::getForTopic(topic, this->node, qos, topic_conf->get_map().at("debug_num_frames")->get_int());
             topic_reader->addOutput(track_info, this->pc); // only adds once
         } else {
             //TODO Image topics
@@ -808,7 +810,9 @@ namespace phntm {
 
             if (TopicReaderH264::getForTopic(topic) != nullptr) {
                 auto tr = TopicReaderH264::getForTopic(topic);
-                tr->removeOutput(track_info); // stops if no other peer subs left
+                if (tr->removeOutput(track_info)) { // stops if no other peer subs left, returns true of empty
+                    TopicReaderH264::destroy(topic);
+                }
             } else if (false) {
                 //TODO Image topics
             } else {

@@ -20,6 +20,8 @@ namespace phntm {
         public:
             static std::shared_ptr<TopicReaderData> getForTopic(std::string topic, std::string msg_type, std::shared_ptr<PhntmBridge> bridge_node, rclcpp::QoS qos);
             static std::shared_ptr<TopicReaderData> getForTopic(std::string topic); // does not create a new one
+            static void destroy(std::string topic);
+
             bool addOutput(std::shared_ptr<rtc::DataChannel> dc, std::shared_ptr<rtc::PeerConnection> pc);
             bool removeOutput(std::shared_ptr<rtc::DataChannel> dc);
             // static void onDCOpen(std::shared_ptr<rtc::DataChannel> dc, std::shared_ptr<rtc::PeerConnection> pc);
@@ -48,6 +50,7 @@ namespace phntm {
 
             std::vector<std::shared_ptr<Output>> outputs; // target data channels & pcs
             std::mutex outputs_mutex;
+            static std::mutex readers_mutex;
             bool is_reliable; // sends latest message on new dc add
             std::string topic, msg_type;
             std::shared_ptr<PhntmBridge> bridge_node;

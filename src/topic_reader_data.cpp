@@ -9,8 +9,10 @@
 namespace phntm {
 
     std::map<std::string, std::shared_ptr<TopicReaderData>> TopicReaderData::readers;
+    std::mutex TopicReaderData::readers_mutex;
 
     std::shared_ptr<TopicReaderData> TopicReaderData::getForTopic(std::string topic, std::string msg_type, std::shared_ptr<PhntmBridge> bridge_node, rclcpp::QoS qos) {
+        std::lock_guard<std::mutex> lock(readers_mutex);
         if (readers.find(topic) != readers.end()) {
             return readers.at(topic);
         } else { // create subscriber
@@ -21,10 +23,19 @@ namespace phntm {
     }
 
     std::shared_ptr<TopicReaderData> TopicReaderData::getForTopic(std::string topic) {
+        std::lock_guard<std::mutex> lock(readers_mutex);
         if (readers.find(topic) != readers.end()) {
             return readers.at(topic);
         } else {
             return nullptr;
+        }
+    }
+
+    void TopicReaderData::destroy(std::string topic) {
+        std::lock_guard<std::mutex> lock(readers_mutex);
+        if (readers.find(topic) != readers.end()) {
+            log(GRAY + "Destroying reader for " + topic + CLR);
+            readers.erase(topic);
         }
     }
 
@@ -87,17 +98,18 @@ namespace phntm {
                 return output->dc.get() == dc.get();
             }
         );
-        if (pos == this->outputs.end()) {
+        if (pos != this->outputs.end()) {
+            auto o = *pos;
+            o->active = false;
+            this->outputs.erase(pos);    
+        } else {
             log("DC not found in " + this->topic + " reader");
-            return false;
         }
-        auto o = *pos;
-        o->active = false;
-        this->outputs.erase(pos);
         if (this->outputs.size() == 0) {
             this->stop();
+            return true; // good to destoy
         }
-        return true;
+        return false;
     }
 
     void TopicReaderData::onData(std::shared_ptr<rclcpp::SerializedMessage> data) {

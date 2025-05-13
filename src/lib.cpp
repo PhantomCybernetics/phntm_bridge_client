@@ -93,5 +93,20 @@ namespace phntm {
         out->append((char*)contents, totalSize);
         return totalSize;
     }
+
+    std::string toHex(uint32_t num, bool uppercase) {
+        const char* hex_chars = uppercase ? "0123456789ABCDEF" : "0123456789abcdef";
+        std::string result;
+        result.reserve(8); // Reserve space for 32-bit integer (8 hex digits)
+        
+        // Process each nibble from highest to lowest
+        for (int i = 28; i >= 0; i -= 4) {
+            uint8_t nibble = (num >> i) & 0xF;
+            if (nibble != 0 || !result.empty()) { // Skip leading zeros
+                result.push_back(hex_chars[nibble]);
+            }
+        }
+        return result.empty() ? "0" : result; // Handle num = 0
+    }
     
 }

@@ -23,14 +23,16 @@ namespace phntm {
     class TopicReaderH264 {
 
         public:
-            static std::shared_ptr<TopicReaderH264> getForTopic(std::string topic, std::shared_ptr<PhntmBridge> bridge_node, rclcpp::QoS qos);
+            static std::shared_ptr<TopicReaderH264> getForTopic(std::string topic, std::shared_ptr<PhntmBridge> bridge_node, rclcpp::QoS qos, int debug_num_frames);
             static std::shared_ptr<TopicReaderH264> getForTopic(std::string topic); // does not create a new one
+            static void destroy(std::string topic);
+
             bool addOutput(std::shared_ptr<WRTCPeer::MediaTrackInfo> track_info, std::shared_ptr<rtc::PeerConnection> pc);
             bool removeOutput(std::shared_ptr<WRTCPeer::MediaTrackInfo> track_info);
             // static void onDCOpen(std::shared_ptr<rtc::DataChannel> dc, std::shared_ptr<rtc::PeerConnection> pc);
             static void onPCSignalingStateChange(std::shared_ptr<rtc::PeerConnection> pc);
         
-            TopicReaderH264(std::string topic, std::shared_ptr<PhntmBridge> bridge_node, rclcpp::QoS qos);
+            TopicReaderH264(std::string topic, std::shared_ptr<PhntmBridge> bridge_node, rclcpp::QoS qos, int debug_num_frames);
             ~TopicReaderH264();
 
             struct Output {
@@ -60,6 +62,7 @@ namespace phntm {
 
             std::vector<std::shared_ptr<Output>> outputs; // target data channels & pcs
             std::mutex outputs_mutex;
+            static std::mutex readers_mutex;
             std::string topic;
             std::shared_ptr<PhntmBridge> bridge_node;
             rclcpp::QoS qos;
@@ -73,6 +76,7 @@ namespace phntm {
             size_t latest_payload_size = 0;
             // rtc::FrameInfo latest_frame_info = rtc::FrameInfo(0);
 
+            int debug_num_frames = 0; // set number of frames to be analyzed (nal units debug)
             bool logged_receiving = false;
     };
 

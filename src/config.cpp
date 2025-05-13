@@ -416,6 +416,14 @@ namespace phntm {
     sio::message::ptr PhntmBridge::loadTopicMsgTypeExtraConfig(std::string topic, std::string msg_type) {
         auto res = sio::object_message::create();
 
+        // h.264 encoded frames
+        if (msg_type == "ffmpeg_image_transport_msgs/msg/FFMPEGPacket") { 
+            try {
+                this->declare_parameter(topic + ".debug_num_frames", 0);
+            } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+            res->get_map().emplace("debug_num_frames", sio::int_message::create(this->get_parameter(topic + ".debug_num_frames").as_int()));
+        }
+
         // NN Detections
         if (msg_type == "vision_msgs/msg/Detection2DArray" || msg_type == "vision_msgs/msg/Detection3DArray") { 
             try {

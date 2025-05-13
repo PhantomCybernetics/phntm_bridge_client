@@ -8,22 +8,27 @@
 #include <ffmpeg_image_transport_msgs/msg/detail/ffmpeg_packet__struct.hpp>
 #include <stdexcept>
 #include <string>
+#include <chrono>
+#include <iostream>
 
 namespace phntm {
 
     std::map<std::string, std::shared_ptr<TopicReaderH264>> TopicReaderH264::readers;
+    std::mutex TopicReaderH264::readers_mutex;
 
-    std::shared_ptr<TopicReaderH264> TopicReaderH264::getForTopic(std::string topic, std::shared_ptr<PhntmBridge> bridge_node, rclcpp::QoS qos) {
+    std::shared_ptr<TopicReaderH264> TopicReaderH264::getForTopic(std::string topic, std::shared_ptr<PhntmBridge> bridge_node, rclcpp::QoS qos, int debug_num_frames) {
+        std::lock_guard<std::mutex> lock(readers_mutex);
         if (readers.find(topic) != readers.end()) {
             return readers.at(topic);
         } else { // create subscriber
-            auto tr = std::make_shared<TopicReaderH264>(topic, bridge_node, qos);
+            auto tr = std::make_shared<TopicReaderH264>(topic, bridge_node, qos, debug_num_frames);
             readers.emplace(topic, tr);
             return tr;
         }
     }
 
     std::shared_ptr<TopicReaderH264> TopicReaderH264::getForTopic(std::string topic) {
+        std::lock_guard<std::mutex> lock(readers_mutex);
         if (readers.find(topic) != readers.end()) {
             return readers.at(topic);
         } else {
@@ -31,8 +36,16 @@ namespace phntm {
         }
     }
 
-    TopicReaderH264::TopicReaderH264(std::string topic, std::shared_ptr<PhntmBridge> bridge_node, rclcpp::QoS qos) : topic(topic), bridge_node(bridge_node), qos(qos) {
-      
+    void TopicReaderH264::destroy(std::string topic) {
+        std::lock_guard<std::mutex> lock(readers_mutex);
+        if (readers.find(topic) != readers.end()) {
+            log(GRAY + "Destroying reader for " + topic + CLR);
+            readers.erase(topic);
+        }
+    }
+
+    TopicReaderH264::TopicReaderH264(std::string topic, std::shared_ptr<PhntmBridge> bridge_node, rclcpp::QoS qos, int debug_num_frames)
+        : topic(topic), bridge_node(bridge_node), qos(qos), debug_num_frames(debug_num_frames) {
     }
 
     TopicReaderH264::~TopicReaderH264() {
@@ -87,98 +100,68 @@ namespace phntm {
                 return output->track_info->track.get() == track_info->track.get();
             }
         );
-        if (pos == this->outputs.end()) {
-            log("Tracl not found in " + this->topic + " reader");
-            return false;
+        if (pos != this->outputs.end()) {
+            auto o = *pos;
+            o->active = false;
+            this->outputs.erase(pos);    
+        } else {
+            log("Track not found in " + this->topic + " reader");
         }
-        auto o = *pos;
-        o->active = false;
-        this->outputs.erase(pos);
         if (this->outputs.size() == 0) {
             this->stop();
+            return true; // good to destoy
         }
-        return true;
+        return false;
     }
 
-    // std::vector<std::vector<uint8_t>> splitNalUnits(const uint8_t* data, size_t size) {
-    //     std::vector<std::vector<uint8_t>> nalUnits;
-    //     size_t start = 0;
+    std::vector<std::vector<uint8_t>> splitNalUnits(const uint8_t* data, size_t size) {
+        std::vector<std::vector<uint8_t>> nalUnits;
+        size_t start = 0;
         
-    //     // Find start codes (0x00000001 or 0x000001)
-    //     for(size_t i = 0; i < size; ++i) {
-    //         if((i >= 3 && data[i] == 0x01 && data[i-1] == 0x00 && data[i-2] == 0x00 && data[i-3] == 0x00) ||
-    //            (i >= 2 && data[i] == 0x01 && data[i-1] == 0x00 && data[i-2] == 0x00)) {
-    //             if(start > 0) {
-    //                 // Skip start code (4 or 3 bytes)
-    //                 size_t nalStart = (data[i-3] == 0x00) ? i-3 : i-2;
-    //                 nalUnits.emplace_back(data + start, data + nalStart);
-    //             }
-    //             start = i + 1;
-    //         }
-    //     }
+        // Find start codes (0x00000001 or 0x000001)
+        for(size_t i = 0; i < size; ++i) {
+            if((i >= 3 && data[i] == 0x01 && data[i-1] == 0x00 && data[i-2] == 0x00 && data[i-3] == 0x00) ||
+               (i >= 2 && data[i] == 0x01 && data[i-1] == 0x00 && data[i-2] == 0x00)) {
+                if(start > 0) {
+                    // Skip start code (4 or 3 bytes)
+                    size_t nalStart = (data[i-3] == 0x00) ? i-3 : i-2;
+                    nalUnits.emplace_back(data + start, data + nalStart);
+                }
+                start = i + 1;
+            }
+        }
         
-    //     if(start < size) {
-    //         nalUnits.emplace_back(data + start, data + size);
-    //     }
+        if(start < size) {
+            nalUnits.emplace_back(data + start, data + size);
+        }
         
-    //     return nalUnits;
-    // }
+        return nalUnits;
+    }
 
-    // bool hasSpsPps(const std::vector<std::vector<uint8_t>>& nalUnits) {
-    //     for(const auto& unit : nalUnits) {
-    //         if(!unit.empty()) {
-    //             uint8_t nalType = unit[0] & 0x1F;
-    //             if(nalType == 7 || nalType == 8) return true; // 7=SPS, 8=PPS
-    //         }
-    //     }
-    //     return false;
-    // }
+    bool hasSpsPps(const std::vector<std::vector<uint8_t>>& nalUnits) {
+        for(const auto& unit : nalUnits) {
+            if(!unit.empty()) {
+                uint8_t nalType = unit[0] & 0x1F;
+                if(nalType == 7 || nalType == 8) return true; // 7=SPS, 8=PPS
+            }
+        }
+        return false;
+    }
 
-    // void logNalUnit(const uint8_t* data, size_t size) {
-    //     if(size < 1) return;
+    void logNalUnit(const uint8_t* data, size_t size, std::string topic) {
+        if(size < 1) return;
         
-    //     uint8_t nalType = data[0] & 0x1F;
-    //     std::cout << "NAL Unit Type: " << (int)nalType 
-    //               << ", Size: " << size 
-    //               << ", First bytes: "
-    //               << std::hex << (int)data[0] << " " 
-    //               << (int)data[1] << " " 
-    //               << (int)data[2] << std::dec << "\n";
-    // }
+        uint8_t nalType = data[0] & 0x1F;
+        log("[" + topic + "] " +  "NAL Unit Type: " + std::to_string((int)nalType)
+            + ", Size: " + std::to_string(size)
+            + ", First bytes: "
+            + toHex((int)data[0]) + " "
+            + toHex((int)data[1]) + " "
+            + toHex((int)data[2])
+        );
+    }
 
-    // std::vector<std::byte> initialNALUS(std::shared_ptr<TopicReaderH264::Output> output) {
-    //     std::vector<std::byte> units{};
-    //     if (output->last_nal_unit_7.has_value()) {
-    //         auto nalu = output->last_nal_unit_7.value();
-    //         units.insert(units.end(), nalu.begin(), nalu.end());
-    //     }
-    //     if (output->last_nal_unit_8.has_value()) {
-    //         auto nalu = output->last_nal_unit_8.value();
-    //         units.insert(units.end(), nalu.begin(), nalu.end());
-    //     }
-    //     if (output->last_nal_unit_5.has_value()) {
-    //         auto nalu = output->last_nal_unit_5.value();
-    //         units.insert(units.end(), nalu.begin(), nalu.end());
-    //     }
-    //     return units;
-    // }
-
-    // void sendInitialNalus(std::shared_ptr<TopicReaderH264::Output> output) {
-    //     auto initialNalus = initialNALUS(output);
-    
-    //     // send previous NALU key frame so users don't have to wait to see stream works
-    //     if (!initialNalus.empty()) {
-    //         //const double frameDuration_s = double(h264->getSampleDuration_us()) / (1000 * 1000);
-    //         //const uint32_t frameTimestampDuration = video->sender->rtpConfig->secondsToTimestamp(frameDuration_s);
-    //         //video->sender->rtpConfig->timestamp = video->sender->rtpConfig->startTimestamp - frameTimestampDuration * 2;
-    //         output->track->send(initialNalus);
-    //         //video->sender->rtpConfig->timestamp += frameTimestampDuration;
-    //         // Send initial NAL units again to start stream in firefox browser
-    //         output->track->send(initialNalus);
-    //     }
-    // }
-
-    uint32_t convertToRtpTimestamp(uint32_t sec, uint32_t nanosec) {
+    uint32_t convertToRtpTimestamp(uint64_t sec, uint64_t nanosec) {
         // Convert to nanoseconds first to avoid floating-point precision loss
         constexpr uint64_t NS_PER_SEC = 1'000'000'000ULL;
         constexpr uint64_t CLOCK_RATE = 90'000ULL; // 90kHz
@@ -196,12 +179,25 @@ namespace phntm {
         // this->latest_payload.resize(this->latest_payload_size);
         // std::memcpy(this->latest_payload.data(), msg->data.data(), this->latest_payload_size);
 
-        auto ts = convertToRtpTimestamp(msg->header.stamp.sec, msg->header.stamp.nanosec);
+        // auto ts = convertToRtpTimestamp(msg->header.stamp.sec, msg->header.stamp.nanosec);
+        // auto ts = msg->pts;
+        auto now = std::chrono::system_clock::now();
+        auto duration_since_epoch = now.time_since_epoch();
+        auto sec = std::chrono::duration_cast<std::chrono::seconds>(duration_since_epoch);
+        auto nanosec = std::chrono::duration_cast<std::chrono::nanoseconds>(duration_since_epoch - sec);
+        auto ts = convertToRtpTimestamp(sec.count(), nanosec.count());
 
-        // auto is_keyframe = msg->flags == 1;
-        // auto nal_units = splitNalUnits(msg->data.data(), msg->data.size());
-        // auto has_sps_pps = hasSpsPps(nal_units);
-        
+        if (this->debug_num_frames > 0) {
+            auto is_keyframe = msg->flags == 1;
+            auto nal_units = splitNalUnits(msg->data.data(), msg->data.size());
+            auto has_sps_pps = hasSpsPps(nal_units);
+            log("[" + this->topic + "] " + std::string(is_keyframe ? CYAN + "Keyframe" + CLR : "Frame") + " has "+std::to_string(nal_units.size())+" nal units "+(has_sps_pps?" HAS SPS/PPS":"")+"; ts=" + std::to_string(ts));
+            for (const auto & nal_unit: nal_units) {
+                logNalUnit(nal_unit.data(), nal_unit.size(), this->topic);
+            }
+            --this->debug_num_frames;
+        }
+
         if (!this->logged_receiving) {
             log(MAGENTA + "Receiving " + std::to_string(msg->width) + "x" + std::to_string(msg->height)+ " " + msg->encoding + " frames from " + this->topic + " " + std::to_string(this->latest_payload_size) + " B" + CLR);
             this->logged_receiving = true;
@@ -238,14 +234,8 @@ namespace phntm {
             //     ts = ts_src - output->ts_base;
             // }
 
-            // log(std::string(is_keyframe ? "Keyframe" : "Frame") + " has "+std::to_string(nal_units.size())+" nal units "+(has_sps_pps?" HAS SPS/PPS":"")+"; ts=" + std::to_string(ts));
 
             try {
-
-                // for (const auto & nal_unit: nal_units) {
-                //     logNalUnit(nal_unit.data(), nal_unit.size());
-                //     output->track_info->track->send(reinterpret_cast<const std::byte*>(nal_unit.data()), nal_unit.size());
-                // }
                 
                 output->track_info->track->sendFrame(reinterpret_cast<const std::byte*>(msg->data.data()), msg->data.size(), ts);
 
