@@ -144,10 +144,16 @@ namespace phntm {
     void TopicWriterData::stop() {
         if (this->pub == nullptr)
             return; //already stopped
+        if (!rclcpp::ok()) 
+            return;
+        try {
+            this->pub.reset(); // removes sub
+            this->pub = nullptr;
+            log(BLUE + "[" + this->topic + "] Removed publisher" + CLR);
+        } catch (const std::exception & ex) {
+            log("Exception closing publisher: " + std::string(ex.what()), true);
+        }
         
-        this->pub.reset(); // removes sub
-        this->pub = nullptr;
-        log(BLUE + "[" + this->topic + "] Removed publisher" + CLR);
     }
 
 }

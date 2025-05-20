@@ -11,11 +11,12 @@
 namespace phntm {
 
     class BridgeSocket;
+    class PhntmBridge;
 
     class Introspection {
 
         public:
-            static void init(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<BridgeConfig> config);
+            static void init(std::shared_ptr<PhntmBridge> node, std::shared_ptr<BridgeConfig> config);
             static void start();
             static void stop();
             static void report();
@@ -23,15 +24,17 @@ namespace phntm {
             static std::string getService(std::string service); //srv type empty
             static std::string getTopic(std::string topic); //msg type or empty 
             static std::map<std::string, rclcpp::Client<phntm_interfaces::srv::FileRequest>::SharedPtr> getFileExtractors();
+            static const std::string L;
             
         private:
-            Introspection(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<BridgeConfig> config);
+            
+            Introspection(std::shared_ptr<PhntmBridge> node, std::shared_ptr<BridgeConfig> config);
             ~Introspection();
             static Introspection * instance;
 
             bool running;
 
-            std::shared_ptr<rclcpp::Node> node;
+            std::shared_ptr<PhntmBridge> node;
             std::shared_ptr<BridgeConfig> config;
 
             std::map<std::string, phntm_interfaces::msg::DockerStatus>discovered_docker_containers;

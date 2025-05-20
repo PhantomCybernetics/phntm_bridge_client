@@ -229,11 +229,16 @@ namespace phntm {
     void TopicReaderData::stop() {
         if (this->sub == nullptr)
             return; // already stopped
-        
-        this->sub.reset(); // removes sub
-        this->sub = nullptr;
-        this->logged_receiving = false;
-        log(BLUE + "[" + this->topic + "] Removed subscriber" + CLR);
+        if (!rclcpp::ok()) 
+            return;
+        try {
+            this->sub.reset(); // removes sub
+            this->sub = nullptr;
+            this->logged_receiving = false;
+            log(BLUE + "[" + this->topic + "] Removed subscriber" + CLR);
+        } catch (const std::exception & ex) {
+            log("Exception closing data subscriber: " + std::string(ex.what()), true);
+        }
     }
 
 }

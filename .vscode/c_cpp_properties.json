@@ -7,6 +7,7 @@
       },
       "includePath": [
         "/ros2_ws/install/phntm_interfaces/include/**",
+        "/root/libdatachannel/include/rtc/**",
         "/opt/ros/humble/include/**",
         "/ros2_ws/src/phntm_bridge/include/**",
         "/ros2_ws/src/vision_msgs/include/**",

@@ -22,6 +22,13 @@ namespace phntm {
   {   
       this->config = config;
 
+      this->introspection_reentrant_group = this->create_callback_group(
+        rclcpp::CallbackGroupType::Reentrant
+      );
+      this->media_reentrant_group = this->create_callback_group(
+        rclcpp::CallbackGroupType::Reentrant
+      );
+
       // this->declare_parameter("topic_prefix", "/picam_ros2/camera_");
       // this->declare_parameter("log_message_every_sec", 5.0); // -1.0 = off
       // this->declare_parameter("log_scroll", false);
@@ -101,12 +108,16 @@ int main(int argc, char ** argv)
 
   Introspection::stop();
   StatusLEDs::clear();
+  BridgeSocket::shutdown();
 
   log("Spinning ROS node some more...");
   executor.spin_some(); // make sure we send out what we need before shutdown
   log("Done spinning");
 
-  BridgeSocket::shutdown();
+  while (WRTCPeer::anyPeersConnected()) {
+    log("Waiting for peers cleanup...");
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
 
   rclcpp::shutdown();
 

@@ -1,0 +1,39 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "source environment",
+      "type": "shell",
+      "command": ". ~/.bashrc",
+      "args": [ ],
+      "group": "build",
+      "options": {
+        "cwd": "/ros2_ws"
+      }
+    },
+    {
+      "label": "colcon build",
+      "type": "shell",
+      "command": "colcon",
+      "args": ["build", "--symlink-install", "--packages-select", "phntm_bridge"],
+      "group": "build",
+      "problemMatcher": ["$gcc"],
+      "dependsOn": "source environment",
+      "options": {
+        "cwd": "/ros2_ws"
+      }
+    },
+    {
+      "label": "launch node",
+      "type": "shell",
+      "command": "/opt/ros/humble/bin/ros2",
+      "args": [ "launch", "phntm_bridge", "bridge_launch.py", "use_gdb_server:=true" ],
+      "group": "build",
+      "problemMatcher": ["$gcc"],
+      "dependsOn": "colcon build",
+      "options": {
+        "cwd": "/ros2_ws"
+      }
+    }
+  ]
+}

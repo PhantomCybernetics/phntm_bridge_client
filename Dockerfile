@@ -62,7 +62,7 @@ RUN ninja -C build install
 
 # using w libnice bcs libjuice fails on asymetric responses
 WORKDIR /root
-RUN git clone https://github.com/paullouisageneau/libdatachannel.git
+RUN git clone https://github.com/PhantomCybernetics/libdatachannel.git
 WORKDIR /root/libdatachannel
 RUN git submodule update --init --recursive --depth 1
 RUN cmake -B build -DCMAKE_BUILD_TYPE=Release -DUSE_NICE=1

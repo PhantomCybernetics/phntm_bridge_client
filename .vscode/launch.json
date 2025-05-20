@@ -1,0 +1,44 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+    {
+        "name": "build and debug phntm_bridge",
+        "type": "cppdbg",
+        "request": "launch",
+        "cwd": "/ros2_ws",
+        "program": "/opt/ros/humble/bin/ros2",
+        "args": [ "launch", "phntm_bridge", "bridge_launch.py", "use_gdb_server:=true" ],
+        "environment": [],
+        "stopAtEntry": false,
+        "externalConsole": false,
+        "MIMode": "gdb",
+        "debugServer": 3000,
+        "deploySteps": [],
+        "miDebuggerArgs": "",
+        "useExtendedRemote": false,
+        // "customLaunchSetupCommands": [ {
+        //     "text": ""
+        // }],
+
+        "miDebuggerServerAddress": "localhost:3000",
+        "preLaunchTask": "colcon build",
+        // "stopAtEntry": true,
+        // "pipeTransport": {
+        //     "pipeCwd": "/usr/bin",
+        //     "pipeProgram": "enter the fully qualified path for the pipe program name, for example '/usr/bin/ssh'.",
+        //     "pipeArgs": [],
+        //     "debuggerPath": "The full path to the debugger on the target machine, for example /usr/bin/gdb."
+        // },
+        "setupCommands": [
+            {
+                "description": "Enable pretty-printing for gdb",
+                "text": "-enable-pretty-printing",
+                "ignoreFailures": true
+            }
+        ]
+    }
+    ]
+}

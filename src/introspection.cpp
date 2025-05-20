@@ -15,8 +15,9 @@
 namespace phntm {
 
     Introspection* Introspection::instance = nullptr;
+    const std::string Introspection::L = "[I] ";
 
-    Introspection::Introspection(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<BridgeConfig> config) {
+    Introspection::Introspection(std::shared_ptr<PhntmBridge> node, std::shared_ptr<BridgeConfig> config) {
 
         this->node = node;
         this->config = config;
@@ -31,13 +32,13 @@ namespace phntm {
             qos.lifespan(rclcpp::Duration::max());
             // rclcpp::SubscriptionOptions options;
             // options.callback_group = my_callback_group;
-            log("Subscribing to " + this->config->docker_monitor_topic);
+            log(L + "Subscribing to " + this->config->docker_monitor_topic);
             this->docker_sub = this->node->create_subscription<phntm_interfaces::msg::DockerStatus>(this->config->docker_monitor_topic, qos,
                 std::bind(&Introspection::onDockerMonitorMessage, this, std::placeholders::_1));
         }
     }
 
-    void Introspection::init(std::shared_ptr<rclcpp::Node> node,std::shared_ptr<BridgeConfig> config) {
+    void Introspection::init(std::shared_ptr<PhntmBridge> node, std::shared_ptr<BridgeConfig> config) {
         if (Introspection::instance != nullptr) {
             return;
         }
@@ -50,14 +51,15 @@ namespace phntm {
             return;
 
         instance->running = true;
-        log(CYAN + "Introspection starting..." + CLR);
+        log(CYAN + L + "Introspection starting..." + CLR);
         instance->reportRunningState();
         
         instance->start_time = instance->node->now();
         instance->introspection_in_progress = false;
         instance->timer = instance->node->create_wall_timer(
             std::chrono::milliseconds((uint) instance->config->discovery_period_sec * 1000),
-            std::bind(&Introspection::runIntrospection, instance)
+            std::bind(&Introspection::runIntrospection, instance),
+            instance->node->introspection_reentrant_group
         );
     }
 
@@ -67,7 +69,7 @@ namespace phntm {
             return;
 
         instance->running = false;
-        log(CYAN + "Introspection stopped." + CLR);
+        log(CYAN + L + "Introspection stopped." + CLR);
 
         instance->timer->cancel();
         instance->reportRunningState();
@@ -80,7 +82,7 @@ namespace phntm {
 
         this->introspection_in_progress = true;
         if (this->config->introspection_verbose)
-            log(GRAY + "Introspecting..." + CLR);
+            log(GRAY + L + "Introspecting..." + CLR);
 
         bool nodes_changed = false;
         bool topics_changed = false;
@@ -92,7 +94,7 @@ namespace phntm {
         try {
             observed_nodes = this->node->get_node_names();
         } catch (const std::runtime_error & ex) {
-            log(RED + "Failed to get fresh nodes, skipping  introslection..." + CLR);
+            log(RED + L + "Failed to get fresh nodes, skipping  introslection..." + CLR);
             this->introspection_in_progress = false;
             return;
         }
@@ -117,7 +119,7 @@ namespace phntm {
         // remove not found nodes
         for (auto it = this->discovered_nodes.begin(); it != this->discovered_nodes.end();) {
             if (nodes_and_namespaces.find(it->first) == nodes_and_namespaces.end()) {
-                log(GRAY + "Lost node " + it->first + CLR);
+                log(GRAY + L + "Lost node " + it->first + CLR);
                 if (this->discovered_file_extractors.find(it->first) != this->discovered_file_extractors.end()) {
                     this->discovered_file_extractors.erase(it->first);
                 }
@@ -131,7 +133,7 @@ namespace phntm {
         // add newly found nodes
         for (auto n : nodes_and_namespaces) {
             if (this->discovered_nodes.find(n.first) == this->discovered_nodes.end()) {
-                log("Discovered node " + MAGENTA + n.first + CLR + " ns=" + n.second);
+                log(L + "Discovered node " + MAGENTA + n.first + CLR + " ns=" + n.second);
                 DiscoveredNode node;
                 node.ns = n.second;
                 this->discovered_nodes.emplace(n.first, node);
@@ -149,7 +151,7 @@ namespace phntm {
         try {
             observed_topics_and_types = this->node->get_topic_names_and_types();
         } catch (const std::runtime_error & ex) {
-            log(RED + "Failed to get fresh topics, skipping  introslection..." + CLR);
+            log(RED + L + "Failed to get fresh topics, skipping  introslection..." + CLR);
             this->introspection_in_progress = false;
             return;
         }
@@ -157,7 +159,7 @@ namespace phntm {
         // remove no longer observed topics
         for (auto it = this->discovered_topics.begin(); it != this->discovered_topics.end();) {
             if (observed_topics_and_types.find(it->first) == observed_topics_and_types.end()) {
-                log(GRAY + "Lost topic " + it->first + CLR);
+                log(GRAY + L + "Lost topic " + it->first + CLR);
                 it = this->discovered_topics.erase(it);
                 topics_changed = true;
             } else {
@@ -177,7 +179,7 @@ namespace phntm {
 
             // add new topic
             if (this->discovered_topics.find(topic.first) == this->discovered_topics.end()) {
-                log("Discovered topic " + CYAN + topic.first + CLR + GRAY + " {" + topic.second[0] + "}" + CLR);
+                log(L + "Discovered topic " + CYAN + topic.first + CLR + GRAY + " {" + topic.second[0] + "}" + CLR);
                 this->discovered_topics.emplace(topic.first, topic.second[0]);
                 topics_changed = true;
                 idls_changed = this->collectIDLs(topic.second[0]) || idls_changed;
@@ -188,12 +190,12 @@ namespace phntm {
             try {
                 observed_topic_publishers = node->get_publishers_info_by_topic(topic.first);
             } catch (const std::runtime_error & ex) {
-                log(RED + "Failed getting publishers of " + topic.first + ", skipping..." + CLR);
+                log(RED + L + "Failed getting publishers of " + topic.first + ", skipping..." + CLR);
                 continue;
             }
             for (auto pub : observed_topic_publishers) {
                 if (this->discovered_nodes.find(pub.node_name()) == this->discovered_nodes.end()) {
-                    log(RED + "Publisher node " + pub.node_name() + " not found for " + topic.first + CLR);
+                    log(RED + L + "Publisher node " + pub.node_name() + " not found for " + topic.first + CLR);
                     continue;
                 }
 
@@ -215,12 +217,12 @@ namespace phntm {
             try {
                 observed_topic_subscribers = node->get_subscriptions_info_by_topic(topic.first);
             } catch (const std::runtime_error & ex) {
-                log(RED + "Failed getting subscribers of " + topic.first + ", skipping..." + CLR);
+                log(RED + L + "Failed getting subscribers of " + topic.first + ", skipping..." + CLR);
                 continue;
             }
             for (auto sub : observed_topic_subscribers) {
                 if (this->discovered_nodes.find(sub.node_name()) == this->discovered_nodes.end()) {
-                    log(RED + "Subscriber node " + sub.node_name() + " not found for " + topic.first + CLR);
+                    log(RED + L + "Subscriber node " + sub.node_name() + " not found for " + topic.first + CLR);
                     continue;
                 }
 
@@ -251,7 +253,7 @@ namespace phntm {
                 auto pub_topic = pub.first;
                 if (n.second.publishers.find(pub_topic) == n.second.publishers.end()) {
                     pubs_changed = true;
-                    log("  " + node_name + GREEN + " >> " + CLR + pub_topic + GRAY + " {" + pub.second.msg_type + "}" + CLR);
+                    log(L + node_name + GREEN + " >> " + CLR + pub_topic + GRAY + " {" + pub.second.msg_type + "}" + CLR);
                 }
             }
 
@@ -260,21 +262,21 @@ namespace phntm {
                 auto pub_topic = pub.first;
                 if (n.second.tmp_publishers.find(pub_topic) == n.second.tmp_publishers.end()) {
                     pubs_changed = true;
-                    log(GRAY + node_name + "Stopped publishing >> " + pub_topic + CLR);
+                    log(GRAY + L + node_name + "Stopped publishing >> " + pub_topic + CLR);
                 } else { // publister existed
                     auto tmp = n.second.tmp_publishers[pub_topic];
                     auto old = pub.second;
                     if (tmp.msg_type != old.msg_type) {
                         pubs_changed = true;
-                        log("Message type changed for " + node_name + GREEN + " >> " + CLR + pub_topic + GRAY + " {" + old.msg_type + "} > {" + tmp.msg_type + "}" + CLR);
+                        log(L + "Message type changed for " + node_name + GREEN + " >> " + CLR + pub_topic + GRAY + " {" + old.msg_type + "} > {" + tmp.msg_type + "}" + CLR);
                     } else if (tmp.qos.size() != old.qos.size()) {
                         pubs_changed = true;
-                        log("Changed number of publishers " + node_name + GREEN + " >> " + CLR + pub_topic + GRAY + " {" + tmp.msg_type + "}"+ (tmp.qos.size() > 1 ? "[" + std::to_string(tmp.qos.size()) + "]" : "") + CLR);
+                        log(L + "Changed number of publishers " + node_name + GREEN + " >> " + CLR + pub_topic + GRAY + " {" + tmp.msg_type + "}"+ (tmp.qos.size() > 1 ? "[" + std::to_string(tmp.qos.size()) + "]" : "") + CLR);
                     } else {
                         for (size_t i = 0; i < tmp.qos.size(); i++) {
                             if (tmp.qos[i] != old.qos[i]) {
                                 pubs_changed = true;
-                                log("Changed publisger QoS "+(tmp.qos.size() > 1 ? std::to_string(i)+"/"+std::to_string(tmp.qos.size()) : "")+" of " + node_name + GREEN + " >> " + CLR + pub_topic + GRAY + " {" + tmp.msg_type + "}" + CLR);
+                                log(L + "Changed publisger QoS "+(tmp.qos.size() > 1 ? std::to_string(i)+"/"+std::to_string(tmp.qos.size()) : "")+" of " + node_name + GREEN + " >> " + CLR + pub_topic + GRAY + " {" + tmp.msg_type + "}" + CLR);
                             }
                         }
                     }
@@ -286,7 +288,7 @@ namespace phntm {
                 auto sub_topic = sub.first;
                 if (n.second.subscribers.find(sub_topic) == n.second.subscribers.end()) {
                     subs_changed = true;
-                    log("  " + node_name  + YELLOW + " << " + CLR + sub_topic + GRAY + " {" + sub.second.msg_type + "}" + CLR);
+                    log(L +  node_name  + YELLOW + " << " + CLR + sub_topic + GRAY + " {" + sub.second.msg_type + "}" + CLR);
                 }
             }
 
@@ -295,21 +297,21 @@ namespace phntm {
                 auto sub_topic = sub.first;
                 if (n.second.tmp_subscribers.find(sub_topic) == n.second.tmp_subscribers.end()) {
                     subs_changed = true;
-                    log(GRAY + "Lost subscriber " + node_name + " << " + sub_topic + CLR);
+                    log(GRAY + L + "Lost subscriber " + node_name + " << " + sub_topic + CLR);
                 } else { // subscriber existed
                     auto tmp = n.second.tmp_subscribers[sub_topic];
                     auto old = sub.second;
                     if (tmp.msg_type != old.msg_type) {
                         subs_changed = true;
-                        log("Message type changed for " + node_name + GREEN + " << " + CLR + sub_topic + GRAY + " {" + old.msg_type + "} > {" + tmp.msg_type + "}" + CLR);
+                        log(L + "Message type changed for " + node_name + GREEN + " << " + CLR + sub_topic + GRAY + " {" + old.msg_type + "} > {" + tmp.msg_type + "}" + CLR);
                     } else if (tmp.qos.size() != old.qos.size()) {
                         subs_changed = true;
-                        log("Changed number of subscribers " + node_name + GREEN + " << " + CLR + sub_topic + GRAY + " {" + tmp.msg_type + "}" + (tmp.qos.size() > 1 ? "[" + std::to_string(tmp.qos.size()) + "]" : "") + CLR);
+                        log(L + "Changed number of subscribers " + node_name + GREEN + " << " + CLR + sub_topic + GRAY + " {" + tmp.msg_type + "}" + (tmp.qos.size() > 1 ? "[" + std::to_string(tmp.qos.size()) + "]" : "") + CLR);
                     } else {
                         for (size_t i = 0; i < tmp.qos.size(); i++) {
                             if (tmp.qos[i].qos != old.qos[i].qos) {
                                 subs_changed = true;
-                                log("Changed subscriber QoS "+(tmp.qos.size() > 1 ? std::to_string(i)+"/"+std::to_string(tmp.qos.size()) : "")+" of " + node_name + GREEN + " << " + CLR + sub_topic + GRAY + " {" + tmp.msg_type + "}" + CLR);
+                                log(L + "Changed subscriber QoS "+(tmp.qos.size() > 1 ? std::to_string(i)+"/"+std::to_string(tmp.qos.size()) : "")+" of " + node_name + GREEN + " << " + CLR + sub_topic + GRAY + " {" + tmp.msg_type + "}" + CLR);
                             } else {
                                 tmp.qos[i].error = old.qos[i].error; // copy on no change
                                 tmp.qos[i].warning = old.qos[i].warning;
@@ -353,7 +355,7 @@ namespace phntm {
             try {
                 observed_node_services = this->node->get_service_names_and_types_by_node(n.first, n.second.ns);
             } catch (const std::runtime_error & ex) {
-                log(RED + "Failed getting services of " + n.first + ", skipping..." + CLR);
+                log(RED + L + "Failed getting services of " + n.first + ", skipping..." + CLR);
                 continue;
             }
 
@@ -364,7 +366,7 @@ namespace phntm {
                     if (this->discovered_file_extractors.find(n.first) == this->discovered_file_extractors.end()) {
                         auto client = node->create_client<phntm_interfaces::srv::FileRequest>(s.first);
                         this->discovered_file_extractors.emplace(n.first, client); //id node => srv id
-                        log("Discovered " + GREEN + "file extractor" + CLR + " node " + n.first + ": " + GREEN + s.first + CLR);
+                        log(L + "Discovered " + GREEN + "file extractor" + CLR + " node " + n.first + ": " + GREEN + s.first + CLR);
                     }
                 }
 
@@ -379,12 +381,12 @@ namespace phntm {
                     n.second.services.emplace(s.first, s.second[0]);
                     services_changed = true;
                     idls_changed = this->collectIDLs(s.second[0]) || idls_changed;
-                    log("Discovered srv " + n.first + ": " + GREEN + s.first + CLR + GRAY + " {" + s.second[0] + "}" + CLR);
+                    log(L + "Discovered srv " + n.first + ": " + GREEN + s.first + CLR + GRAY + " {" + s.second[0] + "}" + CLR);
                 } else if (n.second.services.at(s.first) != s.second[0]) {
                     n.second.services[s.first] = s.second[0];
                     services_changed = true;
                     idls_changed = this->collectIDLs(s.second[0]) || idls_changed;
-                    log("Message type changed for srv " + n.first + ": " + GREEN + s.first + CLR + GRAY + " {" + s.second[0] + "}" + CLR);
+                    log(L + "Message type changed for srv " + n.first + ": " + GREEN + s.first + CLR + GRAY + " {" + s.second[0] + "}" + CLR);
                 }
             }
         }
@@ -430,12 +432,12 @@ namespace phntm {
                             case rclcpp::QoSCompatibility::Error:
                                 sub_qos.warning = "";
                                 sub_qos.error = res.reason;
-                                log(RED + "Detected QoS compatilibility error for " + id_subscriber + " << " + sub_topic + ": " + res.reason + CLR);
+                                log(RED + L + "Detected QoS compatilibility error for " + id_subscriber + " << " + sub_topic + ": " + res.reason + CLR);
                                 break;
                             case rclcpp::QoSCompatibility::Warning:
                                 sub_qos.warning = res.reason;
                                 sub_qos.error = "";
-                                log(RED + "Detected QoS compatilibility warnning for " + id_subscriber + " << " + sub_topic + ": " + res.reason + CLR);
+                                log(RED + L + "Detected QoS compatilibility warnning for " + id_subscriber + " << " + sub_topic + ": " + res.reason + CLR);
                                 break;
                             default: // ignore (last error or warning will be reported)
                                 break;
@@ -455,21 +457,21 @@ namespace phntm {
     std::string getInterfaceIDLPath(std::string interface_name) {
         auto parts = split(interface_name, '/');
         if (parts.size() < 2) {
-            log("Invalid name '" + interface_name + "'. Expected at least two parts separated by '/'", true);
+            log(Introspection::L + "Invalid name '" + interface_name + "'. Expected at least two parts separated by '/'", true);
             return "";
         }
         auto all_non_empty = std::all_of(parts.begin(), parts.end(), [](const std::string& s) { return !s.empty(); });
         if (!all_non_empty) {
-            log("Invalid name '" + interface_name + "'. Must not contain empty part", true);
+            log(Introspection::L + "Invalid name '" + interface_name + "'. Must not contain empty part", true);
             return "";
         }
         if (std::find(parts.begin(), parts.end(), "..") != parts.end()) {
-            log("Invalid name '" + interface_name + "'. Must not contain '..'", true);
+            log(Introspection::L + "Invalid name '" + interface_name + "'. Must not contain '..'", true);
             return "";
         }
         std::string prefix_path;
         if (!ament_index_cpp::has_resource("packages", parts[0], &prefix_path)) {
-            log("Unknown package '" + parts[0] + "'", true);
+            log(Introspection::L + "Unknown package '" + parts[0] + "'", true);
             return "";
         }
 
@@ -480,7 +482,7 @@ namespace phntm {
         }
 
         if (!std::filesystem::exists(interface_path)) {
-            log("Could not find the interface '" + interface_path.string() + "'", true);
+            log(Introspection::L + "Could not find the interface '" + interface_path.string() + "'", true);
             return "";
         }
         
@@ -497,7 +499,7 @@ namespace phntm {
 
         auto idl_path = getInterfaceIDLPath(msg_type);
         if (idl_path.empty()) {
-            log("IDL path not found for '" + msg_type + "'", true);
+            log(L + "IDL path not found for '" + msg_type + "'", true);
             return false;
         }
 
@@ -530,7 +532,7 @@ namespace phntm {
         }
 
         this->discovered_idls.emplace(msg_type, idl_clear);
-        log(YELLOW + "Loaded " + idl_path + CLR);
+        log(YELLOW + L + "Loaded " + idl_path + CLR);
 
         // load includes
         for (auto inc_msg_type : inluded_message_types) {
@@ -553,7 +555,7 @@ namespace phntm {
                 for (auto p : this->discovered_docker_containers) {
                     for (size_t j = 0; j < p.second.containers.size(); j++) {
                         if (msg.containers[i].id == p.second.containers[j].id) { // known container id found under new host
-                            log("Agent host changed from " + p.first + " to " + host);
+                            log(L + "Agent host changed from " + p.first + " to " + host);
                             this->discovered_docker_containers.erase(p.first);
                             break;
                         }
@@ -603,7 +605,7 @@ namespace phntm {
             msg->get_map().emplace(idl.first, one_idl);
         }
 
-        log(GRAY + "Reporting " + std::to_string(this->discovered_idls.size()) + " IDLs" + CLR);
+        log(GRAY + L + "Reporting " + std::to_string(this->discovered_idls.size()) + " IDLs" + CLR);
         if (this->config->introspection_verbose)
             log(GRAY + BridgeSocket::printMessage(msg) + CLR);
 
@@ -673,11 +675,11 @@ namespace phntm {
         }
         
         if (this->discovered_nodes.size()) {
-            log(GRAY + "Reporting " + std::to_string(this->discovered_nodes.size()) + " nodes" + CLR);
+            log(GRAY + L + "Reporting " + std::to_string(this->discovered_nodes.size()) + " nodes" + CLR);
             if (this->config->introspection_verbose)
                 log(GRAY + BridgeSocket::printMessage(msg) + CLR);
         } else {
-            log(GRAY + "Reporting empty nodes" + CLR);
+            log(GRAY + L + "Reporting empty nodes" + CLR);
         }
         BridgeSocket::emit("nodes", { msg }, nullptr);
     }
@@ -716,11 +718,11 @@ namespace phntm {
             msg->get_map().emplace(p.first, host_msg);
         }
         if (hosts.size()) {
-            log(GRAY + "Reporting " + std::to_string(this->discovered_docker_containers.size()) + " Docker containers for " + join(hosts) + CLR);
+            log(GRAY + L + "Reporting " + std::to_string(this->discovered_docker_containers.size()) + " Docker containers for " + join(hosts) + CLR);
             if (this->config->introspection_verbose)
                 log(GRAY + BridgeSocket::printMessage(msg) + CLR);
         } else {
-            log(GRAY + "Reporting empty Docker containers" + CLR);
+            log(GRAY + L + "Reporting empty Docker containers" + CLR);
         }
         
         BridgeSocket::emit("docker", { msg }, nullptr);

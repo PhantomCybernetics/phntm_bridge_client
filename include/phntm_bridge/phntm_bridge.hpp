@@ -36,7 +36,9 @@ namespace phntm {
       void readGitRepoHead(std::string repo_path);
 
       std::shared_ptr<BridgeConfig> config = std::make_shared<BridgeConfig>();
-      
+      rclcpp::CallbackGroup::SharedPtr introspection_reentrant_group;
+      rclcpp::CallbackGroup::SharedPtr media_reentrant_group;
+
     private:
       bool shutting_down = false;
 

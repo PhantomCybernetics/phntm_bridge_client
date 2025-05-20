@@ -5,9 +5,14 @@
 
 #include "phntm_bridge/sio.hpp"
 #include "phntm_bridge/config.hpp"
+#include "phntm_bridge/h264_prepacketizer.hpp"
 
 #include "rtc/datachannel.hpp"
 #include "rtc/rtc.hpp"
+
+#include "phntm_bridge/topic_reader_data.hpp"
+#include "phntm_bridge/topic_writer_data.hpp"
+#include "phntm_bridge/topic_reader_h264.hpp"
 
 namespace phntm {
 
@@ -21,6 +26,7 @@ namespace phntm {
             static std::shared_ptr<WRTCPeer> getConnectedPeer(sio::event const & ev);
             static void onPeerConnected(std::shared_ptr<PhntmBridge> node, std::string id_peer, sio::event &ev, std::shared_ptr<BridgeConfig> config);
             static void onAllPeersDisconnected();
+            static bool anyPeersConnected();
 
             void createPeerConnection();
             void removePeerConnection();
@@ -30,6 +36,7 @@ namespace phntm {
 
             // std::shared_ptr<WRTCPeer> shared_ptr;
             void processSubscriptions(int ack_msg_id = -1, sio::object_message::ptr ack = nullptr);
+            void processSubscriptionsSync(int ack_msg_id = -1, sio::object_message::ptr ack = nullptr);
             static void processAllPeerSubscriptions();
             // void processWriteSubscriptions(int ack_msg_id);
             bool addReqReadSubscription(std::string topic);
@@ -46,11 +53,13 @@ namespace phntm {
             static std::string toString(rtc::PeerConnection::State state);
             static std::string toString(rtc::PeerConnection::GatheringState state);
             static std::string toString(rtc::PeerConnection::IceState state);
-            
-            struct MediaTrackInfo {
-                std::shared_ptr<rtc::Track> track;
-                std::shared_ptr<rtc::RtpPacketizationConfig> rtpConfig;
-            };
+
+            std::shared_ptr<rtc::PeerConnection> getPC() { return  this->pc ;};
+            uint nextChannelId() { return  ++this->next_channel_id; };
+
+            std::map<std::string, std::shared_ptr<rtc::DataChannel>> outbound_data_channels; 
+            std::map<std::string, std::shared_ptr<rtc::DataChannel>> inbound_data_channels; 
+            std::map<std::string, std::shared_ptr<TopicReaderH264::MediaTrackInfo>> outbound_media_tracks;
 
         private:
             static std::map<std::string, std::shared_ptr<WRTCPeer>> connected_peers;
@@ -79,16 +88,12 @@ namespace phntm {
 
             sio::array_message::ptr unsubscribeReadDataTopic(std::string topic);
             sio::array_message::ptr unsubscribeWriteDataTopic(std::string topic);
-            sio::array_message::ptr unsubscribeMediaTopic(std::string topic);
-
-            std::map<std::string, std::shared_ptr<rtc::DataChannel>> outbound_data_channels; 
-            std::map<std::string, std::shared_ptr<rtc::DataChannel>> inbound_data_channels; 
-            std::map<std::string, std::shared_ptr<MediaTrackInfo>> outbound_media_tracks;
+            sio::array_message::ptr unsubscribeMediaTopic(std::string topic, bool close_channel);
 
             uint16_t openDataChannelForTopic(std::string topic, std::string msg_type, bool is_reliable, bool write=false);
             void closeDataChannelForTopic(std::string topic, bool write);
-            std::string openMediaTrackForTopic(std::string topic);
-            void closeMediaTrackForTopic(std::string topic);
+            // std::string openMediaTrackForTopic(std::string topic);
+            // void closeMediaTrackForTopic(std::string topic);
             
             uint16_t next_channel_id;
             bool negotiation_needed;

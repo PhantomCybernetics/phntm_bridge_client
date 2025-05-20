@@ -47,6 +47,7 @@ namespace phntm {
             Json::Value input_defaults, service_defaults;
 
             bool webrtc_debug, webrtc_verbose;
+            bool enable_ice_udp_mux, enable_ice_tcp, disable_fingerprint_verification;
             bool log_heartbeat, log_sdp;
 
             std::string file_chunks_topic;

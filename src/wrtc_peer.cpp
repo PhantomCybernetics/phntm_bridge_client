@@ -4,10 +4,6 @@
 #include "phntm_bridge/wrtc_peer.hpp"
 #include "phntm_bridge/sio.hpp"
 
-#include "phntm_bridge/topic_reader_data.hpp"
-#include "phntm_bridge/topic_writer_data.hpp"
-#include "phntm_bridge/topic_reader_h264.hpp"
-
 #include "rtc/configuration.hpp"
 #include "rtc/global.hpp"
 #include "rtc/peerconnection.hpp"
@@ -21,7 +17,6 @@
 #include <rclcpp/logging.hpp>
 #include <rclcpp/qos.hpp>
 #include <string>
-#include <uuid/uuid.h>
 
 namespace phntm {
 
@@ -47,6 +42,10 @@ namespace phntm {
 
     bool WRTCPeer::isConnected(std::string id_peer) {
         return connected_peers.find(id_peer) != connected_peers.end();
+    }
+
+    bool WRTCPeer::anyPeersConnected() {
+        return connected_peers.size() > 0;
     }
 
     // vaidates peer id, checks if connected, calls error ack if requested
@@ -78,11 +77,11 @@ namespace phntm {
 
         auto data = ev.get_message();
 
-        uuid_t session;
-        uuid_generate(session);
-        char session_str[37]; // session id unique to peer connection, change will force the peer to restart its pc
-        uuid_unparse(session, session_str);
-        auto id_session= replace(session_str, "-", "");
+        // uuid_t session;
+        // uuid_generate(session);
+        // char session_str[37]; // session id unique to peer connection, change will force the peer to restart its pc
+        // uuid_unparse(session, session_str);
+        auto id_session = generateId(24);//= replace(session_str, "-", "");
         log("Generated new session id " + id_session);
 
         auto peer = std::make_shared<WRTCPeer>(
@@ -200,12 +199,12 @@ namespace phntm {
     }
 
     void WRTCPeer::onDisconnected() {
-        RCLCPP_INFO(node->get_logger(), "%s Diconnected", this->toString().c_str());
+        RCLCPP_INFO(node->get_logger(), "%s Peer disconnected", this->toString().c_str());
         // log(BLUE + this->toString() + "Disconnected" + CLR);
         this->req_read_subs.clear(); // empty all subs
         this->req_write_subs.clear();
         this->is_connected = false;
-        this->processSubscriptions(); // clean up
+        this->processSubscriptionsSync(); // clean up in this thread
         connected_peers.erase(this->id);
     }
 
@@ -246,12 +245,12 @@ namespace phntm {
         rtc_config.disableAutoNegotiation = true;
         rtc_config.disableAutoGathering = false;
         rtc_config.certificateType = rtc::CertificateType::Default;
-        rtc_config.enableIceUdpMux = false;
+        rtc_config.enableIceUdpMux = config->enable_ice_udp_mux;
         rtc_config.iceTransportPolicy = rtc::TransportPolicy::All;
-        rtc_config.disableFingerprintVerification = false;
-        rtc_config.enableIceTcp = true;
+        rtc_config.disableFingerprintVerification = config->disable_fingerprint_verification;
+        rtc_config.enableIceTcp = config->enable_ice_tcp;
         rtc_config.forceMediaTransport = true;
-
+        
         for (auto & one : this->config->ice_servers) {
             if (one.compare(0, 5, "turn:") == 0) {
                 auto turn_url = "turn://" + this->config->ice_username + ":" + this->config->ice_secret + "@" +  one.substr(5);
@@ -284,7 +283,7 @@ namespace phntm {
                 log(YELLOW + this->toString() + "Signaling state: " + toString(state) + CLR);
             
             TopicReaderData::onPCSignalingStateChange(this->pc);
-            TopicReaderH264::onPCSignalingStateChange(this->pc);
+            TopicReaderH264::onPCSignalingStateChange(shared_from_this());
         });
         this->pc->onLocalCandidate([&](rtc::Candidate candidate){
             if (this->config->webrtc_debug)
@@ -322,175 +321,172 @@ namespace phntm {
         }
     }
 
-    void WRTCPeer::processSubscriptions(int ack_msg_id, sio::object_message::ptr ack) {
+    void WRTCPeer::processSubscriptionsSync(int ack_msg_id, sio::object_message::ptr ack) {
 
-        // std::shared_ptr<WRTCPeer> that = nullptr;
-        // for (auto pair : connected_peers) {
-        //     if (pair.second->id == this->id) {
-        //         that = pair.second;
-        //         break;
-        //     }
-        // }
-        // if (that == nullptr) {
-        //     log(this->toString() + " Ptr not found in connected_peers, not processing subscriptions", true);
-        //     return;
-        // }
+        std::lock_guard<std::mutex> lock(this->processing_subscriptions_mutex); // wait until previus pressing completes
+
+        log(BLUE + this->toString() + "Processing peer subs begins" + (ack_msg_id > -1 ? " [msg #" + std::to_string(ack_msg_id) + "]" : "") + " >>" + CLR);
+
+        bool is_reconnect = this->is_connected && BridgeSocket::isConnected() && (this->peer_needs_restart || this->pc == nullptr || this->pc->state() == rtc::PeerConnection::State::Failed || this->pc->iceState() == rtc::PeerConnection::IceState::Closed);
+        this->negotiation_needed = is_reconnect; // reset
+
+        if (this->config->webrtc_debug) {
+            std::vector<std::string> req_writes_joined;
+            for (auto one : this->req_write_subs) {
+                req_writes_joined.push_back(one[0]+" {"+ one[1]+ "}");
+            }
+            log(this->toString() + (this->is_connected ? "Processing " : "Cleaning up ") + (is_reconnect ? MAGENTA + "re-connect " + CLR : (!this->is_connected ? BLUE + "disconnected " + CLR : "")) + "subs:\n"
+                + "    read: " + GREEN + "[" + join( this->req_read_subs, ", ") + "] " + CLR + "\n"
+                + "    write: " + MAGENTA + "[" + join(req_writes_joined, ", ") + "] " + CLR + "\n"
+                + "    " + (this->pc != nullptr ? ("pc state=" + YELLOW + toString(this->pc->state()) + CLR + " signalingState=" + YELLOW + toString(this->pc->signalingState()) + CLR + " iceGatheringState=" + YELLOW + toString(this->pc->gatheringState()) + CLR) : "pc = " + RED + "null" + CLR)
+            );
+        }
+
+        sio::object_message::ptr reply = ack == nullptr ? sio::object_message::create() : ack;
+        reply->get_map().emplace("session", sio::string_message::create(this->session));
+        reply->get_map().emplace("read_video_streams", sio::array_message::create());
+        reply->get_map().emplace("read_data_channels", sio::array_message::create());
+        reply->get_map().emplace("write_data_channels", sio::array_message::create());
         
+        if (is_reconnect) {
+            this->peer_needs_restart = false;
+            this->removePeerConnection();
+            this->outbound_data_channels.clear();
+            this->inbound_data_channels.clear();
+            this->createPeerConnection();
+        }
+
+        // open read data and media channels
+        for (auto topic : this->req_read_subs) {
+            auto msg_type = Introspection::getTopic(topic);
+            if (msg_type.empty()) {
+                log(GRAY + this->toString() + " Topic '"+topic+"' not yet discovered" + CLR);
+                continue; // topic not yet discovered
+            }
+            if (!isImageOrVideoType(msg_type)) {
+                auto channel_config = this->subscribeReadDataTopic(topic, msg_type);
+                reply->get_map().at("read_data_channels")->get_vector().push_back(channel_config);
+            } else {
+                auto channel_config = this->subscribeMediaTopic(topic, msg_type);
+                reply->get_map().at("read_video_streams")->get_vector().push_back(channel_config);
+            }
+        }
+
+        // open write data channels
+        for (auto sub : this->req_write_subs) {
+            auto topic = sub[0];
+            auto msg_type = sub[1];
+
+            auto channel_config = this->subscribeWriteDataTopic(topic, msg_type);
+            reply->get_map().at("write_data_channels")->get_vector().push_back(channel_config); 
+        }
+
+        // close unused read channels
+        std::vector<std::string> r_dcs_to_close;
+        for (const auto& pair : this->outbound_data_channels)
+            if (std::find(this->req_read_subs.begin(), this->req_read_subs.end(), pair.first) == this->req_read_subs.end())
+                r_dcs_to_close.push_back(pair.first);
+        for (auto topic : r_dcs_to_close) {
+            auto removed_channel_config = this->unsubscribeReadDataTopic(topic);
+            if (removed_channel_config->get_vector().size())
+                reply->get_map().at("read_data_channels")->get_vector().push_back(removed_channel_config); // no id => unsubscribed                 
+        }
+
+        // unsubscribe from unused media streams
+        std::vector<std::string> r_media_tracks_to_close;
+        for (const auto& pair : this->outbound_media_tracks)
+            if (pair.second->in_use && std::find(this->req_read_subs.begin(), this->req_read_subs.end(), pair.first) == this->req_read_subs.end())
+                r_media_tracks_to_close.push_back(pair.first);
+        for (auto topic : r_media_tracks_to_close) {
+            auto removed_channel_config = this->unsubscribeMediaTopic(topic, is_reconnect || !this->is_connected);
+            if (removed_channel_config->get_vector().size())
+                reply->get_map().at("read_video_streams")->get_vector().push_back(removed_channel_config); // no id => unsubscribed               
+        }
+        
+        // close unused write channels
+        std::vector<std::string> w_dcs_to_close;
+        for (const auto& pair : this->inbound_data_channels) {
+            bool active = false;
+            for (size_t i = 0; i < this->req_write_subs.size(); i++) {
+                if (this->req_write_subs[i][0] == pair.first) {
+                    active = true;
+                    break;
+                }
+            }
+            if (!active)
+                w_dcs_to_close.push_back(pair.first);
+        }
+        for (auto topic : w_dcs_to_close) {
+            auto removed_channel_config = this->unsubscribeWriteDataTopic(topic);
+            if (removed_channel_config->get_vector().size())
+                reply->get_map().at("write_data_channels")->get_vector().push_back(removed_channel_config); // no id => unsubscribed   
+        }
+
+        this->awaiting_peer_reply = false;
+        if (this->is_connected && this->negotiation_needed) { // that->pc->negotiationNeeded()
+            if (this->config->webrtc_debug)
+                log(YELLOW + this->toString() + "RTC negotiation needed, generating local offer..." + CLR);
+
+            //auto offer = that->pc->createOffer();
+            std::string sdpBuffer;
+            this->pc->onLocalDescription([&](auto sdp) {
+                sdpBuffer = std::string(sdp);
+            });
+            this->pc->setLocalDescription(rtc::Description::Type::Offer);
+            while(sdpBuffer.empty() && this->is_connected) { // wait for the offer to be (re-generated)
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+            while(this->pc->gatheringState() != rtc::PeerConnection::GatheringState::Complete && this->is_connected) { // wait for the offer
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+            auto local_desc = this->pc->localDescription();
+            auto sdp = local_desc->generateSdp(); // this includes late discovered candidates, sdpBuffer doesn't
+            if (this->config->webrtc_debug) {
+                log(GRAY + this->toString() + "Generated local SDP offer" + (this->config->log_sdp ? ":\n" + sdp : "") + CLR);
+            }
+            reply->get_map().emplace("offer", sio::string_message::create(sdp));
+
+            this->awaiting_peer_reply = true;
+        }
+
+        if (!this->is_connected && !is_reconnect) { //cleanup and end here
+
+            log(GRAY + this->toString() + "Disconnected, closing PC" + CLR);
+            this->removePeerConnection();
+
+        } else if (this->is_connected) { // produce update and wait for peer reply
+
+            if (ack_msg_id < 0) { // emit as new sio peer:update message 
+                if (!this->id_app.empty())
+                    reply->get_map().emplace("id_app", sio::string_message::create(this->id_app));
+                if (!this->id_instance.empty())
+                    reply->get_map().emplace("id_instance", sio::string_message::create(this->id_instance));
+                BridgeSocket::emit("peer:update", { reply }, std::bind(&WRTCPeer::onSIOOfferReply, this, std::placeholders::_1)); //no ack
+
+            } else { // return as ack
+                BridgeSocket::ack(ack_msg_id, { reply });
+            }
+
+            while(this->awaiting_peer_reply && this->is_connected) { // block the mutex until reply is received and processed
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+
+        }
+        
+        log(BLUE + this->toString() + "<< Processing subs finished" + (ack_msg_id > -1 ? " [msg #" + std::to_string(ack_msg_id) + "]" : "") + "." + CLR);
+    }
+
+    void WRTCPeer::processSubscriptions(int ack_msg_id, sio::object_message::ptr ack) {
         std::thread newThread([that = shared_from_this(), ack_msg_id, ack]() {
             log(GRAY + that->toString() + "Requested peer subs processing" + (ack_msg_id > -1 ? " [msg #" + std::to_string(ack_msg_id) + "]" : "") + CLR);
 
-            {
-                std::lock_guard<std::mutex> lock(that->processing_subscriptions_mutex); // wait until previus pressing completes
-                log(BLUE + that->toString() + "Processing peer subs begins" + (ack_msg_id > -1 ? " [msg #" + std::to_string(ack_msg_id) + "]" : "") + " >>" + CLR);
+            try {
+                that->processSubscriptionsSync(ack_msg_id, ack);
 
-                bool is_reconnect = that->is_connected && BridgeSocket::isConnected() && (that->peer_needs_restart || that->pc == nullptr || that->pc->state() == rtc::PeerConnection::State::Failed || that->pc->iceState() == rtc::PeerConnection::IceState::Closed);
-                that->negotiation_needed = is_reconnect; // reset
-
-                if (that->config->webrtc_debug) {
-                    std::vector<std::string> req_writes_joined;
-                    for (auto one : that->req_write_subs) {
-                        req_writes_joined.push_back(one[0]+" {"+ one[1]+ "}");
-                    }
-                    log(that->toString() + (that->is_connected ? "Processing " : "Cleaning up ") + (is_reconnect ? MAGENTA + "re-connect " + CLR : (!that->is_connected ? BLUE + "disconnected " + CLR : "")) + "subs:\n"
-                        + "    read: " + GREEN + "[" + join( that->req_read_subs, ", ") + "] " + CLR + "\n"
-                        + "    write: " + MAGENTA + "[" + join(req_writes_joined, ", ") + "] " + CLR + "\n"
-                        + "    " + (that->pc != nullptr ? ("pc state=" + YELLOW + toString(that->pc->state()) + CLR + " signalingState=" + YELLOW + toString(that->pc->signalingState()) + CLR + " iceGatheringState=" + YELLOW + toString(that->pc->gatheringState()) + CLR) : "pc = " + RED + "null" + CLR)
-                    );
-                }
-
-                sio::object_message::ptr reply = ack == nullptr ? sio::object_message::create() : ack;
-                reply->get_map().emplace("session", sio::string_message::create(that->session));
-                reply->get_map().emplace("read_video_streams", sio::array_message::create());
-                reply->get_map().emplace("read_data_channels", sio::array_message::create());
-                reply->get_map().emplace("write_data_channels", sio::array_message::create());
-                
-                if (is_reconnect) {
-                    that->peer_needs_restart = false;
-                    that->removePeerConnection();
-                    that->outbound_data_channels.clear();
-                    that->inbound_data_channels.clear();
-                    that->createPeerConnection();
-                }
-
-                // open read data and media channels
-                for (auto topic : that->req_read_subs) {
-                    auto msg_type = Introspection::getTopic(topic);
-                    if (msg_type.empty()) {
-                        log(GRAY + that->toString() + " Topic '"+topic+"' not yet discovered" + CLR);
-                        continue; // topic not yet discovered
-                    }
-                    if (!isImageOrVideoType(msg_type)) {
-                        auto channel_config = that->subscribeReadDataTopic(topic, msg_type);
-                        reply->get_map().at("read_data_channels")->get_vector().push_back(channel_config);
-                    } else {
-                        auto channel_config = that->subscribeMediaTopic(topic, msg_type);
-                        reply->get_map().at("read_video_streams")->get_vector().push_back(channel_config);
-                    }
-                }
-
-                // open write data channels
-                for (auto sub : that->req_write_subs) {
-                    auto topic = sub[0];
-                    auto msg_type = sub[1];
-
-                    auto channel_config = that->subscribeWriteDataTopic(topic, msg_type);
-                    reply->get_map().at("write_data_channels")->get_vector().push_back(channel_config); 
-                }
-
-                // close unused read channels
-                std::vector<std::string> r_dcs_to_close;
-                for (const auto& pair : that->outbound_data_channels)
-                    if (std::find(that->req_read_subs.begin(), that->req_read_subs.end(), pair.first) == that->req_read_subs.end())
-                        r_dcs_to_close.push_back(pair.first);
-                for (auto topic : r_dcs_to_close) {
-                    auto removed_channel_config = that->unsubscribeReadDataTopic(topic);
-                    if (removed_channel_config->get_vector().size())
-                        reply->get_map().at("read_data_channels")->get_vector().push_back(removed_channel_config); // no id => unsubscribed                 
-                }
-
-                // unsubscribe from unused media streams
-                std::vector<std::string> r_media_tracks_to_close;
-                for (const auto& pair : that->outbound_media_tracks)
-                    if (std::find(that->req_read_subs.begin(), that->req_read_subs.end(), pair.first) == that->req_read_subs.end())
-                        r_media_tracks_to_close.push_back(pair.first);
-                for (auto topic : r_media_tracks_to_close) {
-                    auto removed_channel_config = that->unsubscribeMediaTopic(topic);
-                    if (removed_channel_config->get_vector().size())
-                        reply->get_map().at("read_video_streams")->get_vector().push_back(removed_channel_config); // no id => unsubscribed               
-                }
-
-                // close unused write channels
-                std::vector<std::string> w_dcs_to_close;
-                for (const auto& pair : that->inbound_data_channels) {
-                    bool active = false;
-                    for (size_t i = 0; i < that->req_write_subs.size(); i++) {
-                        if (that->req_write_subs[i][0] == pair.first) {
-                            active = true;
-                            break;
-                        }
-                    }
-                    if (!active)
-                        w_dcs_to_close.push_back(pair.first);
-                }
-                for (auto topic : w_dcs_to_close) {
-                    auto removed_channel_config = that->unsubscribeWriteDataTopic(topic);
-                    if (removed_channel_config->get_vector().size())
-                        reply->get_map().at("write_data_channels")->get_vector().push_back(removed_channel_config); // no id => unsubscribed   
-                }
-
-                that->awaiting_peer_reply = false;
-                if (that->is_connected && that->negotiation_needed) { // that->pc->negotiationNeeded()
-                    if (that->config->webrtc_debug)
-                        log(YELLOW + that->toString() + "RTC negotiation needed, generating local offer..." + CLR);
-
-                    //auto offer = that->pc->createOffer();
-                    std::string sdpBuffer;
-                    that->pc->onLocalDescription([&](auto sdp) {
-                        sdpBuffer = std::string(sdp);
-                    });
-                    that->pc->setLocalDescription(rtc::Description::Type::Offer);
-                    while(sdpBuffer.empty() && that->is_connected) { // wait for the offer to be (re-generated)
-                        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                    }
-                    while(that->pc->gatheringState() != rtc::PeerConnection::GatheringState::Complete && that->is_connected) { // wait for the offer
-                        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                    }
-                    auto local_desc = that->pc->localDescription();
-                    auto sdp = local_desc->generateSdp(); // this includes late discovered candidates, sdpBuffer doesn't
-                    if (that->config->webrtc_debug) {
-                        log(GRAY + that->toString() + "Generated local SDP offer" + (that->config->log_sdp ? ":\n" + sdp : "") + CLR);
-                    }
-                    reply->get_map().emplace("offer", sio::string_message::create(sdp));
-
-                    that->awaiting_peer_reply = true;
-                }
-
-                if (!that->is_connected && !is_reconnect) { //cleanup and end here
-
-                    log(GRAY + that->toString() + "Disconnected, closing PC" + CLR);
-                    that->removePeerConnection();
-
-                } else if (that->is_connected) { // produce update and wait for peer reply
-
-                    if (ack_msg_id < 0) { // emit as new sio peer:update message 
-                        if (!that->id_app.empty())
-                            reply->get_map().emplace("id_app", sio::string_message::create(that->id_app));
-                        if (!that->id_instance.empty())
-                            reply->get_map().emplace("id_instance", sio::string_message::create(that->id_instance));
-                        BridgeSocket::emit("peer:update", { reply }, std::bind(&WRTCPeer::onSIOOfferReply, that, std::placeholders::_1)); //no ack
-        
-                    } else { // return as ack
-                        BridgeSocket::ack(ack_msg_id, { reply });
-                    }
-        
-                    while(that->awaiting_peer_reply && that->is_connected) { // block the mutex until reply is received and processed
-                        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                    }
-
-                }
-                
-                log(BLUE + that->toString() + "<< Processing subs finished" + (ack_msg_id > -1 ? " [msg #" + std::to_string(ack_msg_id) + "]" : "") + "." + CLR);
+            } catch (const std::exception& ex) {
+                log(that->toString() + "Exception in subs pricessor: " + std::string(ex.what()), true);
             }
+
         });
         newThread.detach();
     }
@@ -607,53 +603,6 @@ namespace phntm {
     //         video->track->send(initialNalus);
     //     }
     // }
-
-    std::string WRTCPeer::openMediaTrackForTopic(std::string topic) {
-        rtc::SSRC ssrc = ++this->next_channel_id;;
-        auto payload_type = 96;
-        auto cname = topic;
-        auto msid = topic;
-        auto mid = "stream-" + std::to_string(ssrc); // must be unique per stream and < 16 chars in order to open a new stream
-                                                         // when adding audio, it should use the same mid to be added to the same stream (?!)
-        rtc::Description::Video media(mid, rtc::Description::Direction::SendOnly);
-		media.addH264Codec(payload_type); // Must match the payload type of the external h264 RTP stream
-		media.addSSRC(ssrc, cname, msid, topic); //track id is used to identify streams by the client
-		auto track = this->pc->addTrack(media);
-
-        // create RTP configuration
-        auto rtpConfig = std::make_shared<rtc::RtpPacketizationConfig>(ssrc, cname, payload_type, rtc::H264RtpPacketizer::ClockRate);
-        // create packetizer
-        auto packetizer = std::make_shared<rtc::H264RtpPacketizer>(rtc::NalUnit::Separator::StartSequence, rtpConfig);
-        // add RTCP SR handler
-        auto srReporter = std::make_shared<rtc::RtcpSrReporter>(rtpConfig);
-        packetizer->addToChain(srReporter);
-        // add RTCP NACK handler
-        auto nackResponder = std::make_shared<rtc::RtcpNackResponder>();
-        packetizer->addToChain(nackResponder);
-        // set handler
-        track->setMediaHandler(packetizer);
-
-        auto track_info = std::make_shared<MediaTrackInfo>(MediaTrackInfo {track, rtpConfig} );
-        this->outbound_media_tracks.emplace(topic, track_info);
-
-        track->onOpen([this, topic](){
-            log(GREEN + this->toString() + "Media track open for " + topic + CLR);
-        });
-
-        track->onClosed([this, topic](){
-            log(BLUE + this->toString() + "Media track closed for "+topic + CLR);
-        });
-
-        return topic;
-    }
-
-    void WRTCPeer::closeMediaTrackForTopic(std::string topic) {
-        log(GRAY + this->toString() + "Closing media track for " + topic + CLR);
-        if (this->outbound_media_tracks.at(topic)->track->isOpen()) {
-            this->outbound_media_tracks.at(topic)->track->close();
-        }
-        this->outbound_media_tracks.erase(topic);
-    }
 
     void WRTCPeer::closeDataChannelForTopic(std::string topic, bool write) {
 
@@ -777,18 +726,24 @@ namespace phntm {
         auto topic_conf = this->node->loadTopicMsgTypeExtraConfig(topic, msg_type); // get topic extras from yaml
 
         std::string track_id;
-        std::shared_ptr<MediaTrackInfo> track_info;
+        std::shared_ptr<TopicReaderH264::MediaTrackInfo> track_info;
         if (this->outbound_media_tracks.find(topic) != this->outbound_media_tracks.end()) {
+            log(GRAY + this->toString() + "Re-using media track for " + topic + CLR);
             track_info = this->outbound_media_tracks.at(topic);
-            track_id = topic;
+            track_info->in_use = true;
+            track_id = track_info->id_track;
         } else {
-            track_id = this->openMediaTrackForTopic(topic);
+            track_id = TopicReaderH264::openMediaTrackForTopic(topic, shared_from_this());
             track_info = this->outbound_media_tracks.at(topic);
             this->negotiation_needed = true;
         }
 
         if (isEncodedVideoType(msg_type)) {
-            auto topic_reader = TopicReaderH264::getForTopic(topic, this->node, qos, topic_conf->get_map().at("debug_num_frames")->get_int());
+            auto topic_reader = TopicReaderH264::getForTopic(topic, this->node, qos,
+                                                             topic_conf->get_map().at("use_pts")->get_bool(),
+                                                             topic_conf->get_map().at("debug_verbose")->get_bool(),
+                                                             topic_conf->get_map().at("debug_num_frames")->get_int()
+                                                            );
             topic_reader->addOutput(track_info, this->pc); // only adds once
         } else {
             //TODO Image topics
@@ -802,25 +757,35 @@ namespace phntm {
         return channel_config;
     }
 
-    sio::array_message::ptr WRTCPeer::unsubscribeMediaTopic(std::string topic) {
+    sio::array_message::ptr WRTCPeer::unsubscribeMediaTopic(std::string topic, bool close_channel) {
         auto removed_channel_config = sio::array_message::create();
         if (this->outbound_media_tracks.find(topic) != this->outbound_media_tracks.end()) {
-            
+
             auto track_info = this->outbound_media_tracks.at(topic);
 
-            if (TopicReaderH264::getForTopic(topic) != nullptr) {
-                auto tr = TopicReaderH264::getForTopic(topic);
-                if (tr->removeOutput(track_info)) { // stops if no other peer subs left, returns true of empty
-                    TopicReaderH264::destroy(topic);
+            if (!track_info->in_use && !close_channel)
+                return removed_channel_config; // no change
+
+            track_info->in_use = false;
+
+            try {
+                if (auto tr = TopicReaderH264::getForTopic(topic)) {
+                    if (tr->removeOutput(track_info)) { // stops if no other peer subs left, returns true of empty
+                        TopicReaderH264::destroy(topic);
+                    }
+                } else if (false) {
+                    //TODO Image topics
+                } else {
+                    log(RED + "Topic reader not found for " + topic +"!" + CLR) ;
                 }
-            } else if (false) {
-                //TODO Image topics
-            } else {
-                log(RED + "Topic reader not found for " + topic +"!" + CLR) ;
+            } catch (const std::exception & ex) {
+                log("Exception destroying media topic reader: " + std::string(ex.what()), true);
             }
-            
-            this->closeMediaTrackForTopic(topic); // removes from outbound_media_tracks
-            removed_channel_config->get_vector().push_back(sio::string_message::create(topic));
+            if (close_channel) 
+                TopicReaderH264::closeMediaTrackForTopic(topic, shared_from_this()); // when disconected, removes from outbound_media_tracks
+            else
+                log(GRAY + this->toString() + "Keeping open media track for " + topic + CLR); 
+            removed_channel_config->get_vector().push_back(sio::string_message::create(topic)); // no id_track
         }
         return removed_channel_config;
     }

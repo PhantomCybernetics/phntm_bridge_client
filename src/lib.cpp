@@ -2,6 +2,7 @@
 #include "phntm_bridge/const.hpp"
 #include <algorithm>
 #include <iostream>
+#include <uuid/uuid.h>
 
 namespace phntm {
 
@@ -11,6 +12,16 @@ namespace phntm {
         } else {
             std::cout << msg + (append_endl ? "\n" : "");
         }
+    }
+
+    std::string generateId(const size_t length) {
+        uuid_t uuid;
+        uuid_generate_time(uuid);
+        char uuid_str[37]; // zero-terminated
+        uuid_unparse(uuid, uuid_str);
+        auto res = std::string(uuid_str);
+        res = replace(res, "-", "");
+        return res.substr(0, length);
     }
 
     std::string trim(const std::string str, const char *trim_chars) {
