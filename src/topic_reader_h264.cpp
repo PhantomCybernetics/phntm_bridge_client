@@ -162,17 +162,15 @@ namespace phntm {
     void TopicReaderH264::onFrame(std::shared_ptr<ffmpeg_image_transport_msgs::msg::FFMPEGPacket> msg) {
         if (!this->worker_running)
              return;
-        {
-            //std::lock_guard<std::mutex> lock(this->frame_queue_mutex); 
-            //this->latest_payload_size = msg->data.size();
-            //this->latest_payload.resize(this->latest_payload_size);
-            //std::memcpy(this->latest_payload.data(), msg->data.data(), this->latest_payload_size);
-            //log("received sec=" + std::to_string(msg->header.stamp.sec) + " nanosec=" + std::to_string(msg->header.stamp.nanosec));
-            this->frame_queue.push(std::move(msg));
-            this->frame_queue_cv.notify_one(); // Notify one waiting thread
+        //std::lock_guard<std::mutex> lock(this->frame_queue_mutex); 
+        //this->latest_payload_size = msg->data.size();
+        //this->latest_payload.resize(this->latest_payload_size);
+        //std::memcpy(this->latest_payload.data(), msg->data.data(), this->latest_payload_size);
+        //log("received sec=" + std::to_string(msg->header.stamp.sec) + " nanosec=" + std::to_string(msg->header.stamp.nanosec));
+        // this->frame_queue.push(std::move(msg));
+        // this->frame_queue_cv.notify_one(); // Notify one waiting thread
 
-            // this->processFrame(msg);
-        }
+        this->processFrame(msg); // TODO not using the worker queue here
     }
 
     void TopicReaderH264::processFrame(std::shared_ptr<ffmpeg_image_transport_msgs::msg::FFMPEGPacket> msg) {
