@@ -121,7 +121,7 @@ namespace phntm {
         std::memcpy(this->latest_payload.data(), msg.buffer, this->latest_payload_size);
 
         if (!this->logged_receiving) {
-            log(MAGENTA + "Receiving data from " + this->topic + " " + std::to_string(this->latest_payload_size) + " B" + CLR);
+            log(MAGENTA + "[" + getThreadId() + "] Receiving data from " + this->topic + " " + std::to_string(this->latest_payload_size) + " B" + CLR);
             this->logged_receiving = true;
         }
 
@@ -131,14 +131,14 @@ namespace phntm {
             if (!output->dc->isOpen()) {
                 if (!output->logged_closed) {
                     output->logged_closed = true;
-                    log(GRAY + "DC #" + std::to_string(output->dc->id().value()) + " is closed for " + this->topic + CLR);
+                    log(GRAY + "[" + getThreadId() + "] DC #" + std::to_string(output->dc->id().value()) + " is closed for " + this->topic + CLR);
                 }
                 continue;
             }
             if (!output->init_complete) {
                 if (!output->logged_init_incomplete) {
                     output->logged_init_incomplete = true;
-                    log(GRAY + "DC #" + std::to_string(output->dc->id().value()) + " not sending msg yet for " + this->topic + " (init incomplete)" + CLR);
+                    log(GRAY + "[" + getThreadId() + "] DC #" + std::to_string(output->dc->id().value()) + " not sending msg yet for " + this->topic + " (init incomplete)" + CLR);
                 }
                 continue;
             }

@@ -159,7 +159,8 @@ namespace phntm {
         return static_cast<uint32_t>(rtpTimestamp);
     }
 
-    void TopicReaderH264::onFrame(std::shared_ptr<ffmpeg_image_transport_msgs::msg::FFMPEGPacket> msg) {
+    void TopicReaderH264::onFrame(const std::shared_ptr<ffmpeg_image_transport_msgs::msg::FFMPEGPacket> msg) {
+        std::lock_guard<std::mutex> lock(this->subscriber_mutex); // this will prevent ros from calling all subs on the same thread
         if (!this->worker_running)
              return;
         //std::lock_guard<std::mutex> lock(this->frame_queue_mutex); 
@@ -184,14 +185,14 @@ namespace phntm {
         }
 
         if (!this->logged_receiving) {
-            log(MAGENTA + "Receiving " + std::to_string(msg->width) + "x" + std::to_string(msg->height)+ " " + msg->encoding + " frames from " + this->topic + " " + std::to_string(this->latest_payload_size) + " B" + CLR);
+            log(MAGENTA + "[" + getThreadId() + "] Receiving " + std::to_string(msg->width) + "x" + std::to_string(msg->height)+ " " + msg->encoding + " frames from " + this->topic + " " + std::to_string(this->latest_payload_size) + " B" + CLR);
             this->logged_receiving = true;
         }
 
         if (this->debug_num_frames > 0) {
             auto nal_units = splitNalUnits(msg->data.data(), msg->data.size());
             auto has_sps_pps = hasSpsPps(nal_units);
-            log("[" + this->topic + "] " + std::string(is_keyframe ? CYAN + "Keyframe" + CLR : "Frame") + " has "+std::to_string(nal_units.size())+" nal units "+(has_sps_pps?" HAS SPS/PPS":"")+"; ts=" + std::to_string(ts));
+            log("[" + getThreadId() + "]["+ this->topic + "] " + std::string(is_keyframe ? CYAN + "Keyframe" + CLR : "Frame") + " has "+std::to_string(nal_units.size())+" nal units "+(has_sps_pps?" HAS SPS/PPS":"")+"; ts=" + std::to_string(ts));
             for (const auto & nal_unit: nal_units) {
                 logNalUnit(nal_unit.data(), nal_unit.size(), this->topic);
             }
@@ -217,7 +218,7 @@ namespace phntm {
                 if (!output->track_info->init_complete) {
                     if (!output->logged_init_incomplete) {
                         output->logged_init_incomplete = true;
-                        log(GRAY + "Track #" + std::to_string(output->track_info->ssrc) + " not sending msgs yet for " + this->topic + " (init incomplete)" + CLR);
+                        log(GRAY + "[" + getThreadId() + "] Track #" + std::to_string(output->track_info->ssrc) + " not sending msgs yet for " + this->topic + " (init incomplete)" + CLR);
                     }
                     continue;
                 }
@@ -225,7 +226,7 @@ namespace phntm {
                 if (!output->track_info->track->isOpen()) {
                     if (!output->logged_closed) {
                         output->logged_closed = true;
-                        log(GRAY + "Track #" + std::to_string(output->track_info->ssrc) + " is closed for " + this->topic + CLR);
+                        log(GRAY + "[" + getThreadId() + "] Track #" + std::to_string(output->track_info->ssrc) + " is closed for " + this->topic + CLR);
                     }
                     continue;
                 }
@@ -240,7 +241,7 @@ namespace phntm {
 
                 {
                     if (this->debug_verbose)
-                        log(GRAY + "Pushing one of " + this->topic + " to output queue for track #" + std::to_string(output->track_info->ssrc) + CLR);
+                        log(GRAY + "[" + getThreadId() + "] Pushing one of " + this->topic + " to output queue for track #" + std::to_string(output->track_info->ssrc) + CLR);
                     // std::lock_guard<std::mutex> ouput_lock(output->queue_mutex); 
                     OutputMsg frame { msg, ts, is_keyframe };
                     output->queue.push(frame);
@@ -306,6 +307,7 @@ namespace phntm {
 
     void TopicReaderH264::outputFramesWorker(std::shared_ptr<Output> output) {
         
+        log(GRAY + "[" + getThreadId() + "] Output worker started for track " + output->track_info->id_track + CLR);
         while (this->worker_running && output->active) {
 
             std::unique_lock<std::mutex> lock(output->queue_mutex);
@@ -330,14 +332,14 @@ namespace phntm {
             lock.unlock();
 
             if (!output->active || !this->worker_running) {
-                log("Output closed for " + this->topic + " track #" + std::to_string(output->track_info->ssrc));
+                log("[" + getThreadId() + "] Output closed for " + this->topic + " track #" + std::to_string(output->track_info->ssrc));
                 return;
             }
 
             if (output->ts_base == 0) {
                 output->ts_base = frame.ts;
                 output->track_info->rtpConfig->timestamp = output->track_info->rtpConfig->startTimestamp = frame.ts;
-                log("Track #" + std::to_string(output->track_info->ssrc) + " initial ts set to " + std::to_string(frame.ts)
+                log("[" + getThreadId() + "] Track #" + std::to_string(output->track_info->ssrc) + " initial ts set to " + std::to_string(frame.ts)
                     + " sec=" + std::to_string(frame.msg->header.stamp.sec) + " nanosec=" + std::to_string(frame.msg->header.stamp.nanosec));
             }
 
@@ -346,7 +348,7 @@ namespace phntm {
                 // this->latest_payload.resize(this->latest_payload_size);
                 // std::memcpy(this->latest_payload.data(), msg->data.data(), this->latest_payload_size);
                 if (this->debug_verbose)
-                    log("Track #" + std::to_string(output->track_info->ssrc) + " sending " + (frame.is_keyframe ? CYAN + "KEYFRAME" + CLR : "frame") + " w ts=" + std::to_string(frame.ts)+" sec=" + std::to_string(frame.msg->header.stamp.sec) + " nanosec=" + std::to_string(frame.msg->header.stamp.nanosec));
+                    log("[" + getThreadId() + "] Track #" + std::to_string(output->track_info->ssrc) + " sending " + (frame.is_keyframe ? CYAN + "KEYFRAME" + CLR : "frame") + " w ts=" + std::to_string(frame.ts)+" sec=" + std::to_string(frame.msg->header.stamp.sec) + " nanosec=" + std::to_string(frame.msg->header.stamp.nanosec));
 
                 output->track_info->track->sendFrame(reinterpret_cast<const std::byte*>(frame.msg->data.data()), frame.msg->data.size(), frame.ts);
                 // output->track_info->track->sendPrepacketizedFrame(fragments, info);
@@ -387,7 +389,7 @@ namespace phntm {
                 }
             }
         }
-        log(BLUE + "Track #" + std::to_string(output->track_info->ssrc) + " frames worker finished; " /*worker_running=" + std::to_string(this->worker_running) + ", " */ + "output.active=" + std::to_string(output->active) + CLR); 
+        log(BLUE + "[" + getThreadId() + "] Track #" + std::to_string(output->track_info->ssrc) + " frames worker finished" /*worker_running=" + std::to_string(this->worker_running) + ", " */ + "output.active=" + std::to_string(output->active) + CLR); 
     }
 
     void TopicReaderH264::start() {
@@ -395,8 +397,12 @@ namespace phntm {
             return; //already running
 
         try {
+            this->callback_group = this->bridge_node->create_callback_group(
+                rclcpp::CallbackGroupType::Reentrant
+            ); // one group per topic to allow multithreaed subscription
             auto options = rclcpp::SubscriptionOptions();
-            options.callback_group = this->bridge_node->media_reentrant_group;
+            // options.callback_group = this->bridge_node->media_reentrant_group;
+            options.callback_group = this->callback_group; // each subscription in its own group
             this->sub = this->bridge_node->create_subscription<ffmpeg_image_transport_msgs::msg::FFMPEGPacket>(
                 this->topic,
                 this->qos,

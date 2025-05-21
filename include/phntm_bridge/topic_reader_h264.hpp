@@ -86,15 +86,17 @@ namespace phntm {
             std::vector<std::shared_ptr<Output>> outputs; // target data channels & pcs
             std::mutex outputs_mutex;
             static std::mutex readers_mutex;
-           
+            std::mutex subscriber_mutex;
+
             std::string topic;
             std::shared_ptr<PhntmBridge> bridge_node;
             rclcpp::QoS qos;
 
             void start();
             void stop();
-            void onFrame(std::shared_ptr<ffmpeg_image_transport_msgs::msg::FFMPEGPacket> data);
+            void onFrame(const std::shared_ptr<ffmpeg_image_transport_msgs::msg::FFMPEGPacket> data);
             std::shared_ptr<rclcpp::Subscription<ffmpeg_image_transport_msgs::msg::FFMPEGPacket>> sub;
+            rclcpp::CallbackGroup::SharedPtr callback_group;
             std::thread processor_thread;
             std::queue<std::shared_ptr<ffmpeg_image_transport_msgs::msg::FFMPEGPacket>> frame_queue;
             std::mutex frame_queue_mutex;

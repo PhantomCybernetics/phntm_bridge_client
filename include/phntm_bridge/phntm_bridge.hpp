@@ -29,7 +29,7 @@ namespace phntm {
       PhntmBridge(std::string node_name, rclcpp::NodeOptions node_options, std::shared_ptr<BridgeConfig> config);
       ~PhntmBridge();
       void loadConfig(std::shared_ptr<BridgeConfig> config);
-      rclcpp::QoS loadTopicQoSConfig(std::string topic, size_t default_depth=1, int default_reliability=2, int default_durability=2, float default_lifespan_sec=-1.0);
+      rclcpp::QoS loadTopicQoSConfig(std::string topic, size_t default_depth=1, rclcpp::ReliabilityPolicy default_reliability=rclcpp::ReliabilityPolicy::BestEffort, rclcpp::DurabilityPolicy default_durability=rclcpp::DurabilityPolicy::Volatile, float default_lifespan_sec=-1.0);
       sio::message::ptr loadTopicMsgTypeExtraConfig(std::string topic, std::string msg_type);
       void setupLocalServices();
       void callGenericService(std::string service_name, std::string service_type, sio::event const& ev);

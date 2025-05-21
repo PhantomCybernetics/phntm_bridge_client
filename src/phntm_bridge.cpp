@@ -69,7 +69,11 @@ int main(int argc, char ** argv)
 
   std::signal(SIGINT, signal_handler);
 
-  rclcpp::executors::MultiThreadedExecutor executor;
+  rclcpp::ExecutorOptions options;
+  //options.number_of_threads = 4;  // Custom thread pool size
+  rclcpp::executors::MultiThreadedExecutor executor(options, 0); // 0 = auto
+
+  log("Executor using " + std::to_string(executor.get_number_of_threads())+ " threads");
 
   auto config = std::make_shared<BridgeConfig>();
 

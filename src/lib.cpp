@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <iostream>
 #include <uuid/uuid.h>
+#include <thread>
 
 namespace phntm {
 
@@ -120,4 +121,9 @@ namespace phntm {
         return result.empty() ? "0" : result; // Handle num = 0
     }
     
+    std::string getThreadId() {
+        std::ostringstream oss;
+        oss << std::this_thread::get_id();
+        return oss.str();
+    }
 }
