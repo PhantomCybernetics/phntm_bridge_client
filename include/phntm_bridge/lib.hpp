@@ -17,6 +17,9 @@ namespace phntm {
     size_t CURLResponseCallback(void* contents, size_t size, size_t nmemb, std::string* out);
     std::string toHex(uint32_t num, bool uppercase = false);
     std::string getThreadId();
+    uint64_t convertToRtpTimestamp(int32_t sec, uint32_t nanosec);
+    uint64_t getCurrentRtpTimestamp();
+    uint32_t getRandomUInt();
 
     struct CustomWidgetDef {
         std::string class_name;

@@ -82,7 +82,7 @@ add_executable(phntm_bridge
               src/wrtc_peer.cpp
               src/status_leds.cpp
               src/file_extractor.cpp
-              src/h264_prepacketizer.cpp
+              # src/h264_prepacketizer.cpp
               ${SIOCLIENT_SRC}
               # ${ASIO_SRC}
               )
@@ -97,9 +97,9 @@ target_include_directories(phntm_bridge PUBLIC
   /ros2_ws/src/phntm_bridge/sioclient/
   /root/asio/asio/include/
   /root/libdatachannel/include/
-  /root/libdatachannel/include/rtc/
-  /root/libdatachannel/deps/plog/include/
-  /root/libdatachannel/src/
+  # /root/libdatachannel/include/rtc/
+  # /root/libdatachannel/deps/plog/include/
+  # /root/libdatachannel/src/
   ${TINYXML2_INCLUDE_DIRS}
   ${OPENSSL_INCLUDE_DIR}
   ${GPIOD_INCLUDE_DIRS}

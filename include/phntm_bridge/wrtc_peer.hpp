@@ -61,6 +61,8 @@ namespace phntm {
             std::map<std::string, std::shared_ptr<rtc::DataChannel>> inbound_data_channels; 
             std::map<std::string, std::shared_ptr<TopicReaderH264::MediaTrackInfo>> outbound_media_tracks;
 
+            uint64_t connectedRTPTimeBase() { return this->connected_rtp_time_base; };
+
         private:
             static std::map<std::string, std::shared_ptr<WRTCPeer>> connected_peers;
             static void addUIConfigToMessage(sio::object_message::ptr msg, std::shared_ptr<BridgeConfig> config);
@@ -73,6 +75,7 @@ namespace phntm {
             std::string id_instance;
             std::string session;
             bool is_connected;
+            uint64_t connected_rtp_time_base = 0;
             std::shared_ptr<PhntmBridge> node;
 
             std::shared_ptr<BridgeConfig> config;

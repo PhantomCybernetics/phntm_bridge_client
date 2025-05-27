@@ -113,7 +113,7 @@ namespace phntm {
             config->ice_username = config->id_robot;
         config->ice_secret = this->get_parameter("ice_secret").as_string();
 
-        this->declare_parameter("enable_ice_udp_mux", false); // multiple WebRTC peer connections can be multiplexed over a single UDP port
+        this->declare_parameter("enable_ice_udp_mux", true); // multiple WebRTC peer connections can be multiplexed over a single UDP port
         this->declare_parameter("enable_ice_tcp", false); // in addition to the default UDP candidates, the library will also attempt to establish peer-to-peer connections over TCP if UDP is unavailable or blocked by network restrictions.
         this->declare_parameter("disable_fingerprint_verification", false);
         config->enable_ice_udp_mux = this->get_parameter("enable_ice_udp_mux").as_bool();
@@ -437,11 +437,15 @@ namespace phntm {
                 this->declare_parameter(topic + ".debug_verbose", false); // will debug this many frames (instects NAL units)
             } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
             try {
+                this->declare_parameter(topic + ".create_node", true); // if false, subscriber is created on the main node
+            } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+            try {
                 this->declare_parameter(topic + ".use_pts", true); // if false, message timestamp is converted to 1/90000
             } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
             res->get_map().emplace("debug_num_frames", sio::int_message::create(this->get_parameter(topic + ".debug_num_frames").as_int()));
             res->get_map().emplace("debug_verbose", sio::bool_message::create(this->get_parameter(topic + ".debug_verbose").as_bool()));
             res->get_map().emplace("use_pts", sio::bool_message::create(this->get_parameter(topic + ".use_pts").as_bool()));
+            res->get_map().emplace("create_node", sio::bool_message::create(this->get_parameter(topic + ".create_node").as_bool()));
         }
 
         // NN Detections

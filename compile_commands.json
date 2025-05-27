@@ -2,7 +2,7 @@
   {
     "directory": "/ros2_ws/src/phntm_bridge",
     "command": "/usr/bin/c++ -std=c++17 \ 
-                -DDEFAULT_RMW_IMPLEMENTATION=rmw_fastrtps_cpp -DRCUTILS_ENABLE_FAULT_INJECTION -DRTC_ENABLE_MEDIA \
+                -DDEFAULT_RMW_IMPLEMENTATION=rmw_fastrtps_cpp -DRCUTILS_ENABLE_FAULT_INJECTION -DRTC_ENABLE_MEDIA -DUSE_MBEDTLS=1 \
                 -I/ros2_ws/src/phntm_bridge/include \
                 -I/ros2_ws/src/phntm_bridge/sioclient \
                 -I/root/libdatachannel/include \

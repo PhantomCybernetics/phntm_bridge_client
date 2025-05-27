@@ -4,6 +4,7 @@
 #include <iostream>
 #include <uuid/uuid.h>
 #include <thread>
+#include <random>
 
 namespace phntm {
 
@@ -125,5 +126,38 @@ namespace phntm {
         std::ostringstream oss;
         oss << std::this_thread::get_id();
         return oss.str();
+    }
+
+    uint64_t convertToRtpTimestamp(int32_t sec, uint32_t nanosec) {
+        // Convert to nanoseconds first to avoid floating-point precision loss
+        constexpr uint64_t NS_PER_SEC = 1'000'000'000ULL;
+        constexpr uint64_t CLOCK_RATE = 90'000ULL; // 90kHz
+    
+        uint64_t total_ns = static_cast<uint64_t>(sec) * NS_PER_SEC + nanosec;
+        uint64_t rtp_timestamp = (total_ns * CLOCK_RATE) / NS_PER_SEC;
+
+        return rtp_timestamp;
+    }
+
+    uint64_t getCurrentRtpTimestamp() { // in 1/90000 for clock syncing
+        auto now = std::chrono::system_clock::now();
+        auto duration = now.time_since_epoch();
+        auto seconds = std::chrono::duration_cast<std::chrono::seconds>(duration);
+        auto nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(duration) - std::chrono::duration_cast<std::chrono::nanoseconds>(seconds);
+        return convertToRtpTimestamp(seconds.count(), nanoseconds.count());
+    }
+
+    uint32_t getRandomUInt() {
+            // Create a random device and seed the generator
+        std::random_device rd;
+        std::mt19937 gen(rd());
+
+        // Define the distribution for 32-bit unsigned integers
+        std::uniform_int_distribution<uint32_t> dist(0, UINT32_MAX);
+
+        // Generate a random 32-bit unsigned integer
+        return dist(gen);
+
+        // std::cout << "Random 32-bit integer: " << random_value << std::endl;
     }
 }

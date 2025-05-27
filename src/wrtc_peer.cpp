@@ -234,6 +234,7 @@ namespace phntm {
         this->peer_needs_restart = false;
 
         this->createPeerConnection();
+        this->connected_rtp_time_base = getCurrentRtpTimestamp();
     }
 
     void WRTCPeer::createPeerConnection() {
@@ -250,6 +251,7 @@ namespace phntm {
         rtc_config.disableFingerprintVerification = config->disable_fingerprint_verification;
         rtc_config.enableIceTcp = config->enable_ice_tcp;
         rtc_config.forceMediaTransport = true;
+        rtc_config.mtu = 32768;
         
         for (auto & one : this->config->ice_servers) {
             if (one.compare(0, 5, "turn:") == 0) {
@@ -299,6 +301,16 @@ namespace phntm {
                 this->processSubscriptions(); // new negotiation
             }
         });
+        // this->pc->onTrack([&](std::shared_ptr<rtc::Track> track){
+        //     // if (this->config->webrtc_debug)
+        //     // log(YELLOW + this->toString() + "Track added! Fixing ssrcs:" + CLR);
+        //     // auto description = track->description();
+        //     // for (auto ssrc : description.getSSRCs()) {
+        //     //     log(std::to_string(ssrc));
+        //     // }
+        // //     description.addSSRC(mySSRC, "video");
+        // //     track->setDescription(std::move(description));
+        // });
     }
 
     void WRTCPeer::removePeerConnection() {
@@ -360,7 +372,7 @@ namespace phntm {
         for (auto topic : this->req_read_subs) {
             auto msg_type = Introspection::getTopic(topic);
             if (msg_type.empty()) {
-                log(GRAY + this->toString() + " Topic '"+topic+"' not yet discovered" + CLR);
+                log(GRAY + this->toString() + "Topic '"+topic+"' not yet discovered" + CLR);
                 continue; // topic not yet discovered
             }
             if (!isImageOrVideoType(msg_type)) {
@@ -484,7 +496,7 @@ namespace phntm {
                 that->processSubscriptionsSync(ack_msg_id, ack);
 
             } catch (const std::exception& ex) {
-                log(that->toString() + "Exception in subs pricessor: " + std::string(ex.what()), true);
+                log(that->toString() + "Exception in subs processor: " + std::string(ex.what()), true);
             }
 
         });
@@ -533,7 +545,7 @@ namespace phntm {
         rtc::DataChannelInit dc_init;
         dc_init.reliability = reliability;
         dc_init.negotiated = true; // dcs negotiated by the bridge, not webrtc
-        dc_init.id = ++this->next_channel_id;
+        dc_init.id = this->nextChannelId();
         dc_init.protocol = msg_type;
 
         log(GRAY + this->toString() + "Opening new " +(write?"write":"read") + (is_reliable ? " RELIABLE":"") + " DC for " + topic + " {" + msg_type + "} #" + std::to_string(this->next_channel_id) + CLR);
@@ -725,26 +737,28 @@ namespace phntm {
         auto qos = this->node->loadTopicQoSConfig(topic);
         auto topic_conf = this->node->loadTopicMsgTypeExtraConfig(topic, msg_type); // get topic extras from yaml
 
-        std::string track_id;
+        std::string stream_id;
         std::shared_ptr<TopicReaderH264::MediaTrackInfo> track_info;
         if (this->outbound_media_tracks.find(topic) != this->outbound_media_tracks.end()) {
             log(GRAY + this->toString() + "Re-using media track for " + topic + CLR);
             track_info = this->outbound_media_tracks.at(topic);
             track_info->in_use = true;
-            track_id = track_info->id_track;
+            stream_id = track_info->msid;
         } else {
-            track_id = TopicReaderH264::openMediaTrackForTopic(topic, shared_from_this());
+            stream_id = TopicReaderH264::openMediaTrackForTopic(topic, shared_from_this());
             track_info = this->outbound_media_tracks.at(topic);
             this->negotiation_needed = true;
         }
 
         if (isEncodedVideoType(msg_type)) {
-            auto topic_reader = TopicReaderH264::getForTopic(topic, this->node, qos,
-                                                             topic_conf->get_map().at("use_pts")->get_bool(),
-                                                             topic_conf->get_map().at("debug_verbose")->get_bool(),
-                                                             topic_conf->get_map().at("debug_num_frames")->get_int()
-                                                            );
-            topic_reader->addOutput(track_info, this->pc); // only adds once
+            auto topic_reader = TopicReaderH264::getForTopic(topic, qos,
+                                        topic_conf->get_map().at("create_node")->get_bool() ? nullptr : this->node,
+                                        nullptr,
+                                        topic_conf->get_map().at("use_pts")->get_bool(),
+                                        topic_conf->get_map().at("debug_verbose")->get_bool(),
+                                        topic_conf->get_map().at("debug_num_frames")->get_int()
+                                        );
+            topic_reader->addOutput(track_info, shared_from_this()); // only adds once
         } else {
             //TODO Image topics
         }
@@ -752,8 +766,8 @@ namespace phntm {
         // media stream config for the peer
         auto channel_config = sio::array_message::create();
         channel_config->get_vector().push_back(sio::string_message::create(topic));
-        auto ssrcs_msg = sio::string_message::create(track_id);
-        channel_config->get_vector().push_back(ssrcs_msg);
+        auto stream_id_msg = sio::string_message::create(stream_id);
+        channel_config->get_vector().push_back(stream_id_msg);
         return channel_config;
     }
 

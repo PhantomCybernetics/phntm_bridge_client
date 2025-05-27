@@ -1,6 +1,9 @@
 #pragma once
 #include <cstdint>
 #include <map>
+#include <rclcpp/executors/multi_threaded_executor.hpp>
+#include <rclcpp/executors/single_threaded_executor.hpp>
+#include <rclcpp/executors/static_single_threaded_executor.hpp>
 #include <rclcpp/subscription.hpp>
 #include <string>
 #include <memory>
@@ -26,44 +29,49 @@ namespace phntm {
     class TopicReaderH264 {
 
         public:
-            static std::shared_ptr<TopicReaderH264> getForTopic(std::string topic, std::shared_ptr<PhntmBridge> bridge_node, rclcpp::QoS qos, bool use_pts = true, bool debug_verbose = false, int debug_num_frames = 0);
+            static std::shared_ptr<TopicReaderH264> getForTopic(std::string topic, rclcpp::QoS qos, std::shared_ptr<rclcpp::Node> node, rclcpp::CallbackGroup::SharedPtr callback_group, bool use_pts = true, bool debug_verbose = false, int debug_num_frames = 0);
             static std::shared_ptr<TopicReaderH264> getForTopic(std::string topic); // does not create a new one
             static void destroy(std::string topic);
 
             struct MediaTrackInfo {
                 std::shared_ptr<rtc::Track> track;
-                std::string id_track;
+                std::string msid;
                 uint ssrc;
                 bool in_use = true; // false when paused
                 bool init_complete = false; // waits for 1st stable signaling state after track open
                 std::shared_ptr<rtc::RtpPacketizationConfig> rtpConfig;
-                std::shared_ptr<H264PrePacketizer> packetizer;
+                std::shared_ptr<rtc::H264RtpPacketizer> packetizer;
             };
-            bool addOutput(std::shared_ptr<MediaTrackInfo> track_info, std::shared_ptr<rtc::PeerConnection> pc);
+            bool addOutput(std::shared_ptr<MediaTrackInfo> track_info, std::shared_ptr<WRTCPeer> peer);
             bool removeOutput(std::shared_ptr<MediaTrackInfo> track_info);
+            uint media_reader_node_no = 0;
+
             // static void onDCOpen(std::shared_ptr<rtc::DataChannel> dc, std::shared_ptr<rtc::PeerConnection> pc);
             static void onPCSignalingStateChange(std::shared_ptr<WRTCPeer> peer);
         
             static std::string openMediaTrackForTopic(std::string topic, std::shared_ptr<WRTCPeer> peer);
             static void closeMediaTrackForTopic(std::string topic, std::shared_ptr<WRTCPeer> peer);
 
-            TopicReaderH264(std::string topic, std::shared_ptr<PhntmBridge> bridge_node, rclcpp::QoS qos, bool use_pts, bool debug_verbose, int debug_num_frames);
+            TopicReaderH264(std::string topic, rclcpp::QoS qos, std::shared_ptr<rclcpp::Node> node, rclcpp::CallbackGroup::SharedPtr callback_group, bool use_pts, bool debug_verbose, int debug_num_frames);
             ~TopicReaderH264();
 
             struct OutputMsg {
                 std::shared_ptr<ffmpeg_image_transport_msgs::msg::FFMPEGPacket> msg;
-                uint ts;
-                bool is_keyframe;
+                uint64_t ts;
+                bool is_keyframe = false;
             };
 
             struct Output {
                 std::shared_ptr<MediaTrackInfo> track_info;
-                std::shared_ptr<rtc::PeerConnection> pc;
+                std::shared_ptr<WRTCPeer> peer;
                 
                 uint16_t num_sent = 0;
                 bool active = true;
                 // bool initial_ts_set = false;
-                uint32_t ts_base = 0;
+                uint64_t ts_first = 0; // 1st pts from ros
+                uint64_t ts_offset = 0; // trp time on 1st frame (1/90000)
+                uint64_t last_raw_ts = 0; // last received pts form ros
+                bool start_ts_set = false;
 
                 std::optional<std::vector<uint8_t>> last_nal_unit_7 = std::nullopt;
                 std::optional<std::vector<uint8_t>> last_nal_unit_8 = std::nullopt;
@@ -85,25 +93,32 @@ namespace phntm {
 
             std::vector<std::shared_ptr<Output>> outputs; // target data channels & pcs
             std::mutex outputs_mutex;
+            std::mutex start_stop_mutex;
             static std::mutex readers_mutex;
             std::mutex subscriber_mutex;
 
             std::string topic;
-            std::shared_ptr<PhntmBridge> bridge_node;
+            bool subscriber_running = false;
+            void spinSubscriber();
+            std::shared_ptr<rclcpp::Executor> executor = nullptr;
+            std::thread subscriber_thread;
+
             rclcpp::QoS qos;
 
             void start();
             void stop();
             void onFrame(const std::shared_ptr<ffmpeg_image_transport_msgs::msg::FFMPEGPacket> data);
-            std::shared_ptr<rclcpp::Subscription<ffmpeg_image_transport_msgs::msg::FFMPEGPacket>> sub;
-            rclcpp::CallbackGroup::SharedPtr callback_group;
-            std::thread processor_thread;
-            std::queue<std::shared_ptr<ffmpeg_image_transport_msgs::msg::FFMPEGPacket>> frame_queue;
-            std::mutex frame_queue_mutex;
-            std::condition_variable frame_queue_cv;
-            void processFramesWorker();
-            void processFrame(std::shared_ptr<ffmpeg_image_transport_msgs::msg::FFMPEGPacket> msg);
-            bool worker_running;
+            std::shared_ptr<rclcpp::Subscription<ffmpeg_image_transport_msgs::msg::FFMPEGPacket>> sub = nullptr;
+            std::shared_ptr<rclcpp::Node> node; // node to run subs on, new if null
+            bool create_node;
+            rclcpp::CallbackGroup::SharedPtr callback_group = nullptr;
+            
+            //std::queue<std::shared_ptr<ffmpeg_image_transport_msgs::msg::FFMPEGPacket>> frame_queue;
+            //std::mutex frame_queue_mutex;
+            //std::condition_variable frame_queue_cv;
+            // void processFramesWorker();
+            // void processFrame(std::shared_ptr<ffmpeg_image_transport_msgs::msg::FFMPEGPacket> msg);
+            
             void outputFramesWorker(std::shared_ptr<Output> output);
 
             std::vector<std::byte> latest_payload;
