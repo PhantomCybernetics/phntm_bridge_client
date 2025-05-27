@@ -78,6 +78,7 @@ RUN apt install -y libpcap-dev
 # using w libnice bcs libjuice fails on asymetric responses
 WORKDIR /root
 RUN git clone https://github.com/PhantomCybernetics/libdatachannel.git
+WORKDIR /root/libdatachannel
 RUN git submodule update --init --recursive --depth 1
 RUN cmake -B build -DCMAKE_BUILD_TYPE=Release -DUSE_NICE=1 -DUSE_MBEDTLS=1 -DTEST_APPS=0 -DNO_TESTS=1 -DNO_EXAMPLES=1
 WORKDIR /root/libdatachannel/build
