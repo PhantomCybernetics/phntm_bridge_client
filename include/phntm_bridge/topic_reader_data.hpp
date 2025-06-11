@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <ctime>
 #include <map>
 #include <string>
 #include <memory>
@@ -40,6 +41,7 @@ namespace phntm {
 
                 bool logged_closed = false;
                 bool logged_init_incomplete = false;
+                bool logged_sending = false;
                 bool logged_error = false;
                 bool logged_exception = false;
             };

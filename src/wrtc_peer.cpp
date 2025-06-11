@@ -251,7 +251,6 @@ namespace phntm {
         rtc_config.disableFingerprintVerification = config->disable_fingerprint_verification;
         rtc_config.enableIceTcp = config->enable_ice_tcp;
         rtc_config.forceMediaTransport = true;
-        rtc_config.mtu = 32768;
         
         for (auto & one : this->config->ice_servers) {
             if (one.compare(0, 5, "turn:") == 0) {

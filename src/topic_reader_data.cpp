@@ -143,6 +143,11 @@ namespace phntm {
                 continue;
             }
             try {
+                if (!output->logged_sending) {
+                    log(GRAY + "[" + getThreadId() + "] Sending " + std::to_string(this->latest_payload_size) +" B into DC " + std::to_string(output->dc->id().value()) + " for " + this->topic + CLR);
+                    output->logged_sending = true;
+                }
+
                 if (!output->dc->send(this->latest_payload.data(), this->latest_payload_size)) {
                     if (!output->logged_error) {
                         output->logged_error = true;
