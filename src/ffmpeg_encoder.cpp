@@ -79,7 +79,8 @@ namespace phntm {
         
         // Set encoder options
         av_opt_set(this->codec_ctx->priv_data, "preset", "fast", 0);
-        av_opt_set(this->codec_ctx->priv_data, "tune", "zerolatency", 0);
+        if (hw_device_type == AV_HWDEVICE_TYPE_NONE)
+            av_opt_set(this->codec_ctx->priv_data, "tune", "zerolatency", 0);
         av_opt_set(this->codec_ctx->priv_data, "profile", "high", 0);
         
         // Open codec
