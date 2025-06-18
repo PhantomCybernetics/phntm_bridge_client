@@ -74,7 +74,7 @@ namespace phntm {
         // this->codec_ctx->flags2 |= AV_CODEC_FLAG2_FAST;        // Faster encoding
 
         if (hw_device_ctx) {
-            this->codec_ctx->hw_device_ctx = av_buffer_ref(hw_device_ctx);
+            this->codec_ctx->hw_device_ctx = hw_device_ctx;
         }
         
         // Set encoder options
