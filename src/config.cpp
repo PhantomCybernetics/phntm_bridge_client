@@ -1,5 +1,6 @@
 #include "phntm_bridge/const.hpp"
 #include "phntm_bridge/config.hpp"
+#include "phntm_bridge/lib.hpp"
 #include "phntm_bridge/phntm_bridge.hpp"
 #include "sio_message.h"
 #include <fstream>
@@ -390,6 +391,14 @@ namespace phntm {
 
         this->declare_parameter("file_chunks_topic", "/file_chunks");
         config->file_chunks_topic = this->get_parameter("file_chunks_topic").as_string();
+
+        
+        this->declare_parameter("low_fps_default", 30); // overwrite per topic
+
+        this->declare_parameter("encoder_hw_device_default", ""); // none, cuda, vaapi
+        this->declare_parameter("encoder_thread_count_default", 2);
+        this->declare_parameter("encoder_gop_size_default", 60); // kf every 
+        this->declare_parameter("encoder_bit_rate_default", 512 * 8 * 1024); // 512KB
     }
 
     rclcpp::QoS PhntmBridge::loadTopicQoSConfig(std::string topic, size_t default_depth, rclcpp::ReliabilityPolicy default_reliability, rclcpp::DurabilityPolicy default_durability, float default_lifespan_sec) {
@@ -428,8 +437,13 @@ namespace phntm {
     sio::message::ptr PhntmBridge::loadTopicMsgTypeExtraConfig(std::string topic, std::string msg_type) {
         auto res = sio::object_message::create();
 
+        try {
+            this->declare_parameter(topic + ".low_fps", this->get_parameter("low_fps_default").as_int()); // if 0, no fps warning is shown
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        res->get_map().emplace("low_fps", sio::int_message::create(this->get_parameter(topic + ".low_fps").as_int()));
+
         // h.264 encoded frames
-        if (msg_type == VIDEO_STREAM_MSG_TYPE) { 
+        if (isImageOrVideoType(msg_type)) { 
             try {
                 this->declare_parameter(topic + ".debug_num_frames", 0); // will debug this many frames (instects NAL units)
             } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
@@ -446,6 +460,35 @@ namespace phntm {
             res->get_map().emplace("debug_verbose", sio::bool_message::create(this->get_parameter(topic + ".debug_verbose").as_bool()));
             res->get_map().emplace("use_pts", sio::bool_message::create(this->get_parameter(topic + ".use_pts").as_bool()));
             res->get_map().emplace("create_node", sio::bool_message::create(this->get_parameter(topic + ".create_node").as_bool()));
+        }
+
+        // depth visualization extras
+        if (isImageType(msg_type)) {
+            try {
+                this->declare_parameter(topic + ".colormap", 0); // will debug this many frames (instects NAL units)
+            } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+            try {
+                this->declare_parameter(topic + ".max_sensor_value", 255.0f); // will debug this many frames (instects NAL units)
+            } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+             try {
+                this->declare_parameter(topic + ".encoder_hw_device", this->get_parameter("encoder_hw_device_default").as_string()); // none, cuda, vaapi
+            } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+             try {
+                this->declare_parameter(topic + ".encoder_thread_count", this->get_parameter("encoder_thread_count_default").as_int()); //2
+            } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+             try {
+                this->declare_parameter(topic + ".encoder_gop_size", this->get_parameter("encoder_gop_size_default").as_int()); //60,  kf every 
+            } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+             try {
+                this->declare_parameter(topic + ".encoder_bit_rate", this->get_parameter("encoder_bit_rate_default").as_int()); // 5 * 8 * 1024
+            } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+
+            res->get_map().emplace("colormap", sio::int_message::create(this->get_parameter(topic + ".colormap").as_int()));
+            res->get_map().emplace("max_sensor_value", sio::double_message::create(this->get_parameter(topic + ".max_sensor_value").as_double()));
+            res->get_map().emplace("encoder_hw_device", sio::string_message::create(this->get_parameter(topic + ".encoder_hw_device").as_string()));
+            res->get_map().emplace("encoder_thread_count", sio::int_message::create(this->get_parameter(topic + ".encoder_thread_count").as_int()));
+            res->get_map().emplace("encoder_gop_size", sio::int_message::create(this->get_parameter(topic + ".encoder_gop_size").as_int()));
+            res->get_map().emplace("encoder_bit_rate", sio::int_message::create(this->get_parameter(topic + ".encoder_bit_rate").as_int()));
         }
 
         // NN Detections

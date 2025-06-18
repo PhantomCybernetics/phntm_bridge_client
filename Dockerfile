@@ -80,7 +80,7 @@ WORKDIR /root
 RUN git clone https://github.com/PhantomCybernetics/libdatachannel.git
 WORKDIR /root/libdatachannel
 RUN git submodule update --init --recursive --depth 1
-RUN cmake -B build -DCMAKE_BUILD_TYPE=Release -DUSE_NICE=1 -DUSE_MBEDTLS=1 -DTEST_APPS=0 -DNO_TESTS=1 -DNO_EXAMPLES=1
+RUN cmake -B build -DCMAKE_BUILD_TYPE=Release -DUSE_NICE=1 -DUSE_MBEDTLS=0 -DTEST_APPS=0 -DNO_TESTS=1 -DNO_EXAMPLES=1
 WORKDIR /root/libdatachannel/build
 RUN make -j2
 RUN make install
@@ -126,6 +126,10 @@ RUN pip install docker
 RUN apt-get install -y iw wireless-tools libiw-dev
 RUN pip install iwlib
 RUN apt-get install -y wpasupplicant
+
+# video enc
+RUN apt-get install -y libopencv-dev
+RUN apt-get install -y libavdevice-dev
 
 # clone and install Phntm Agent
 RUN git clone https://github.com/PhantomCybernetics/phntm_agent.git /ros2_ws/src/phntm_agent

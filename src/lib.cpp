@@ -90,10 +90,25 @@ namespace phntm {
         return result;
     }
 
+     std::string strToLower(std::string s) {
+        for (char &c : s) {
+            c = std::tolower(static_cast<unsigned char>(c));
+        }
+        return s;
+    }
+
     bool isImageOrVideoType(std::string msg_type) {
         return msg_type == IMAGE_MSG_TYPE ||
             msg_type == COMPRESSED_IMAGE_MSG_TYPE ||
             msg_type == VIDEO_STREAM_MSG_TYPE;
+    }
+
+    bool isImageType(std::string msg_type) {
+        return msg_type == IMAGE_MSG_TYPE;
+    }
+
+    bool isCompressedImageType(std::string msg_type) {
+        return msg_type == COMPRESSED_IMAGE_MSG_TYPE;
     }
         
     bool isEncodedVideoType(std::string msg_type) {

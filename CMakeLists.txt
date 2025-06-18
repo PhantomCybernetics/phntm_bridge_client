@@ -26,9 +26,19 @@ find_library(OPENSSL_LIBRARY ssl)
 find_library(OPENSSL_CRYPTO_LIBRARY crypto)
 find_package(CURL REQUIRED)
 find_package(LibDataChannel REQUIRED)
+find_package(OpenCV REQUIRED)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GPIOD REQUIRED libgpiodcxx)
+
+pkg_check_modules(FFMPEG REQUIRED 
+    libavformat 
+    libavcodec 
+    libavutil 
+    libswscale
+)
+
+find_library(AVFORMAT NAMES avformat PATHS /lib/aarch64-linux-gnu)
 
 add_definitions(
     -DSIO_TLS
@@ -54,6 +64,8 @@ add_definitions(
 
 include_directories(/usr/include/jsoncpp/)
 include_directories(${GPIOD_INCLUDE_DIRS})
+include_directories(${OpenCV_INCLUDE_DIRS})
+include_directories(${FFMPEG_INCLUDE_DIRS})
 
 set(SIOCLIENT_SRC
   "sioclient/sio_client.cpp"
@@ -82,7 +94,7 @@ add_executable(phntm_bridge
               src/wrtc_peer.cpp
               src/status_leds.cpp
               src/file_extractor.cpp
-              # src/h264_prepacketizer.cpp
+              src/ffmpeg_encoder.cpp
               ${SIOCLIENT_SRC}
               # ${ASIO_SRC}
               )
@@ -104,6 +116,7 @@ target_include_directories(phntm_bridge PUBLIC
   ${OPENSSL_INCLUDE_DIR}
   ${GPIOD_INCLUDE_DIRS}
   ${CURL_INCLUDE_DIR}
+  ${FFMPEG_INCLUDE_DIRS}
 )
 target_compile_features(phntm_bridge PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
 
@@ -116,6 +129,18 @@ ament_target_dependencies(phntm_bridge
                           phntm_interfaces
                           )
 
+link_directories(${FFMPEG_LIBRARY_DIRS})
+
+set(FFMPEG_LINK_FLAGS
+    -lavformat
+    -lavcodec
+    -lavutil
+    -lswscale
+    -lswresample
+    -lavdevice
+    -lavfilter
+)
+
 target_link_libraries(phntm_bridge
   ${FMT_LIBRARY}
   ${JSONCPP_LIBRARY}
@@ -127,10 +152,17 @@ target_link_libraries(phntm_bridge
   ${UUID_LIBRARY}
   ${CURL_LIBRARIES}
   LibDataChannel::LibDataChannel
+  ${OpenCV_LIBS}
+  ${FFMPEG_LINK_FLAGS}
+  ${AVFORMAT}
   # ${WEBSOCKET_LIBRARY}
   # ${ASIO_LIBRARY}
   # ${RAPIDJSON_LIBRARY}
   # ${SIOCLIENT_LIBRARY}
+  -lpthread
+  -ldl
+  -lz
+  -lm
 )
 
 link_directories(${GPIOD_LIBRARY_DIRS})

@@ -5,7 +5,6 @@
 
 #include "phntm_bridge/sio.hpp"
 #include "phntm_bridge/config.hpp"
-#include "phntm_bridge/h264_prepacketizer.hpp"
 
 #include "rtc/datachannel.hpp"
 #include "rtc/rtc.hpp"
@@ -62,11 +61,10 @@ namespace phntm {
             std::map<std::string, std::shared_ptr<TopicReaderH264::MediaTrackInfo>> outbound_media_tracks;
 
             uint64_t connectedRTPTimeBase() { return this->connected_rtp_time_base; };
-
         private:
             static std::map<std::string, std::shared_ptr<WRTCPeer>> connected_peers;
             static void addUIConfigToMessage(sio::object_message::ptr msg, std::shared_ptr<BridgeConfig> config);
-            
+
             std::mutex processing_subscriptions_mutex;
             bool awaiting_peer_reply;
 

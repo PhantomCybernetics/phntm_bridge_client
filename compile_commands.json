@@ -11,6 +11,7 @@
                 -I/root/libdatachannel/deps/plog/include \
                 -isystem /usr/include/jsoncpp \
                 -isystem /usr/local/include \
+                -isystem /usr/include/opencv4 \
                 -isystem /opt/ros/humble/include/rclcpp \
                 -isystem /usr/include/aarch64-linux-gnu/libavcodec \
                 -isystem /opt/ros/humble/include/std_msgs \

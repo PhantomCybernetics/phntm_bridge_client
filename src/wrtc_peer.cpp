@@ -342,13 +342,15 @@ namespace phntm {
         this->negotiation_needed = is_reconnect; // reset
 
         if (this->config->webrtc_debug) {
-            std::vector<std::string> req_writes_joined;
+            std::vector<std::string> req_writes;
             for (auto one : this->req_write_subs) {
-                req_writes_joined.push_back(one[0]+" {"+ one[1]+ "}");
+                req_writes.push_back(one[0]+" {"+ one[1]+ "}");
             }
+            auto req_reads_joined = join( this->req_read_subs, ", ");
+            auto req_writes_joined = join(req_writes, ", ");
             log(this->toString() + (this->is_connected ? "Processing " : "Cleaning up ") + (is_reconnect ? MAGENTA + "re-connect " + CLR : (!this->is_connected ? BLUE + "disconnected " + CLR : "")) + "subs:\n"
-                + "    read: " + GREEN + "[" + join( this->req_read_subs, ", ") + "] " + CLR + "\n"
-                + "    write: " + MAGENTA + "[" + join(req_writes_joined, ", ") + "] " + CLR + "\n"
+                + "    read: " + GREEN + "[" + req_reads_joined + "] " + CLR + "\n"
+                + "    write: " + MAGENTA + "[" + req_writes_joined + "] " + CLR + "\n"
                 + "    " + (this->pc != nullptr ? ("pc state=" + YELLOW + toString(this->pc->state()) + CLR + " signalingState=" + YELLOW + toString(this->pc->signalingState()) + CLR + " iceGatheringState=" + YELLOW + toString(this->pc->gatheringState()) + CLR) : "pc = " + RED + "null" + CLR)
             );
         }
@@ -632,8 +634,6 @@ namespace phntm {
         }
     }
 
-    
-
     sio::array_message::ptr WRTCPeer::subscribeReadDataTopic(std::string topic, std::string msg_type) {
         
         auto qos = this->node->loadTopicQoSConfig(topic); // get topic qos config from yaml
@@ -749,17 +749,15 @@ namespace phntm {
             this->negotiation_needed = true;
         }
 
-        if (isEncodedVideoType(msg_type)) {
-            auto topic_reader = TopicReaderH264::getForTopic(topic, qos,
+        if (isImageOrVideoType(msg_type)) {
+            auto topic_reader = TopicReaderH264::getForTopic(topic, msg_type,qos,
                                         topic_conf->get_map().at("create_node")->get_bool() ? nullptr : this->node,
                                         nullptr,
-                                        topic_conf->get_map().at("use_pts")->get_bool(),
-                                        topic_conf->get_map().at("debug_verbose")->get_bool(),
-                                        topic_conf->get_map().at("debug_num_frames")->get_int()
+                                        topic_conf
                                         );
             topic_reader->addOutput(track_info, shared_from_this()); // only adds once
         } else {
-            //TODO Image topics
+            log("Unsupported message type " + msg_type + " for " + topic +", ignoring.", true) ;
         }
 
         // media stream config for the peer
@@ -767,6 +765,8 @@ namespace phntm {
         channel_config->get_vector().push_back(sio::string_message::create(topic));
         auto stream_id_msg = sio::string_message::create(stream_id);
         channel_config->get_vector().push_back(stream_id_msg);
+        channel_config->get_vector().push_back( topic_conf);
+        
         return channel_config;
     }
 
@@ -786,8 +786,6 @@ namespace phntm {
                     if (tr->removeOutput(track_info)) { // stops if no other peer subs left, returns true of empty
                         TopicReaderH264::destroy(topic);
                     }
-                } else if (false) {
-                    //TODO Image topics
                 } else {
                     log(RED + "Topic reader not found for " + topic +"!" + CLR) ;
                 }

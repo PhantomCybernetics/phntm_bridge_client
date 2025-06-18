@@ -5,6 +5,8 @@
 #include <rclcpp/executors/single_threaded_executor.hpp>
 #include <rclcpp/executors/static_single_threaded_executor.hpp>
 #include <rclcpp/subscription.hpp>
+#include <sensor_msgs/msg/detail/compressed_image__struct.hpp>
+#include <sensor_msgs/msg/detail/image__struct.hpp>
 #include <string>
 #include <memory>
 #include <vector>
@@ -16,10 +18,14 @@
 #include "rtc/frameinfo.hpp"
 #include "rtc/peerconnection.hpp"
 #include "rtc/rtc.hpp"
-#include "phntm_bridge/h264_prepacketizer.hpp"
 
 #include "ffmpeg_image_transport_msgs/msg/ffmpeg_packet.hpp"
+#include "sensor_msgs/msg/image.hpp"
+#include "sensor_msgs/msg/compressed_image.hpp"
+#include "sio_message.h"
 #include <condition_variable>
+
+#include "phntm_bridge/ffmpeg_encoder.hpp"
 
 namespace phntm {
 
@@ -29,7 +35,7 @@ namespace phntm {
     class TopicReaderH264 {
 
         public:
-            static std::shared_ptr<TopicReaderH264> getForTopic(std::string topic, rclcpp::QoS qos, std::shared_ptr<rclcpp::Node> node, rclcpp::CallbackGroup::SharedPtr callback_group, bool use_pts = true, bool debug_verbose = false, int debug_num_frames = 0);
+            static std::shared_ptr<TopicReaderH264> getForTopic(std::string topic, std::string msg_type, rclcpp::QoS qos, std::shared_ptr<rclcpp::Node> node, rclcpp::CallbackGroup::SharedPtr callback_group, sio::message::ptr topic_conf);
             static std::shared_ptr<TopicReaderH264> getForTopic(std::string topic); // does not create a new one
             static void destroy(std::string topic);
 
@@ -52,13 +58,22 @@ namespace phntm {
             static std::string openMediaTrackForTopic(std::string topic, std::shared_ptr<WRTCPeer> peer);
             static void closeMediaTrackForTopic(std::string topic, std::shared_ptr<WRTCPeer> peer);
 
-            TopicReaderH264(std::string topic, rclcpp::QoS qos, std::shared_ptr<rclcpp::Node> node, rclcpp::CallbackGroup::SharedPtr callback_group, bool use_pts, bool debug_verbose, int debug_num_frames);
+            TopicReaderH264(std::string topic, std::string msg_type, rclcpp::QoS qos, std::shared_ptr<rclcpp::Node> node, rclcpp::CallbackGroup::SharedPtr callback_group, sio::message::ptr topic_conf);
             ~TopicReaderH264();
 
             struct OutputMsg {
                 std::shared_ptr<ffmpeg_image_transport_msgs::msg::FFMPEGPacket> msg;
                 uint64_t ts;
                 bool is_keyframe = false;
+            };
+
+            struct SendMsg {
+                std::byte* data;
+                std::size_t size;
+                rtc::FrameInfo info;
+
+                SendMsg(std::byte* d, std::size_t s, rtc::FrameInfo i)
+                    : data(d), size(s), info(i) {};
             };
 
             struct Output {
@@ -83,35 +98,43 @@ namespace phntm {
                 bool logged_exception = false;
 
                 std::thread thread;
-                std::queue<OutputMsg> queue;
-                std::mutex queue_mutex;
-                std::condition_variable queue_cv;
+                std::queue<OutputMsg> in_queue;
+                std::mutex in_queue_mutex;
+                std::condition_variable in_queue_cv;
             };
-
+        
         private:
             static std::map<std::string, std::shared_ptr<TopicReaderH264>> readers;
+            static std::mutex readers_mutex;
+            std::string topic;
+            std::string msg_type;
+            rclcpp::QoS qos;
+            std::shared_ptr<rclcpp::Node> node; // node to run subs on, new if null
+            rclcpp::CallbackGroup::SharedPtr callback_group = nullptr;
 
             std::vector<std::shared_ptr<Output>> outputs; // target data channels & pcs
             std::mutex outputs_mutex;
             std::mutex start_stop_mutex;
-            static std::mutex readers_mutex;
             std::mutex subscriber_mutex;
-
-            std::string topic;
+            
             bool subscriber_running = false;
             void spinSubscriber();
             std::shared_ptr<rclcpp::Executor> executor = nullptr;
             std::thread subscriber_thread;
 
-            rclcpp::QoS qos;
-
             void start();
             void stop();
-            void onFrame(const std::shared_ptr<ffmpeg_image_transport_msgs::msg::FFMPEGPacket> data);
-            std::shared_ptr<rclcpp::Subscription<ffmpeg_image_transport_msgs::msg::FFMPEGPacket>> sub = nullptr;
-            std::shared_ptr<rclcpp::Node> node; // node to run subs on, new if null
+
+            void onEncodedFrame(const std::shared_ptr<ffmpeg_image_transport_msgs::msg::FFMPEGPacket> data);
+            void onImageFrame(const std::shared_ptr<sensor_msgs::msg::Image> data);
+            void onCompressedFrame(const std::shared_ptr<sensor_msgs::msg::CompressedImage> data);
+            
+            // only one of these used at the time
+            std::shared_ptr<rclcpp::Subscription<ffmpeg_image_transport_msgs::msg::FFMPEGPacket>> sub_enc = nullptr;
+            std::shared_ptr<rclcpp::Subscription<sensor_msgs::msg::Image>> sub_img = nullptr;
+            std::shared_ptr<rclcpp::Subscription<sensor_msgs::msg::CompressedImage>> sub_cmp = nullptr;
+            
             bool create_node;
-            rclcpp::CallbackGroup::SharedPtr callback_group = nullptr;
             
             //std::queue<std::shared_ptr<ffmpeg_image_transport_msgs::msg::FFMPEGPacket>> frame_queue;
             //std::mutex frame_queue_mutex;
@@ -122,13 +145,26 @@ namespace phntm {
             void outputFramesWorker(std::shared_ptr<Output> output);
 
             std::vector<std::byte> latest_payload;
-            size_t latest_payload_size = 0;
+            //size_t latest_payload_size = 0;
             // rtc::FrameInfo latest_frame_info = rtc::FrameInfo(0);
 
             bool use_pts;
             bool debug_verbose = false;
             int debug_num_frames = 0; // set number of frames to be analyzed (nal units debug)
             bool logged_receiving = false;
+            bool logged_error = false;
+            
+            int colormap; // used to colorize mono images
+            double max_sensor_value; // used to normalize raw sensor data
+
+            bool encoder_error = false;
+            std::string encoder_hw_device;
+            int encoder_thread_count;
+            int encoder_gop_size;
+            int encoder_bit_rate;
+
+            std::shared_ptr<FFmpegEncoder> encoder = nullptr;
+            //void onH264Encoded();
     };
 
 }

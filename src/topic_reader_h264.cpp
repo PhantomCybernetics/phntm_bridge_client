@@ -1,4 +1,5 @@
 //#include "h264rtppacketizer.hpp"
+#include "phntm_bridge/ffmpeg_encoder.hpp"
 #include "phntm_bridge/lib.hpp"
 #include "rtc/message.hpp"
 #include "phntm_bridge/const.hpp"
@@ -12,27 +13,32 @@
 #include <cstdint>
 #include <exception>
 #include <ffmpeg_image_transport_msgs/msg/detail/ffmpeg_packet__struct.hpp>
+#include <libavutil/pixfmt.h>
 #include <memory>
 #include <mutex>
+#include <opencv2/core/hal/interface.h>
+#include <rclcpp/executors/multi_threaded_executor.hpp>
 #include <rclcpp/executors/static_single_threaded_executor.hpp>
+#include <rclcpp/logging.hpp>
 #include <stdexcept>
 #include <string>
 #include <chrono>
 #include <iostream>
 #include <thread>
 #include <arpa/inet.h>
+#include <opencv2/opencv.hpp>
 
 namespace phntm {
 
     std::map<std::string, std::shared_ptr<TopicReaderH264>> TopicReaderH264::readers;
     std::mutex TopicReaderH264::readers_mutex;
 
-    std::shared_ptr<TopicReaderH264> TopicReaderH264::getForTopic(std::string topic, rclcpp::QoS qos, std::shared_ptr<rclcpp::Node> node, rclcpp::CallbackGroup::SharedPtr callback_group, bool use_pts, bool debug_verbose, int debug_num_frames) {
+    std::shared_ptr<TopicReaderH264> TopicReaderH264::getForTopic(std::string topic, std::string msg_type, rclcpp::QoS qos, std::shared_ptr<rclcpp::Node> node, rclcpp::CallbackGroup::SharedPtr callback_group, sio::message::ptr topic_conf) {
         std::lock_guard<std::mutex> lock(readers_mutex);
         if (readers.find(topic) != readers.end()) {
             return readers.at(topic);
         } else { // create subscriber
-            auto tr = std::make_shared<TopicReaderH264>(topic, qos, node, callback_group, use_pts, debug_verbose, debug_num_frames);
+            auto tr = std::make_shared<TopicReaderH264>(topic, msg_type, qos, node, callback_group, topic_conf);
             readers.emplace(topic, tr);
             return tr;
         }
@@ -47,8 +53,21 @@ namespace phntm {
         }
     }
 
-    TopicReaderH264::TopicReaderH264(std::string topic, rclcpp::QoS qos, std::shared_ptr<rclcpp::Node> node, rclcpp::CallbackGroup::SharedPtr callback_group, bool use_pts, bool debug_verbose, int debug_num_frames)
-        : topic(topic), qos(qos), node(node), callback_group(callback_group), use_pts(use_pts), debug_verbose(debug_verbose), debug_num_frames(debug_num_frames) {
+    TopicReaderH264::TopicReaderH264(std::string topic, std::string msg_type, rclcpp::QoS qos, std::shared_ptr<rclcpp::Node> node, rclcpp::CallbackGroup::SharedPtr callback_group, sio::message::ptr topic_conf)
+        : topic(topic), msg_type(msg_type), qos(qos), node(node), callback_group(callback_group) {
+        
+        this->use_pts = topic_conf->get_map().at("use_pts")->get_bool();
+        this->debug_verbose = topic_conf->get_map().at("debug_verbose")->get_bool();
+        this->debug_num_frames = topic_conf->get_map().at("debug_num_frames")->get_int();
+
+        if (isImageType(msg_type)) {
+            this->colormap = topic_conf->get_map().at("colormap")->get_int();
+            this->max_sensor_value = topic_conf->get_map().at("max_sensor_value")->get_double();
+            this->encoder_hw_device = topic_conf->get_map().at("encoder_hw_device")->get_string();
+            this->encoder_thread_count = topic_conf->get_map().at("encoder_thread_count")->get_int();
+            this->encoder_gop_size = topic_conf->get_map().at("encoder_gop_size")->get_int();
+            this->encoder_bit_rate = topic_conf->get_map().at("encoder_bit_rate")->get_int();
+        }
         this->create_node = node == nullptr; //make a node if none provided
     }
 
@@ -137,7 +156,7 @@ namespace phntm {
     }
 
     // on subscriber thread
-    void TopicReaderH264::onFrame(const std::shared_ptr<ffmpeg_image_transport_msgs::msg::FFMPEGPacket> msg) {
+    void TopicReaderH264::onEncodedFrame(const std::shared_ptr<ffmpeg_image_transport_msgs::msg::FFMPEGPacket> msg) {
         // std::lock_guard<std::mutex> lock(this->subscriber_mutex); // this will prevent ros from calling all subs on the same thread
         if (!this->subscriber_running)
              return;
@@ -151,18 +170,17 @@ namespace phntm {
         }
 
         if (!this->logged_receiving) {
-            log(MAGENTA + "[" + getThreadId() + "] Receiving " + std::to_string(msg->width) + "x" + std::to_string(msg->height)+ " " + msg->encoding + " frames from " + this->topic + " " + std::to_string(this->latest_payload_size) + " B" + CLR);
+            log(MAGENTA + "[" + getThreadId() + "] Receiving " + std::to_string(msg->width) + "x" + std::to_string(msg->height)+ " " + msg->encoding + " frames from " + this->topic + " " + std::to_string(msg->data.size()) + " B" + CLR);
             this->logged_receiving = true;
         }
 
         if (this->debug_num_frames > 0) {
             auto nal_units = splitNalUnits(msg->data.data(), msg->data.size());
             auto has_sps_pps = hasSpsPps(nal_units);
-            log("[" + getThreadId() + "]["+ this->topic + "] " + std::string(is_keyframe ? CYAN + "Keyframe" + CLR : "Frame") + " has "+std::to_string(nal_units.size())+" nal units "+(has_sps_pps?" HAS SPS/PPS":"")+"; ts=" + std::to_string(ts));
+            log("[" + getThreadId() + "]["+ this->topic + "] " + std::string(is_keyframe ? CYAN + "Keyframe" + CLR : "Frame") + " has "+std::to_string(nal_units.size())+" nal units"+(has_sps_pps?(CYAN+" HAS SPS/PPS"+CLR):"")+"; ts=" + std::to_string(ts));
             for (const auto & nal_unit: nal_units) {
                 logNalUnit(nal_unit.data(), nal_unit.size(), this->topic);
             }
-            --this->debug_num_frames;
         }
 
         // pre-packetize??
@@ -202,12 +220,12 @@ namespace phntm {
 
                 // push to output queue without locking
                 {
-                    if (this->debug_verbose)
+                    if (this->debug_verbose || this->debug_num_frames > 0)
                         log(GRAY + "[" + getThreadId() + "] Pushing one of " + this->topic + " to output queue for track #" + std::to_string(output->track_info->ssrc) + CLR);
                     // std::lock_guard<std::mutex> ouput_lock(output->queue_mutex); 
                     OutputMsg frame { msg, ts, is_keyframe };
-                    output->queue.push(frame);
-                    output->queue_cv.notify_one(); // notify one waiting thread
+                    output->in_queue.push(frame);
+                    output->in_queue_cv.notify_one(); // notify one waiting thread
                     msg_sent = true; // flash LED
                 }
 
@@ -215,29 +233,133 @@ namespace phntm {
             }
         }
 
+        if (this->debug_num_frames > 0) {
+            --this->debug_num_frames;
+            if (this->debug_num_frames == 0) {
+                log(GRAY + "Frame debugging finished for " + this->topic + "" + CLR);
+            }
+        }
+
         if (msg_sent)
             DataLED::once();
     }
 
+    // on subscriber thread
+    void TopicReaderH264::onImageFrame(const std::shared_ptr<sensor_msgs::msg::Image> im) {
+        auto size = im->data.size();
+        // log("Got Image " + std::to_string(size)+ "B for " + this->topic + "; encoding=" + im->encoding);
+
+        if (!this->subscriber_running || size == 0 || this->encoder_error)
+            return;
+
+        auto debug_log = this->debug_num_frames > 0;
+
+        if (debug_log) {
+            log("Received Image frame w enc=" + im->encoding+"; sending to encoder");
+        }
+
+        auto enc = strToLower(im->encoding);
+
+        // auto is_keyframe = false; //TODO every sec
+        if (this->encoder == nullptr) {
+            AVPixelFormat opencv_format;
+            if (enc == "rgb8") {
+                opencv_format = AV_PIX_FMT_RGB24;
+            } else if (enc == "bgr8") {
+                opencv_format = AV_PIX_FMT_BGR24;
+            } else if (enc == "mono8" || enc == "8uc1") {
+                opencv_format = AV_PIX_FMT_GRAY8;
+            } else if (enc == "16uc1" || enc == "mono16") {
+                opencv_format = AV_PIX_FMT_RGB24;
+            } else {
+                if (!this->logged_error) {
+                    this->logged_error = true;
+                    RCLCPP_ERROR(this->node->get_logger(), "Image topic %s received frame with unsupported encoding: %s", this->topic.c_str(), enc.c_str());
+                }
+                return;
+            }
+
+            // std::string hw_device = ""; // TODO
+            // int thread_count = 4; // TODO
+            RCLCPP_INFO(this->node->get_logger(), "Making encoder %dx%d for %s {%s} with hw_device=%s",
+                        im->width, im->height, this->topic.c_str(), this->msg_type.c_str(), encoder_hw_device.c_str());
+            try {
+                this->encoder = std::make_shared<FFmpegEncoder>(im->width, im->height, opencv_format,
+                                                im->header.frame_id, this->topic, this->node,
+                                                this->encoder_hw_device,
+                                                this->encoder_thread_count,
+                                                this->encoder_gop_size,
+                                                this->encoder_bit_rate,
+                                                std::bind(&TopicReaderH264::onEncodedFrame, this, std::placeholders::_1));
+            } catch (const std::runtime_error & ex) {
+                this->encoder.reset();
+                this->encoder_error = true;
+                RCLCPP_ERROR(this->node->get_logger(), "%s", ex.what());
+                return;
+            }
+            this->use_pts = true; // pts calculated from header stamp
+        }
+        if (this->encoder == nullptr)
+            return;
+
+        try {
+            cv::Mat frame;
+            if (enc == "rgb8") {
+                frame = cv::Mat(im->height, im->width, CV_8UC3, im->data.data());
+            }
+            else if (enc == "bgr8") {
+                frame = cv::Mat(im->height, im->width, CV_8UC3, im->data.data());
+            }
+            else if (enc == "mono8" || enc == "8uc1") {
+                frame = cv::Mat(im->height, im->width, CV_8UC1, im->data.data());
+            }
+            else if (enc == "16uc1" || enc == "mono16") {
+                cv::Mat mono16(im->height, im->width, CV_16UC1, im->data.data());
+                cv::Mat mono8;
+                mono16.convertTo(mono8, CV_8UC1, 255.0 / this->max_sensor_value); // Convert to 8-bit (0-255 range)
+                cv::applyColorMap(mono8, frame, this->colormap); // Apply color map
+            }
+
+            this->encoder->encodeFrame(frame, im->header, debug_log);
+        } catch (const std::runtime_error & ex) {
+            RCLCPP_ERROR(this->node->get_logger(), "Error encoding frame: %s", ex.what());
+        }
+    }
+
+    // on subscriber thread
+    void TopicReaderH264::onCompressedFrame(const std::shared_ptr<sensor_msgs::msg::CompressedImage> data) {
+        log("Got CompressedImage for " + this->topic + "; format=" + data->format);
+    }
+
+    // void TopicReaderH264::onH264Encoded(std::shared_ptr<>) {
+    //     log("Packet Encoded for " + this->topic + " " + std::to_string(size)+" B pts="+std::to_string(pts)+" flags="+std::to_string(flags));
+
+        
+    //     this->onEncodedFrame(frame);
+    // }
+
+
+    // on own thread
     void TopicReaderH264::outputFramesWorker(std::shared_ptr<Output> output) {
         
         log(GRAY + "[" + getThreadId() + "] Output worker started for track " + output->track_info->msid + CLR);
         while (this->subscriber_running && output->active) {
 
-            std::unique_lock<std::mutex> queue_lock(output->queue_mutex);
-            output->queue_cv.wait(queue_lock, [this, output] { return !output->queue.empty() || !this->subscriber_running || !output->active; });
+            std::unique_lock<std::mutex> queue_lock(output->in_queue_mutex);
+            output->in_queue_cv.wait(queue_lock, [this, output] { return !output->in_queue.empty() || !this->subscriber_running || !output->active; });
 
-            while (!output->queue.empty()) {
-                auto frame = output->queue.front();
-                output->queue.pop();
+            if (!output->in_queue.empty()) {
+                auto frame = output->in_queue.front();
+                output->in_queue.pop();
                 
                 if (!output->active || !this->subscriber_running) {
                     log("[" + getThreadId() + "] Output closed for " + this->topic + " track #" + std::to_string(output->track_info->ssrc));
-                    // lock.lock();
                     continue;
                 }
 
                 queue_lock.unlock();
+
+                auto debug_log = this->debug_num_frames > 0;
 
                 if (frame.ts <= output->last_raw_ts) {
                     output->ts_first = 0; //reset
@@ -256,8 +378,10 @@ namespace phntm {
                         //output->track_info->rtpConfig->timestamp = pts_client;
                         output->track_info->rtpConfig->startTimestamp = (uint32_t) output->peer->connectedRTPTimeBase();
                     }
-                    log("[" + getThreadId() + "] Track #" + std::to_string(output->track_info->ssrc) + " initial ts set to " + std::to_string(pts_client)
-                          + " msg.sec=" + std::to_string(frame.msg->header.stamp.sec) + " msg.nanosec=" + std::to_string(frame.msg->header.stamp.nanosec));
+                    if (this->debug_verbose || debug_log) {
+                        log(GRAY + "[" + getThreadId() + "] Track #" + std::to_string(output->track_info->ssrc) + " initial ts set to " + std::to_string(pts_client)
+                          + " msg.sec=" + std::to_string(frame.msg->header.stamp.sec) + " msg.nanosec=" + std::to_string(frame.msg->header.stamp.nanosec) + CLR);
+                    }
                 } else {
                     pts_client = (frame.ts - output->ts_first) + output->ts_offset;
                     // pts_client = getCurrentRtpTimestamp();
@@ -266,16 +390,26 @@ namespace phntm {
                 }
 
                 rtc::FrameInfo info { (uint32_t) pts_client };
-                info.isKeyframe = frame.is_keyframe;
+                // info.isKeyframe = frame.is_keyframe;
 
                 try {                
                     // this->latest_payload_size = msg->data.size();
                     // this->latest_payload.resize(this->latest_payload_size);
                     // std::memcpy(this->latest_payload.data(), msg->data.data(), this->latest_payload_size);
-                    if (this->debug_verbose)
+                    if (this->debug_verbose || debug_log)
                         log("[" + getThreadId() + "] Track #" + std::to_string(output->track_info->ssrc) + " sending " + (frame.is_keyframe ? CYAN + "KEYFRAME" + CLR : "frame") + " w pts_client=" + std::to_string(pts_client) + " orig " + std::to_string(frame.ts)+" msg.sec=" + std::to_string(frame.msg->header.stamp.sec) + " msg.nanosec=" + std::to_string(frame.msg->header.stamp.nanosec));
 
                     output->track_info->rtpConfig->timestamp = pts_client;
+                    // auto output_to_send = std::make_shared<SendMsg>(reinterpret_cast<std::byte*>(frame.msg->data.data()), frame.msg->data.size(), info);
+                    // {
+                    //     std::unique_lock<std::mutex> output_lock (output->output_to_send_mutex);
+                    //     output->output_to_send.push(output_to_send);
+                    // }
+                    // {
+                    //     std::unique_lock<std::mutex> peer_queue_lock(output->peer->h264_queue_mutex);
+                    //     output->peer->h264_queue.push(output);
+                    // }
+                    // output->peer->h264_queue_cv.notify_one(); // notify the waiting peer thread
                     output->track_info->track->sendFrame(reinterpret_cast<const std::byte*>(frame.msg->data.data()), frame.msg->data.size(), info);
                     // output->track_info->track->sendPrepacketizedFrame(fragments, info);
                     // output->track_info->track->send(*message);
@@ -288,15 +422,7 @@ namespace phntm {
                     output->logged_init_incomplete = false;
                     output->logged_error = false;
                     output->logged_exception = false;
-
-                    output->num_sent++;
-
-                    // reset
-                    output->logged_closed = false;
-                    output->logged_init_incomplete = false;
-                    output->logged_error = false;
-                    output->logged_exception = false;
-                    
+            
                     // }
                 } catch(const std::runtime_error & ex) {
                     if (!output->logged_exception) {
@@ -341,6 +467,7 @@ namespace phntm {
 
                 log(GRAY + "[" + getThreadId() + "] Making executor " + this->topic + CLR);
                 this->executor = std::make_shared<rclcpp::executors::StaticSingleThreadedExecutor>();
+               // this->executor = std::make_shared<rclcpp::executors::MultiThreadedExecutor>();
                 this->executor->add_node(this->node);
             }
 
@@ -353,14 +480,34 @@ namespace phntm {
             if (this->callback_group != nullptr) {
                 options.callback_group = this->callback_group;
             }
-            this->sub = this->node->create_subscription<ffmpeg_image_transport_msgs::msg::FFMPEGPacket>(
-                this->topic,
-                this->qos,
-                std::bind(&TopicReaderH264::onFrame, this, std::placeholders::_1),
-                options
-            );
-            log(GREEN + "[" + this->topic + "] Created subscriber" + CLR);
 
+            if (isEncodedVideoType(this->msg_type)) {
+                this->sub_enc = this->node->create_subscription<ffmpeg_image_transport_msgs::msg::FFMPEGPacket>(
+                    this->topic,
+                    this->qos,
+                    std::bind(&TopicReaderH264::onEncodedFrame, this, std::placeholders::_1),
+                    options
+                );
+            } else if (isImageType(this->msg_type)) {
+                this->sub_img = this->node->create_subscription<sensor_msgs::msg::Image>(
+                    this->topic,
+                    this->qos,
+                    std::bind(&TopicReaderH264::onImageFrame, this, std::placeholders::_1),
+                    options
+                );
+            } else if (isCompressedImageType(this->msg_type)) {
+                this->sub_cmp = this->node->create_subscription<sensor_msgs::msg::CompressedImage>(
+                    this->topic,
+                    this->qos,
+                    std::bind(&TopicReaderH264::onCompressedFrame, this, std::placeholders::_1),
+                    options
+                );
+            } else {
+                log("Invalid message type in H264 reader of " + this->topic+": " + this->msg_type, true);
+                return;
+            }
+
+            log(GREEN + "[" + this->topic + "] Created subscriber" + CLR);
             
             if (this->create_node) { // spin in a new thread
                 this->subscriber_thread = std::thread(&TopicReaderH264::spinSubscriber, this);
@@ -368,26 +515,47 @@ namespace phntm {
             }
 
         } catch(const std::runtime_error & ex) {
-            this->sub = nullptr;
+            this->sub_enc = nullptr;
+            this->sub_img = nullptr;
+            this->sub_cmp = nullptr;
             log("Error creating subscriber for " + this->topic + " {"+ VIDEO_STREAM_MSG_TYPE +"}: " + ex.what(), true);
         }
     }
 
     void TopicReaderH264::spinSubscriber() { // when on its own node
-        log(GRAY + "[" + getThreadId() + "] Subscriuber spinning for " + this->topic + CLR);
+        auto topic = this->topic;
+        log(GRAY + "[" + getThreadId() + "] Subscriuber spinning for " + topic + CLR);
 
         while (rclcpp::ok() && this->subscriber_running) {
-            this->executor->spin_some();
+            this->executor->spin_once();
         }
 
-        log(BLUE + "[" + getThreadId() + "] Subscriber spinning finished for "+ this->topic + CLR);
+        log(BLUE + "[" + getThreadId() + "] Subscriber spinning finished for "+ topic + CLR);
         this->executor->remove_node(this->node);
             
         if (rclcpp::ok()) {
-            if (this->sub != nullptr) {
+            if (this->sub_enc != nullptr) {
                 try {
-                    this->sub.reset(); // removes sub
-                    this->sub = nullptr;
+                    this->sub_enc.reset(); // removes sub
+                    this->sub_enc = nullptr;
+                    log(BLUE + "[" + this->topic + "] Removed subscriber" + CLR);
+                } catch (const std::exception & ex) {
+                    log("Exception closing media subscriber: " + std::string(ex.what()), true);
+                }    
+            }
+            if (this->sub_img != nullptr) {
+                try {
+                    this->sub_img.reset(); // removes sub
+                    this->sub_img = nullptr;
+                    log(BLUE + "[" + this->topic + "] Removed subscriber" + CLR);
+                } catch (const std::exception & ex) {
+                    log("Exception closing media subscriber: " + std::string(ex.what()), true);
+                }    
+            }
+            if (this->sub_cmp != nullptr) {
+                try {
+                    this->sub_cmp.reset(); // removes sub
+                    this->sub_cmp = nullptr;
                     log(BLUE + "[" + this->topic + "] Removed subscriber" + CLR);
                 } catch (const std::exception & ex) {
                     log("Exception closing media subscriber: " + std::string(ex.what()), true);
@@ -395,13 +563,10 @@ namespace phntm {
             }
             
             this->node.reset();
-            this->node = nullptr;
             this->executor.reset();
-            this->executor = nullptr;
         }
         
-        this->logged_receiving = false;
-        log(GRAY + "[" + getThreadId() + "] Subscriber cleared for " + this->topic + CLR);
+        log(GRAY + "[" + getThreadId() + "] Subscriber cleared for " + topic + CLR);
     }
 
     bool TopicReaderH264::removeOutput(std::shared_ptr<MediaTrackInfo> track_info) {
@@ -419,7 +584,13 @@ namespace phntm {
         if (pos != this->outputs.end()) {
             auto o = *pos;
             o->active = false;
-            o->queue_cv.notify_one();
+            o->in_queue_cv.notify_one();
+            // {
+            //     std::lock_guard<std::mutex> output_lock (o->output_to_send_mutex);
+            //     while (!o->output_to_send.empty()) {
+            //         o->output_to_send.pop();
+            //     }
+            // }
             this->outputs.erase(pos);    
         } else {
             log("Track not found in " + this->topic + " reader");
@@ -451,11 +622,21 @@ namespace phntm {
         }
         {
             std::lock_guard<std::mutex> lock(this->outputs_mutex);
-            for (auto & output : this->outputs) {
-                output->active = false; //kill worker
-                output->queue_cv.notify_one();
+            for (auto & o : this->outputs) {
+                o->active = false; //kill worker
+                // {
+                //     std::lock_guard<std::mutex> output_lock (o->output_to_send_mutex);
+                //     while (!o->output_to_send.empty()) {
+                //         o->output_to_send.pop();
+                //     }
+                // }
+                o->in_queue_cv.notify_one();
             }
             this->outputs.clear();
+        }
+        if (this->encoder != nullptr) {
+            this->encoder.reset();
+            this->encoder = nullptr;
         }
     }
 
@@ -505,10 +686,10 @@ namespace phntm {
 
         track->onOpen([peer, topic, track](){
             log(GREEN + peer->toString() + "Media track open for " + topic + CLR);
-            auto description = track->description();
-            for (auto ssrc : description.getSSRCs()) {
-                log(std::to_string(ssrc));
-            }
+            // auto description = track->description();
+            // for (auto ssrc : description.getSSRCs()) {
+            //     log(std::to_string(ssrc));
+            // }
         });
 
         track->onClosed([peer, topic](){
