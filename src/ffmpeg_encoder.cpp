@@ -198,36 +198,24 @@ namespace phntm {
 
         log("["+this->toString()+"] Destroying");
 
-        // Flush encoder
-        flush(); // kills the thread when complete
-        
-        log("["+this->toString()+"] Flushed...");
+        flush(); // flush encoder, kills the thread when complete
 
         // Cleanup
         if (this->frame)
             av_frame_free(&this->frame);
-        log("["+this->toString()+"] frame freed...");
         if (this->codec_ctx) {
-            this->codec_ctx->hw_device_ctx = nullptr;
+            this->codec_ctx->hw_device_ctx = nullptr; //remove this before deallocating
             avcodec_free_context(&this->codec_ctx);
         }
-        log("["+this->toString()+"] codec_ctx freed...");
         if (hw_device_ctx)
             av_buffer_unref(&hw_device_ctx);
-        log("["+this->toString()+"] hw_device_ctx freed...");
         if (fmt_ctx)
             avformat_free_context(fmt_ctx);
-        log("["+this->toString()+"] fmt_ctx freed...");
         if (sws_ctx)
             sws_freeContext(sws_ctx);
-        log("["+this->toString()+"] sws_ctx freed...");
-
-        log("["+this->toString()+"] Deallocated...");
 
         if (this->node.get() != nullptr)
             this->node.reset();
-
-        log("["+this->toString()+"] Done...");
     }
 
     void FFmpegEncoder::flush() {
