@@ -398,8 +398,8 @@ namespace phntm {
         this->declare_parameter("encoder_hw_device_default", ""); // none, cuda, vaapi
         this->declare_parameter("encoder_thread_count_default", 2);
         this->declare_parameter("encoder_gop_size_default", 60); // kf every 
-        this->declare_parameter("encoder_bit_rate_default", 512 * 8 * 1024); // 512KB
-    }
+        this->declare_parameter("encoder_bit_rate_default", 5000000); // 610 KB/s
+    }   
 
     rclcpp::QoS PhntmBridge::loadTopicQoSConfig(std::string topic, size_t default_depth, rclcpp::ReliabilityPolicy default_reliability, rclcpp::DurabilityPolicy default_durability, float default_lifespan_sec) {
     

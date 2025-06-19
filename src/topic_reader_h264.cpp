@@ -255,13 +255,20 @@ namespace phntm {
         auto debug_log = this->debug_num_frames > 0;
 
         if (debug_log) {
-            log("Received Image frame w enc=" + im->encoding+"; sending to encoder");
+            log(this->topic + " Received Image frame w enc=" + im->encoding+"; sending to encoder");
         }
 
         auto enc = strToLower(im->encoding);
 
-        // auto is_keyframe = false; //TODO every sec
+        if (this->encoder.get() != nullptr && !this->encoder->checkCompatibility(im->width, im->height, enc)) {
+            RCLCPP_INFO(this->node->get_logger(), "Removing old encoder for %s {%s}, format change detected",
+                        this->topic.c_str(), this->msg_type.c_str());
+            this->encoder.reset();
+        }
+
+        // make encoder
         if (this->encoder.get() == nullptr) {
+
             AVPixelFormat opencv_format;
             if (enc == "rgb8") {
                 opencv_format = AV_PIX_FMT_RGB24;
@@ -279,12 +286,10 @@ namespace phntm {
                 return;
             }
 
-            // std::string hw_device = ""; // TODO
-            // int thread_count = 4; // TODO
             RCLCPP_INFO(this->node->get_logger(), "Making encoder %dx%d for %s {%s} with hw_device=%s",
                         im->width, im->height, this->topic.c_str(), this->msg_type.c_str(), encoder_hw_device.c_str());
             try {
-                this->encoder = std::make_shared<FFmpegEncoder>(im->width, im->height, opencv_format,
+                this->encoder = std::make_shared<FFmpegEncoder>(im->width, im->height, enc, opencv_format,
                                                 im->header.frame_id, this->topic, this->node,
                                                 this->encoder_hw_device,
                                                 this->encoder_thread_count,

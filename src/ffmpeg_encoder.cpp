@@ -11,8 +11,8 @@
 
 namespace phntm {
 
-   FFmpegEncoder::FFmpegEncoder(int width, int height, AVPixelFormat opencv_format, std::string frame_id, std::string topic, std::shared_ptr<rclcpp::Node> node, std::string& hw_device, int thread_count, int gop_size, int bit_rate, PacketCallback callback)
-        : width(width), height(height), packet_callback(callback), frame_id(frame_id), topic(topic), node(node) {
+   FFmpegEncoder::FFmpegEncoder(int width, int height, std::string src_encoding, AVPixelFormat opencv_format, std::string frame_id, std::string topic, std::shared_ptr<rclcpp::Node> node, std::string& hw_device, int thread_count, int gop_size, int bit_rate, PacketCallback callback)
+        : width(width), height(height), src_encoding(src_encoding), packet_callback(callback), frame_id(frame_id), topic(topic), node(node) {
 
         // Initialize FFmpeg
         avformat_network_init();

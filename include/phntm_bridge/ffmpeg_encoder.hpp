@@ -22,14 +22,16 @@ namespace phntm {
     public:
         using PacketCallback = std::function<void(std::shared_ptr<ffmpeg_image_transport_msgs::msg::FFMPEGPacket> frame)>;
 
-        FFmpegEncoder(int width, int height, AVPixelFormat opencv_format, std::string frame_id, std::string topic, std::shared_ptr<rclcpp::Node> node, std::string& hw_device, int thread_count, int gop_size, int bit_rate, PacketCallback callback = nullptr);
+        FFmpegEncoder(int width, int height, const std::string src_encoding, AVPixelFormat opencv_format, std::string frame_id, std::string topic, std::shared_ptr<rclcpp::Node> node, std::string& hw_device, int thread_count, int gop_size, int bit_rate, PacketCallback callback = nullptr);
         ~FFmpegEncoder();
         
         void encodeFrame(const cv::Mat& raw_frame, std_msgs::msg::Header header, bool debug_log);
-        
+        bool checkCompatibility(const int width, const int height, const std::string & src_encoding) { return width == this->width && height == this->height && src_encoding == this->src_encoding; };
+
     private:
         int width, height;
         const int fps = 30;
+        std::string src_encoding;
         int64_t pts_counter = 0;
         PacketCallback packet_callback;
 
