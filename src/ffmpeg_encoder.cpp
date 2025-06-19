@@ -44,7 +44,7 @@ namespace phntm {
         if (!codec) {
             codec = avcodec_find_encoder(AV_CODEC_ID_H264); // Fallback to software
             //log("["+this->toString()+"] Warning: Software h.264 encoding selected for " + topic+", this is rather slow and expensive");
-            RCLCPP_WARN(this->node->get_logger(), "Software h.264 encoding selected for %s, this is rather slow and expensive", this->topic.c_str());
+            RCLCPP_WARN(this->node->get_logger(), "[%s] Software h.264 encoding selected for %s, this is rather slow and expensive", this->toString().c_str(),  this->topic.c_str());
         }
         
         if (!codec) {
@@ -61,7 +61,7 @@ namespace phntm {
         this->codec_ctx->height = height;
         this->codec_ctx->time_base = (AVRational){1, fps};
         this->codec_ctx->framerate = (AVRational){fps, 1};
-        this->codec_ctx->pix_fmt = hw_device_type != AV_HWDEVICE_TYPE_NONE ? AV_PIX_FMT_CUDA : AV_PIX_FMT_YUV420P;
+        this->codec_ctx->pix_fmt = AV_PIX_FMT_YUV420P;
         this->codec_ctx->gop_size = gop_size; // 60
         this->codec_ctx->max_b_frames = 0;
         this->codec_ctx->thread_count = thread_count;
@@ -91,7 +91,7 @@ namespace phntm {
         // Allocate frame
         frame = av_frame_alloc();
         if (!frame) {
-            throw std::runtime_error("[Enc] Could not allocate frame for "+topic);
+            throw std::runtime_error("["+this->toString()+"] Could not allocate frame for "+topic);
         }
         
         frame->format = this->codec_ctx->pix_fmt;
@@ -99,7 +99,7 @@ namespace phntm {
         frame->height = height;
         
         if (av_frame_get_buffer(frame, 0) < 0) {
-            throw std::runtime_error("[Enc] Could not allocate frame data for " + topic);
+            throw std::runtime_error("["+this->toString()+"] Could not allocate frame data for " + topic);
         }
         
         // Initialize color conversion context
@@ -116,7 +116,7 @@ namespace phntm {
 
     void FFmpegEncoder::encodeFrame(const cv::Mat& raw_frame, std_msgs::msg::Header header, bool debug_log) {
         if (raw_frame.empty()) {
-            throw std::invalid_argument("[Enc] Empty frame provided");
+            throw std::invalid_argument("["+this->toString()+"] Empty frame provided");
         }
 
         // Convert from OpenCV BGR to encoder's format
@@ -138,12 +138,12 @@ namespace phntm {
         
         int ret = avcodec_send_frame(this->codec_ctx, frame);
         if (ret < 0) {
-            throw std::runtime_error("[Enc] Error sending frame to encoder");
+            throw std::runtime_error("["+this->toString()+"] Error sending frame to encoder");
         }
 
         auto pkt = av_packet_alloc();
             if (!pkt) {
-                throw std::runtime_error("[Enc] Could not allocate packet");
+                throw std::runtime_error("["+this->toString()+"] Could not allocate packet");
             }
             
         ret = avcodec_receive_packet(this->codec_ctx, pkt);
@@ -157,7 +157,7 @@ namespace phntm {
             return;
         } else if (ret < 0) {
             av_packet_free(&pkt);
-            log("[Enc] Error during encoding" + std::to_string(ret), true);
+            log("["+this->toString()+"] Error during encoding" + std::to_string(ret), true);
             return;
         }
             
@@ -195,18 +195,39 @@ namespace phntm {
     // }
 
     FFmpegEncoder::~FFmpegEncoder() {
+
+        log("["+this->toString()+"] Destroying");
+
         // Flush encoder
         flush(); // kills the thread when complete
         
-        // Cleanup
-        if (frame) av_frame_free(&frame);
-        if (codec_ctx) avcodec_free_context(&this->codec_ctx);
-        // this->codec_ctx.reset();
+        log("["+this->toString()+"] Flushed...");
 
-        if (hw_device_ctx) av_buffer_unref(&hw_device_ctx);
-        if (fmt_ctx) avformat_free_context(fmt_ctx);
-        if (sws_ctx) sws_freeContext(sws_ctx);
-        this->node.reset();
+        // Cleanup
+        if (this->frame)
+            av_frame_free(&this->frame);
+        log("["+this->toString()+"] frame freed...");
+        if (this->codec_ctx) {
+            this->codec_ctx->hw_device_ctx = nullptr;
+            avcodec_free_context(&this->codec_ctx);
+        }
+        log("["+this->toString()+"] codec_ctx freed...");
+        if (hw_device_ctx)
+            av_buffer_unref(&hw_device_ctx);
+        log("["+this->toString()+"] hw_device_ctx freed...");
+        if (fmt_ctx)
+            avformat_free_context(fmt_ctx);
+        log("["+this->toString()+"] fmt_ctx freed...");
+        if (sws_ctx)
+            sws_freeContext(sws_ctx);
+        log("["+this->toString()+"] sws_ctx freed...");
+
+        log("["+this->toString()+"] Deallocated...");
+
+        if (this->node.get() != nullptr)
+            this->node.reset();
+
+        log("["+this->toString()+"] Done...");
     }
 
     void FFmpegEncoder::flush() {

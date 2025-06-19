@@ -110,7 +110,7 @@ namespace phntm {
             std::string msg_type;
             rclcpp::QoS qos;
             std::shared_ptr<rclcpp::Node> node; // node to run subs on, new if null
-            rclcpp::CallbackGroup::SharedPtr callback_group = nullptr;
+            rclcpp::CallbackGroup::SharedPtr callback_group;
 
             std::vector<std::shared_ptr<Output>> outputs; // target data channels & pcs
             std::mutex outputs_mutex;
@@ -119,7 +119,7 @@ namespace phntm {
             
             bool subscriber_running = false;
             void spinSubscriber();
-            std::shared_ptr<rclcpp::Executor> executor = nullptr;
+            std::shared_ptr<rclcpp::Executor> executor;
             std::thread subscriber_thread;
 
             void start();
@@ -130,9 +130,9 @@ namespace phntm {
             void onCompressedFrame(const std::shared_ptr<sensor_msgs::msg::CompressedImage> data);
             
             // only one of these used at the time
-            std::shared_ptr<rclcpp::Subscription<ffmpeg_image_transport_msgs::msg::FFMPEGPacket>> sub_enc = nullptr;
-            std::shared_ptr<rclcpp::Subscription<sensor_msgs::msg::Image>> sub_img = nullptr;
-            std::shared_ptr<rclcpp::Subscription<sensor_msgs::msg::CompressedImage>> sub_cmp = nullptr;
+            std::shared_ptr<rclcpp::Subscription<ffmpeg_image_transport_msgs::msg::FFMPEGPacket>> sub_enc;
+            std::shared_ptr<rclcpp::Subscription<sensor_msgs::msg::Image>> sub_img;
+            std::shared_ptr<rclcpp::Subscription<sensor_msgs::msg::CompressedImage>> sub_cmp;
             
             bool create_node;
             
@@ -163,7 +163,7 @@ namespace phntm {
             int encoder_gop_size;
             int encoder_bit_rate;
 
-            std::shared_ptr<FFmpegEncoder> encoder = nullptr;
+            std::shared_ptr<FFmpegEncoder> encoder;
             //void onH264Encoded();
     };
 

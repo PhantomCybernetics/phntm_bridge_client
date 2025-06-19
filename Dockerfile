@@ -62,16 +62,16 @@ RUN ninja -C build install
 
 # RUN apt install -y libmbedtls-dev libmbedtls14
 # RUN apt install -y python3-jinja python3-jsonschema
-WORKDIR /root
-RUN git clone https://github.com/Mbed-TLS/mbedtls.git
-WORKDIR /root/mbedtls
-RUN git checkout v3.6.3.1
-RUN git submodule update --init --recursive --depth 1
-RUN python3 -m pip install --user -r scripts/basic.requirements.txt
-RUN sed -i 's|^//\(#define MBEDTLS_SSL_DTLS_SRTP\)|\1|' include/mbedtls/mbedtls_config.h
-# RUN cmake tf-psa-crypto/
-RUN cmake -DCMAKE_BUILD_TYPE=Release -DUSE_STATIC_MBEDTLS_LIBRARY=Off -DUSE_SHARED_MBEDTLS_LIBRARY=On -DENABLE_TESTING=Off -DCMAKE_INSTALL_PREFIX=/usr .
-RUN make && make install
+# WORKDIR /root
+# RUN git clone https://github.com/Mbed-TLS/mbedtls.git
+# WORKDIR /root/mbedtls
+# RUN git checkout v3.6.3.1
+# RUN git submodule update --init --recursive --depth 1
+# RUN python3 -m pip install --user -r scripts/basic.requirements.txt
+# RUN sed -i 's|^//\(#define MBEDTLS_SSL_DTLS_SRTP\)|\1|' include/mbedtls/mbedtls_config.h
+# # RUN cmake tf-psa-crypto/
+# RUN cmake -DCMAKE_BUILD_TYPE=Release -DUSE_STATIC_MBEDTLS_LIBRARY=Off -DUSE_SHARED_MBEDTLS_LIBRARY=On -DENABLE_TESTING=Off -DCMAKE_INSTALL_PREFIX=/usr .
+# RUN make && make install
 
 RUN apt install -y libpcap-dev
 

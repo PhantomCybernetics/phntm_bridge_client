@@ -261,7 +261,7 @@ namespace phntm {
         auto enc = strToLower(im->encoding);
 
         // auto is_keyframe = false; //TODO every sec
-        if (this->encoder == nullptr) {
+        if (this->encoder.get() == nullptr) {
             AVPixelFormat opencv_format;
             if (enc == "rgb8") {
                 opencv_format = AV_PIX_FMT_RGB24;
@@ -299,7 +299,7 @@ namespace phntm {
             }
             this->use_pts = true; // pts calculated from header stamp
         }
-        if (this->encoder == nullptr)
+        if (this->encoder.get() == nullptr)
             return;
 
         try {
@@ -477,7 +477,7 @@ namespace phntm {
             //     );
             // }
             auto options = rclcpp::SubscriptionOptions();
-            if (this->callback_group != nullptr) {
+            if (this->callback_group != nullptr && this->callback_group.get() != nullptr) {
                 options.callback_group = this->callback_group;
             }
 
@@ -515,9 +515,9 @@ namespace phntm {
             }
 
         } catch(const std::runtime_error & ex) {
-            this->sub_enc = nullptr;
-            this->sub_img = nullptr;
-            this->sub_cmp = nullptr;
+            this->sub_enc.reset();
+            this->sub_img.reset();
+            this->sub_cmp.reset();
             log("Error creating subscriber for " + this->topic + " {"+ VIDEO_STREAM_MSG_TYPE +"}: " + ex.what(), true);
         }
     }
@@ -534,28 +534,25 @@ namespace phntm {
         this->executor->remove_node(this->node);
             
         if (rclcpp::ok()) {
-            if (this->sub_enc != nullptr) {
+            if (this->sub_enc.get() != nullptr) {
                 try {
                     this->sub_enc.reset(); // removes sub
-                    this->sub_enc = nullptr;
                     log(BLUE + "[" + this->topic + "] Removed subscriber" + CLR);
                 } catch (const std::exception & ex) {
                     log("Exception closing media subscriber: " + std::string(ex.what()), true);
                 }    
             }
-            if (this->sub_img != nullptr) {
+            if (this->sub_img.get() != nullptr) {
                 try {
                     this->sub_img.reset(); // removes sub
-                    this->sub_img = nullptr;
                     log(BLUE + "[" + this->topic + "] Removed subscriber" + CLR);
                 } catch (const std::exception & ex) {
                     log("Exception closing media subscriber: " + std::string(ex.what()), true);
                 }    
             }
-            if (this->sub_cmp != nullptr) {
+            if (this->sub_cmp.get() != nullptr) {
                 try {
                     this->sub_cmp.reset(); // removes sub
-                    this->sub_cmp = nullptr;
                     log(BLUE + "[" + this->topic + "] Removed subscriber" + CLR);
                 } catch (const std::exception & ex) {
                     log("Exception closing media subscriber: " + std::string(ex.what()), true);
@@ -614,7 +611,7 @@ namespace phntm {
         if (this->subscriber_running && this->create_node) {
             log(GRAY + "Stopping reader for " + this->topic + CLR);
             this->subscriber_running = false; //kills the sub thread]]]
-            while (this->node != nullptr) { // wait fo the thread to stop and destroy node
+            while (this->node.get() != nullptr) { // wait fo the thread to stop and destroy node
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
         } else {
@@ -634,9 +631,8 @@ namespace phntm {
             }
             this->outputs.clear();
         }
-        if (this->encoder != nullptr) {
+        if (this->encoder.get() != nullptr) {
             this->encoder.reset();
-            this->encoder = nullptr;
         }
     }
 
