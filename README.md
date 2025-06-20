@@ -1,26 +1,26 @@
-# Phantom Bridge
+# Phantom Bridge Client
 
 Fast WebRTC + Socket.io ROS2 Bridge for real-time data and video streaming, teleoperation, HRI, and remote robot monitoring. Comes with Docker Container control for the host machine, CPU and Wi-Fi monitoring, and customizable [Web Interface](https://docs.phntm.io/bridge/ui/overview.html). \
 \
 [See full documentation here](https://docs.phntm.io/bridge)
 
 ## Features
-- ROS2 Topic and Service discovery
+- ROS2 Node, Topic and Service discovery
 - Fast streamimg of binary ROS2 messages (in a out)
-- Fast H.264 video streaming (hw or sw encodeded frames)
-- Software encoded ROS2 Image messages streamed as H.264 video (at CPU cost)
+- Fast H.264 video streaming (pre-encodeded FFmpeg frames)
+- Image & CompressesImage messages encoded and streamed as H.264 video (sw, cuda or vaapi encoding)
 - Docker container discovery and control
-- Reliable ROS2 Service calls
-- ROS2 Parameneters read/write at runtime
-- Extra ROS2 packages can be easily included for custom message type support
-- Robot's Wi-Fi signal monitoring, scan & roaming (requires wpa_supplicant)
-- File retreival from any running Docker container and host fs (such as URDF models)
-- System load and Docker stats monitoring
-- Standalone lightweight Bridge Agent for monitoring and management of various parts of a distributed system
+- Reliable ROS2 Service calls via Socket.io
+- ROS2 runtime Parameneters read/write API
+- Extra ROS2 packages can be easily included for custom message and service type support
+- Robot's Wi-Fi signal monitoring, scan & roaming (via Agent, requires wpa_supplicant on host machine)
+- File retreival from any running Docker container (such as URDF meshes, via Agent) 
+- System load and Docker stats monitoring (via Agent)
 - Connects P2P or via a TURN server when P2P link is not possible
 - Multiple peers can connect to the same machine at a very low extra CPU cost
 - ~5-10ms RTT on local network, 50ms+ RTT remote operation via a TURN server
-- Works with rosbag and sims such as Gazebo or Webots
+- Works with Rosbag and sims such as Gazebo or Webots
+- Tested with ROS2 Humble, Iron and Jazzy
 
 ## Architecture
 ![Infrastructure map](https://raw.githubusercontent.com/PhantomCybernetics/phntm_bridge_docs/refs/heads/main/img/Architecture_Bridge.png)
@@ -53,8 +53,8 @@ sudo usermod -aG docker ${USER}
 ### Clone this repo and build the Docker image
 ```bash
 cd ~
-git clone git@github.com:PhantomCybernetics/phntm_bridge.git phntm_bridge
-cd phntm_bridge
+git clone git@github.com:PhantomCybernetics/phntm_bridge_client.git phntm_bridge_client
+cd phntm_bridge_client
 ROS_DISTRO=humble; docker build -f Dockerfile -t phntm/bridge:$ROS_DISTRO --build-arg ROS_DISTRO=$ROS_DISTRO .
 ```
 
@@ -64,7 +64,7 @@ This registers a new robot on the Cloud Bridge and returns default config file y
 wget -O ~/phntm_bridge.yaml 'https://register.phntm.io/robot?yaml'
 ```
 
-### Examine and customize the Bridge config file
+### Examine and customize the Bridge Client config file
 Below is an example of the config file generated in the previous step, e.g. `~/phntm_bridge.yaml`. \
 Full list of configuration options can be found [here](https://docs.phntm.io/bridge/basics/bridge-config.html).
 ```yaml
@@ -145,7 +145,7 @@ Here's an example config file, e.g. `~/phntm_agent.yaml`.
     iw_roaming: False # enable wi-fi roaming
 ```
 
-### Add the Bridge service to your compose.yaml
+### Add service to your compose.yaml
 Add phntm_bridge service to your `~/compose.yaml` file with both `~/phntm_bridge.yaml` and `~/phntm_agent.yaml` mounted in the container as shown below:
 ```yaml
 services:
@@ -159,7 +159,7 @@ services:
     network_mode: host # webrtc needs this
     ipc: host # bridge needs this to see other local containers
     volumes:
-      - ~/phntm_bridge:/ros2_ws/src/phntm_bridge # live repo mapped here for easy updates
+      - ~/phntm_bridge_client:/ros2_ws/src/phntm_bridge # live repo mapped here for easy updates
       - ~/phntm_bridge.yaml:/ros2_ws/phntm_bridge_params.yaml # bridge config goes here
       - ~/phntm_agent.yaml:/ros2_ws/phntm_agent_params.yaml # agent config goes here
       - /var/run:/host_run # docker file extractor and wifi control need this
@@ -172,7 +172,7 @@ services:
 
 ### Launch
 ```bash
-docker compose up phntm_bridge
+docker compose up phntm_bridge # launches Bridge Client & Agent in one container
 ```
 
 ### Open the Web UI
@@ -182,25 +182,17 @@ If you provided maintainer's e-mail in the config, it will be also e-mailed to y
 Please note that Firefox is not fully supported at this time, [reasons are explained here](https://github.com/PhantomCybernetics/bridge_ui/issues/1).
 
 ## Upgrading
-
-Unless the Dockerfile changes between versions (which doesn't happen very often), all you need to do to upgrade the Phantom Bridge is to pull updates from this repo and restart the Docker container.
-
 ```bash
+# Eemove previous version
+docker stop phntm-bridge && docker rm phntm-bridge && docker image rm phntm/bridge:humble
+
+# Update & rebiuld the docker image
 cd ~/phntm_bridge
 git pull
-docker restart phntm-bridge
-```
+ROS_DISTRO=humble; docker build -f Dockerfile -t phntm/bridge:$ROS_DISTRO --build-arg ROS_DISTRO=$ROS_DISTRO .
 
-Should the Dockerfile change, you need to rebuild the Docker image too.
-
-```bash
-cd ~/phntm_bridge
-git pull
-ROS_DISTRO=humble; \
-docker build -f Dockerfile -t phntm/bridge:$ROS_DISTRO \
-  --build-arg ROS_DISTRO=$ROS_DISTRO \
-  .
-docker restart phntm-bridge
+# Launch
+docker compose up phntm_bridge
 ```
 
 ## See also
