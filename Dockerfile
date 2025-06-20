@@ -10,11 +10,11 @@ RUN apt-get install -y ssh \
                        pip
 
 # aiorc neeed pip update or fails on cffi version inconsistency
-RUN pip install --upgrade pip
+# RUN pip install --upgrade pip
 
 RUN apt-get install -y libjsoncpp-dev
 
-RUN pip install setuptools
+RUN apt-get install -y python3-setuptools
 
 # socket.io cpp
 # WORKDIR /root
@@ -104,6 +104,9 @@ RUN chmod a+x /ros_entrypoint.sh
 # source underlay on every login
 RUN echo 'source /opt/ros/'$ROS_DISTRO'/setup.bash' >> /root/.bashrc
 RUN echo 'test -f "/ros2_ws/install/setup.bash" && source "/ros2_ws/install/setup.bash"' >> /root/.bashrc
+# activate python venv on ~/.bashrc source
+RUN echo 'export PATH="/ros2_ws/ros2_py_venv/bin:$PATH"' >> /root/.bashrc
+RUN echo 'export PYTHONPATH="/ros2_ws/ros2_py_venv/lib/python3.12/site-packages:${PYTHONPATH:-}"' >> /root/.bashrc
 
 WORKDIR $ROS_WS
 
@@ -119,13 +122,19 @@ RUN . /opt/ros/$ROS_DISTRO/setup.sh && \
 
 # install Agent deps
 RUN apt-get install -y pkg-config
-RUN pip install termcolor \
-                PyEventEmitter
-                # docker ctrl
-RUN pip install docker
+RUN apt-get install -y python3-termcolor
+RUN apt-get install -y python3-pyee
+# docker ctrl
+RUN apt-get install -y python3-docker
 RUN apt-get install -y iw wireless-tools libiw-dev
-RUN pip install iwlib
 RUN apt-get install -y wpasupplicant
+# create a venv, install pip-only deps
+RUN apt-get install -y python3-venv
+RUN mkdir -p $ROS_WS/ros2_py_venv
+RUN python3 -m venv $ROS_WS/ros2_py_venv
+RUN . $ROS_WS/ros2_py_venv/bin/activate && \
+    pip install iwlib && \
+    deactivate
 
 # video enc
 RUN apt-get install -y libopencv-dev

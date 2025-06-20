@@ -10,6 +10,7 @@ add_compile_options(-g)
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
+find_package(ament_index_cpp REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(phntm_interfaces REQUIRED)
@@ -121,6 +122,7 @@ target_include_directories(phntm_bridge PUBLIC
 target_compile_features(phntm_bridge PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
 
 ament_target_dependencies(phntm_bridge
+                          ament_index_cpp
                           rclcpp
                           std_msgs
                           sensor_msgs
