@@ -126,7 +126,7 @@ Full list of configuration options can be found [here](https://docs.phntm.io/bri
 
 ### Configure the Agent
 The [Bridge Agent](https://docs.phntm.io/bridge/basics/agent-config.html) is a lightweight node that performs system monitoring and various related tasks. Typically, it's run in the same
-container as the Bridge, but can be also installed separately and run in multiple instances in case of a distributed system (hence the separatae configuration).
+container as the Bridge Client, but can be also installed separately and run in multiple instances in case of a distributed system (hence the separatae configuration).
 Here's an example config file, e.g. `~/phntm_agent.yaml`.
 ```yaml
 /**:
