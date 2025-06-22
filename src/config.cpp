@@ -146,7 +146,10 @@ namespace phntm {
                                                                "rcl_interfaces/srv/GetParameters",
                                                                "rcl_interfaces/srv/ListParameters",
                                                                "rcl_interfaces/srv/SetParameters",
-                                                               "rcl_interfaces/srv/SetParametersAtomically"
+                                                               "rcl_interfaces/srv/SetParametersAtomically",
+                                                               "type_description_interfaces/srv/GetTypeDescription",
+                                                               "rcl_interfaces/srv/GetLoggerLevels",
+                                                               "rcl_interfaces/srv/SetLoggerLevels"
                                                              };
         this->declare_parameter("collapse_services_default", collapse_services_default);
         config->collapse_services = this->get_parameter("collapse_services_default").as_string_array(); // system defaults

@@ -14,7 +14,8 @@ namespace phntm {
     bool runCmd(std::string cmd) {
         std::array<char, 128> buffer;
         std::string err_out = "/tmp/phntm_pkg_cmd_err.txt";
-        cmd += " 2>" + err_out;
+        cmd = std::string(". /ros2_ws/ros2_py_venv/bin/activate && ") // must call from inside of the python venv
+            + cmd + " 2>" + err_out;
         FILE* pipe = popen(cmd.c_str(), "r");
         if (!pipe) {
             log("     Error calling " + cmd, true);
