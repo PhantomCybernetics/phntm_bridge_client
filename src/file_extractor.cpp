@@ -80,7 +80,7 @@ namespace phntm {
                         return;
                     }
 
-                    log(GREEN + "Success from " + node_name + ", awaiting " + std::to_string(result->total_bytes) + " B in "+ std::to_string(result->num_parts) + " chunks" + CLR);
+                    log(GREEN + "Success from " + node_name + ", awaiting " + std::to_string(result->total_bytes) + " B in "+ std::to_string(result->num_parts) + " chunks for " + search_path + CLR);
                     
                     {
                         std::lock_guard<std::mutex> lock(uploaded_chunks_mutex);

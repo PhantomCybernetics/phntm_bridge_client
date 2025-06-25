@@ -12,6 +12,7 @@ namespace phntm {
     class BridgeConfig {
         public:
             std::string id_robot, auth_key, robot_name, maintainer_email;
+            std::string description; // shown in the ui
             std::string ros_distro, git_head_sha, latest_git_tag;
             
             std::vector<std::string> extra_packages;

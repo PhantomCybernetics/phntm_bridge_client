@@ -104,12 +104,9 @@ exec "$@"' > /ros_entrypoint.sh
 RUN chmod a+x /ros_entrypoint.sh
 
 # source underlay on every login
+RUN echo '\n# PhntmBridge {' >> /root/.bashrc
 RUN echo 'source /opt/ros/'$ROS_DISTRO'/setup.bash' >> /root/.bashrc
 RUN echo 'test -f "/ros2_ws/install/setup.bash" && source "/ros2_ws/install/setup.bash"' >> /root/.bashrc
-# activate python venv on ~/.bashrc source
-RUN echo 'export PYTHON_VERSION_VENV=$(python3 -c '"'"'import sys; print(".".join(map(str, sys.version_info[:2])))'"'"')' >> /root/.bashrc
-RUN echo 'export PATH="/ros2_ws/ros2_py_venv/bin:$PATH"' >> /root/.bashrc
-RUN echo 'export PYTHONPATH="/ros2_ws/ros2_py_venv/lib/python${PYTHON_VERSION_VENV}/site-packages:${PYTHONPATH:-}"' >> /root/.bashrc
 
 WORKDIR $ROS_WS
 
@@ -127,15 +124,23 @@ RUN . /opt/ros/$ROS_DISTRO/setup.sh && \
 RUN apt-get install -y pkg-config
 RUN apt-get install -y python3-termcolor
 RUN apt-get install -y python3-pyee
-# docker ctrl
+# Docker ctrl
 RUN apt-get install -y python3-docker
 RUN apt-get install -y iw wireless-tools libiw-dev
 RUN apt-get install -y wpasupplicant
-# create a venv, install pip-only deps
+
+# create a python venv, install pip-only deps
 RUN apt-get install -y python3-venv
-RUN mkdir -p $ROS_WS/ros2_py_venv
-RUN python3 -m venv $ROS_WS/ros2_py_venv
-RUN . $ROS_WS/ros2_py_venv/bin/activate && \
+RUN mkdir -p /root/ros2_py_venv
+RUN python3 -m venv /root/ros2_py_venv
+
+# activate python venv on ~/.bashrc source
+RUN echo 'export PYTHON_VERSION_VENV=$(python3 -c '"'"'import sys; print(".".join(map(str, sys.version_info[:2])))'"'"')' >> /root/.bashrc
+RUN echo 'export PATH="/root/ros2_py_venv/bin:$PATH"' >> /root/.bashrc
+RUN echo 'export PYTHONPATH="/root/ros2_py_venv/lib/python${PYTHON_VERSION_VENV}/site-packages:${PYTHONPATH:-}"' >> /root/.bashrc
+
+# Agent python deps and ROS python libs (used when building packages)
+RUN . /root/ros2_py_venv/bin/activate && \
     pip install iwlib && \
     pip install empy catkin_pkg numpy lark && \
     deactivate
@@ -161,6 +166,7 @@ RUN . /opt/ros/$ROS_DISTRO/setup.sh && \
 
 # pimp up prompt with hostame and color
 RUN echo "PS1='\${debian_chroot:+(\$debian_chroot)}\\[\\033[01;35m\\]\\u@\\h\\[\\033[00m\\] \\[\\033[01;34m\\]\\w\\[\\033[00m\\] '"  >> /root/.bashrc
+RUN echo '# } PhntmBridge' >> /root/.bashrc
 
 WORKDIR $ROS_WS
 

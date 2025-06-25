@@ -85,6 +85,13 @@ namespace phntm {
         this->declare_parameter("maintainer_email", "", email_descriptor);
         config->maintainer_email = this->get_parameter("maintainer_email").as_string();
 
+        // description shown in the UI
+        rcl_interfaces::msg::ParameterDescriptor description_descriptor;
+        description_descriptor.description = "Robot description shown in the UI";
+        description_descriptor.additional_constraints = "Some HTML is ok";
+        this->declare_parameter("description", "", description_descriptor);
+        config->description = this->get_parameter("description").as_string();
+
         // will check these packages on 1st (container) start
         rcl_interfaces::msg::ParameterDescriptor extra_pkg_descriptor;
         extra_pkg_descriptor.description = "ROS packages to check for on first Bridge run";
