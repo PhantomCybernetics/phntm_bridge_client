@@ -455,7 +455,7 @@ namespace phntm {
         // h.264 encoded frames
         if (isImageOrVideoType(msg_type)) { 
             try {
-                this->declare_parameter(topic + ".debug_num_frames", 0); // will debug this many frames (instects NAL units)
+                this->declare_parameter(topic + ".debug_num_frames", 1); // will debug this many frames (instects NAL units)
             } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
             try {
                 this->declare_parameter(topic + ".debug_verbose", false); // will debug this many frames (instects NAL units)
