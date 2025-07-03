@@ -15,10 +15,14 @@ def launch_setup(context, *args, **kwargs):
         'phntm_bridge_params.yaml'
     )
 
-    bridge_use_gdb_server = LaunchConfiguration("use_gdb_server", default="false")
+    color = LaunchConfiguration("color", default="false")
+    gdb_debugger = LaunchConfiguration("debugger", default="false")
+    use_gdb_server = LaunchConfiguration("use_gdb_server", default="false")
     bridge_launch_prefix = ""
-    if bridge_use_gdb_server.perform(context) == "true":
-        bridge_launch_prefix += "gdbserver localhost:3000"
+    if gdb_debugger.perform(context) == "true":
+       bridge_launch_prefix = "gdb -ex run --args"
+    elif use_gdb_server.perform(context) == "true":
+        bridge_launch_prefix = "gdbserver localhost:3000"
 
     bridge_node = Node(
         package='phntm_bridge',

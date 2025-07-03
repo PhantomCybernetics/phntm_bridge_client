@@ -9,7 +9,9 @@ RUN apt-get install -y pip wget
 # dev conveniences
 RUN apt-get install -y vim mc \
                        iputils-ping net-tools iproute2 \
-                       curl
+                       curl \
+                       gdb gdbserver \
+                       clangd
 
 # aiorc neeed pip update or fails on cffi version inconsistency
 # RUN pip install --upgrade pip
