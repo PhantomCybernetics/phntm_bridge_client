@@ -47,6 +47,7 @@ jobs:
       with:
         context: .
         file: ./Dockerfile
+        platforms: linux/amd64,linux/arm64
         build-args: |
           ROS_DISTRO=${{ matrix.ros_distro }}
         push: true
