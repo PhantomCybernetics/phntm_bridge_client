@@ -81,6 +81,8 @@ jobs:
       uses: docker/metadata-action@v5
       with:
         images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+      env:
+        DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
 
     - name: Generate image name
       id: image
@@ -93,7 +95,6 @@ jobs:
       with:
         context: .
         file: ./Dockerfile
-        platforms: ${{ matrix.platform }}
         build-args: |
           ROS_DISTRO=${{ matrix.ros_distro }}
         push: true
@@ -101,6 +102,9 @@ jobs:
         labels: ${{ steps.meta.outputs.labels }}
         cache-from: type=gha,scope=${{ matrix.arch }}-${{ matrix.ros_distro }}
         cache-to: type=gha,mode=max,scope=${{ matrix.arch }}-${{ matrix.ros_distro }}
+        platforms: ${{ matrix.platform }}
+        provenance: false # Disable provenance to avoid unknown/unknown
+        sbom: false       # Disable sbom to avoid unknown/unknown
 
   push-multi-arch-manifest:
     runs-on: ubuntu-latest
@@ -128,6 +132,8 @@ jobs:
       uses: docker/metadata-action@v5
       with:
         images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+      env:
+        DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
 
     - name: Check successful builds
       id: check_builds
@@ -136,28 +142,24 @@ jobs:
         SUCCESSFUL_ARCHS=""
         
         # Check if amd64 build was successful for this ROS distro
-        if docker manifest inspect "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.ros_distro }}-amd64-${{ github.sha }}" > /dev/null 2>&1; then
+        if docker buildx imagetools inspect "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.ros_distro }}-amd64-${{ github.sha }}"; then
           SUCCESSFUL_ARCHS="$SUCCESSFUL_ARCHS amd64"
         fi
         
         # Check if arm64 build was successful for this ROS distro
-        if docker manifest inspect "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.ros_distro }}-arm64-${{ github.sha }}" > /dev/null 2>&1; then
+        if docker buildx imagetools inspect "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.ros_distro }}-arm64-${{ github.sha }}"; then
           SUCCESSFUL_ARCHS="$SUCCESSFUL_ARCHS arm64"
         fi
         
         echo "successful_archs=$SUCCESSFUL_ARCHS" >> $GITHUB_OUTPUT
         echo "has_successful_builds=$([ -n "$SUCCESSFUL_ARCHS" ] && echo true || echo false)" >> $GITHUB_OUTPUT
+        cat $GITHUB_OUTPUT
 
     - name: Create and push multi-arch manifest
-      if: false && steps.check_builds.outputs.has_successful_builds == 'true'
+      if: steps.check_builds.outputs.has_successful_builds == 'true'
       run: |
         # Create multi-arch manifest for each tag
         for tag in ${{ steps.meta.outputs.tags }}; do
-          # Skip if tag doesn't match current ROS distro
-          if [[ "$tag" != *"${{ matrix.ros_distro }}"* ]] && [[ "$tag" != *"latest"* ]] && [[ "$tag" != *"main"* ]]; then
-            continue
-          fi
-
           # Build the list of successful images for this manifest
           IMAGES=""
           for arch in ${{ steps.check_builds.outputs.successful_archs }}; do
@@ -166,6 +168,6 @@ jobs:
 
           if [ -n "$IMAGES" ]; then
             echo "Creating manifest for $tag with images: $IMAGES"
-            docker buildx imagetools create --tag "$tag" $IMAGES
+            docker buildx imagetools create --tag "$tag-${{ matrix.ros_distro }}" $IMAGES
           fi
         done
