@@ -134,7 +134,7 @@ namespace phntm {
         this->set_parameter(rclcpp::Parameter("ice_secret", "*************"));
         
         // Cloud Bridge host
-        this->declare_parameter("cloud_bridge_address", "https://us-ca.bridge.phntm.io");
+        this->declare_parameter("bridge_server_address", "https://us-ca.bridge.phntm.io");
         
         /// Cloud Bridge files uploader port
         this->declare_parameter("file_upload_port", 1336);
@@ -254,7 +254,7 @@ namespace phntm {
         config->log_message_every_sec = this->get_parameter("log_message_every_sec").as_double();
 
         // bloud bridge stuffs
-        config->cloud_bridge_address = this->get_parameter("cloud_bridge_address").as_string();
+        config->bridge_server_address = this->get_parameter("bridge_server_address").as_string();
         config->file_upload_port = this->get_parameter("file_upload_port").as_int();
         config->sio_port = this->get_parameter("sio_port").as_int();
         config->sio_path = this->get_parameter("sio_path").as_string();
@@ -262,11 +262,11 @@ namespace phntm {
         config->sio_debug = this->get_parameter("sio_debug").as_bool();
         config->sio_verbose = this->get_parameter("sio_verbose").as_bool();
         config->sio_connection_retry_sec = this->get_parameter("sio_connection_retry_sec").as_double();
-        if (config->cloud_bridge_address.empty()) {
-            RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Param cloud_bridge_address not provided!");
+        if (config->bridge_server_address.empty()) {
+            RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Param bridge_server_address not provided!");
             exit(1);
         }
-        config->uploader_address = fmt::format("{}:{}", config->cloud_bridge_address, config->file_upload_port);
+        config->uploader_address = fmt::format("{}:{}", config->bridge_server_address, config->file_upload_port);
 
         // conn LED control via topic (blinks when connecting; on when connected; off = bridge not running)
         this->declare_parameter("conn_led_topic", "");
