@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: linux/${{ matrix.arch == 'amd64' && 'latest' || matrix.arch }}
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       packages: write
@@ -25,8 +25,42 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [ amd64, arm64 ]
-        ros_distro: [rolling, kilted, jazzy, iron]
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+            platform: linux/amd64
+            ros_distro: rolling
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            ros_distro: rolling
+
+          - arch: amd64
+            runner: ubuntu-latest
+            platform: linux/amd64
+            ros_distro: kilted
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            ros_distro: kilted
+
+          - arch: amd64
+            runner: ubuntu-latest
+            platform: linux/amd64
+            ros_distro: jazzy
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            ros_distro: jazzy
+
+          - arch: amd64
+            runner: ubuntu-latest
+            platform: linux/amd64
+            ros_distro: iron
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            ros_distro: iron
 
     steps:
     - name: Checkout repository
@@ -59,7 +93,7 @@ jobs:
       with:
         context: .
         file: ./Dockerfile
-        platforms: ${{ matrix.arch }}
+        platforms: ${{ matrix.platform }}
         build-args: |
           ROS_DISTRO=${{ matrix.ros_distro }}
         push: true
@@ -115,7 +149,7 @@ jobs:
         echo "has_successful_builds=$([ -n "$SUCCESSFUL_ARCHS" ] && echo true || echo false)" >> $GITHUB_OUTPUT
 
     - name: Create and push multi-arch manifest
-      if: steps.check_builds.outputs.has_successful_builds == 'true'
+      if: false && steps.check_builds.outputs.has_successful_builds == 'true'
       run: |
         # Create multi-arch manifest for each tag
         for tag in ${{ steps.meta.outputs.tags }}; do
