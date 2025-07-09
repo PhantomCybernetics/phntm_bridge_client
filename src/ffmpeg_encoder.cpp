@@ -61,7 +61,8 @@ namespace phntm {
         this->codec_ctx->height = height;
         this->codec_ctx->time_base = (AVRational){1, fps};
         this->codec_ctx->framerate = (AVRational){fps, 1};
-        this->codec_ctx->pix_fmt = AV_PIX_FMT_RGB0;
+        //this->codec_ctx->pix_fmt = AV_PIX_FMT_RGB0;
+        this->codec_ctx->pix_fmt = AV_PIX_FMT_YUV420P;
         this->codec_ctx->gop_size = gop_size; // 60
         this->codec_ctx->max_b_frames = 0;
         this->codec_ctx->thread_count = thread_count;
