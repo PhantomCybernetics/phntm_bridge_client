@@ -9,7 +9,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: phantomcybernetics/bridge-client
+  IMAGE_NAME: phantomcybernetics/phntm_bridge_client
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -28,20 +28,38 @@ jobs:
           - platform: linux/amd64
             runner: ubuntu-latest
             arch: amd64
+            ros_distro: rolling
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            arch: arm64
+            ros_distro: rolling
+
+          - platform: linux/amd64
+            runner: ubuntu-latest
+            arch: amd64
+            ros_distro: kilted
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            arch: arm64
+            ros_distro: kilted
+
+          - platform: linux/amd64
+            runner: ubuntu-latest
+            arch: amd64
             ros_distro: jazzy
           - platform: linux/arm64
             runner: ubuntu-24.04-arm
             arch: arm64
             ros_distro: jazzy
-            # Uncomment below for additional ROS distros
-            # - platform: linux/amd64
-            #   runner: ubuntu-latest
-            #   arch: amd64
-            #   ros_distro: humble
-            # - platform: linux/arm64
-            #   runner: ubuntu-24.04-arm
-            #   arch: arm64
-            #   ros_distro: humble
+
+          - platform: linux/amd64
+            runner: ubuntu-latest
+            arch: amd64
+            ros_distro: iron
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            arch: arm64
+            ros_distro: iron
 
     steps:
     - name: Checkout repository
@@ -92,7 +110,7 @@ jobs:
 
     strategy:
       matrix:
-        ros_distro: [jazzy] # [humble, jazzy, kilted]
+        ros_distro: [rolling, kilted, jazzy, iron]
 
     steps:
     - name: Log in to Container Registry
