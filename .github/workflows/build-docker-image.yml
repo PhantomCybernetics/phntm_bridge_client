@@ -27,40 +27,40 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            runner: ubuntu-latest
-            platform: linux/amd64
             ros_distro: rolling
+            runner: ubuntu-latest
+            platform: linux/amd64
           - arch: arm64
-            runner: ubuntu-24.04-arm
-            platform: linux/arm64
             ros_distro: rolling
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
 
           - arch: amd64
-            runner: ubuntu-latest
-            platform: linux/amd64
             ros_distro: kilted
+            runner: ubuntu-latest
+            platform: linux/amd64
           - arch: arm64
-            runner: ubuntu-24.04-arm
-            platform: linux/arm64
             ros_distro: kilted
-
-          - arch: amd64
-            runner: ubuntu-latest
-            platform: linux/amd64
-            ros_distro: jazzy
-          - arch: arm64
             runner: ubuntu-24.04-arm
             platform: linux/arm64
-            ros_distro: jazzy
 
           - arch: amd64
+            ros_distro: jazzy
             runner: ubuntu-latest
             platform: linux/amd64
-            ros_distro: iron
           - arch: arm64
+            ros_distro: jazzy
             runner: ubuntu-24.04-arm
             platform: linux/arm64
+
+          - arch: amd64
             ros_distro: iron
+            runner: ubuntu-latest
+            platform: linux/amd64
+          - arch: arm64
+            ros_distro: iron
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
 
     steps:
     - name: Checkout repository
@@ -105,7 +105,7 @@ jobs:
   push-multi-arch-manifest:
     runs-on: ubuntu-latest
     needs: build
-    if: always() && contains(needs.build.result, 'success')
+    if: always()
     permissions:
       contents: read
       packages: write
