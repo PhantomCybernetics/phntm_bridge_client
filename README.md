@@ -51,6 +51,9 @@ sudo usermod -aG docker ${USER}
 ```
 
 ### Clone this repo and build the Docker image
+
+You can also use built Docker images, see [ghcr.io/phantomcybernetics/phntm_bridge_client](https://github.com/PhantomCybernetics/phntm_bridge_client/pkgs/container/phntm_bridge_client) for ROS distributions and architectures.
+
 ```bash
 cd ~
 git clone git@github.com:PhantomCybernetics/phntm_bridge_client.git phntm_bridge_client
@@ -73,9 +76,9 @@ Full list of configuration options can be found [here](https://docs.phntm.io/bri
     id_robot: %ID_ROBOT%
     key: %SECRET_KEY%
     name: 'Unnamed Robot'
-    maintainer_email: 'robot.master@domain.com' # e-mail for service announcements
+    maintainer_email: 'robot.master@example.com' # e-mail for service announcements
 
-    cloud_bridge_address: https://us-ca.bridge.phntm.io
+    bridge_server_address: https://us-ca.bridge.phntm.io
 
     log_sdp: True # verbose WebRTC debug
     log_heartbeat: True # debug heartbeat
@@ -150,7 +153,8 @@ Add phntm_bridge service to your `~/compose.yaml` file with both `~/phntm_bridge
 ```yaml
 services:
   phntm_bridge:
-    image: phntm/bridge:humble
+    image: ghcr.io/phantomcybernetics/phntm_bridge_client:main-jazzy
+	# or phntm/bridge:$ROS_DISTRO if image is built locally locally
     container_name: phntm-bridge
     hostname: phntm-bridge.local
     restart: unless-stopped # restarts after first run

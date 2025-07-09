@@ -26,14 +26,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - arch: amd64
-            ros_distro: rolling
-            runner: ubuntu-latest
-            platform: linux/amd64
-          - arch: arm64
-            ros_distro: rolling
-            runner: ubuntu-24.04-arm
-            platform: linux/arm64
+          # - arch: amd64
+          #   ros_distro: rolling
+          #   runner: ubuntu-latest
+          #   platform: linux/amd64
+          # - arch: arm64
+          #   ros_distro: rolling
+          #   runner: ubuntu-24.04-arm
+          #   platform: linux/arm64
 
           - arch: amd64
             ros_distro: kilted
