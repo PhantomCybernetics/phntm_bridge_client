@@ -61,7 +61,7 @@ namespace phntm {
             return false;
         }
 
-        instance->socket_url = fmt::format("{}:{}{}", instance->config->cloud_bridge_address, instance->config->sio_port, instance->config->sio_path);
+        instance->socket_url = fmt::format("{}:{}{}", instance->config->bridge_server_address, instance->config->sio_port, instance->config->sio_path);
 
         RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Socket.io connecting to %s", instance->socket_url.c_str());
 
