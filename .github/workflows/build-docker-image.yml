@@ -104,6 +104,7 @@ jobs:
   push-multi-arch-manifest:
     runs-on: ubuntu-latest
     needs: build
+    if: always() && contains(needs.build.result, 'success')
     permissions:
       contents: read
       packages: write
@@ -126,7 +127,27 @@ jobs:
       with:
         images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
 
+    - name: Check successful builds
+      id: check_builds
+      run: |
+        # Check which architectures were successfully built for this ROS distro
+        SUCCESSFUL_ARCHS=""
+        
+        # Check if amd64 build was successful for this ROS distro
+        if docker manifest inspect "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.ros_distro }}-amd64-${{ github.sha }}" > /dev/null 2>&1; then
+          SUCCESSFUL_ARCHS="$SUCCESSFUL_ARCHS amd64"
+        fi
+        
+        # Check if arm64 build was successful for this ROS distro
+        if docker manifest inspect "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.ros_distro }}-arm64-${{ github.sha }}" > /dev/null 2>&1; then
+          SUCCESSFUL_ARCHS="$SUCCESSFUL_ARCHS arm64"
+        fi
+        
+        echo "successful_archs=$SUCCESSFUL_ARCHS" >> $GITHUB_OUTPUT
+        echo "has_successful_builds=$([ -n "$SUCCESSFUL_ARCHS" ] && echo true || echo false)" >> $GITHUB_OUTPUT
+
     - name: Create and push multi-arch manifest
+      if: steps.check_builds.outputs.has_successful_builds == 'true'
       run: |
         # Create multi-arch manifest for each tag
         for tag in ${{ steps.meta.outputs.tags }}; do
@@ -135,8 +156,14 @@ jobs:
             continue
           fi
 
-          docker buildx imagetools create \
-            --tag "$tag" \
-            "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.ros_distro }}-amd64-${{ github.sha }}" \
-            "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.ros_distro }}-arm64-${{ github.sha }}"
+          # Build the list of successful images for this manifest
+          IMAGES=""
+          for arch in ${{ steps.check_builds.outputs.successful_archs }}; do
+            IMAGES="$IMAGES ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.ros_distro }}-${arch}-${{ github.sha }}"
+          done
+
+          if [ -n "$IMAGES" ]; then
+            echo "Creating manifest for $tag with images: $IMAGES"
+            docker buildx imagetools create --tag "$tag" $IMAGES
+          fi
         done
