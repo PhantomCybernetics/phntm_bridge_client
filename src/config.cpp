@@ -86,6 +86,13 @@ namespace phntm {
         config->maintainer_email = this->get_parameter("maintainer_email").as_string();
 
         // description shown in the UI
+
+        rcl_interfaces::msg::ParameterDescriptor description_header_descriptor;
+        description_header_descriptor.description = "Robot description ehader shown in the UI";
+        description_header_descriptor.additional_constraints = "Some HTML is ok";
+        this->declare_parameter("description_header", "", description_header_descriptor);
+        config->description_header = this->get_parameter("description_header").as_string();
+
         rcl_interfaces::msg::ParameterDescriptor description_descriptor;
         description_descriptor.description = "Robot description shown in the UI";
         description_descriptor.additional_constraints = "Some HTML is ok";

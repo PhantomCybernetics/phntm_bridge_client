@@ -35,19 +35,27 @@ namespace phntm {
         int64_t pts_counter = 0;
         PacketCallback packet_callback;
 
+        bool running = false;
+
+        std::thread encoder_thread;
+        std::condition_variable encoder_cv;
+
         AVFormatContext* fmt_ctx = nullptr;
         AVCodec* codec = nullptr;
         // AVStream* stream = nullptr;
         AVCodecContext* codec_ctx = nullptr;
         AVFrame* frame = nullptr;
+        std::queue<AVFrame*> queue;
+        std::mutex mutex;
         SwsContext* sws_ctx = nullptr;
         
         AVBufferRef* hw_device_ctx = nullptr;
         enum AVHWDeviceType hw_device_type = AV_HWDEVICE_TYPE_NONE;
 
-        void sendFrameToEncoder(AVFrame* frame, std_msgs::msg::Header header, bool debug_log);
+        void sendFrameToEncoder(AVFrame* frame, bool debug_log);
+        void encoderWorker();
         void flush();
-        void packetReceiverWorker();
+
         std::string frame_id, topic;
         std::shared_ptr<rclcpp::Node> node;
 

@@ -4,7 +4,10 @@
 
 #include <cstddef>
 #include <functional>
+#include <libavcodec/avcodec.h>
+#include <libavutil/pixfmt.h>
 #include <libswscale/swscale.h>
+#include <mutex>
 #include <rclcpp/logging.hpp>
 #include <rclcpp/node.hpp>
 #include <string>
@@ -59,16 +62,14 @@ namespace phntm {
         
         this->codec_ctx->width = width;
         this->codec_ctx->height = height;
-        this->codec_ctx->time_base = (AVRational){1, fps};
+        this->codec_ctx->time_base = (AVRational){1, fps}; // t
         this->codec_ctx->framerate = (AVRational){fps, 1};
-        this->codec_ctx->pix_fmt = AV_PIX_FMT_RGB0;
+        this->codec_ctx->pix_fmt = AV_PIX_FMT_NV12; // this is input to the codec (output of sws_scale)
         this->codec_ctx->gop_size = gop_size; // 60
         this->codec_ctx->max_b_frames = 0;
         this->codec_ctx->thread_count = thread_count;
         this->codec_ctx->bit_rate = bit_rate; // 512 * 1024 * 8; // 0.5 MB/s
-        // this->conec_ctx->
         
-        //codec_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
         this->codec_ctx->flags &= ~AV_CODEC_FLAG_GLOBAL_HEADER;
         this->codec_ctx->flags |= AV_CODEC_FLAG_LOW_DELAY;     // For real-time
         // this->codec_ctx->flags2 |= AV_CODEC_FLAG2_FAST;        // Faster encoding
@@ -107,99 +108,130 @@ namespace phntm {
                                 width, height, this->codec_ctx->pix_fmt, // codec input
                                 SWS_POINT, nullptr, nullptr, nullptr);
 
-        //avformat_write_header(format_ctx, nullptr);
-        
-        // this->packet_receiver_running = true;
-        // this->packet_receiver_thread = std::thread(&FFmpegEncoder::packetReceiverWorker, this);
-        // this->packet_receiver_thread.detach();
+        this->running = true;
+        this->encoder_thread = std::thread(&FFmpegEncoder::encoderWorker, this);
+        this->encoder_thread.detach();
     }
 
     void FFmpegEncoder::encodeFrame(const cv::Mat& raw_frame, std_msgs::msg::Header header, bool debug_log) {
+    
         if (raw_frame.empty()) {
             throw std::invalid_argument("["+this->toString()+"] Empty frame provided");
         }
 
-        // Convert from OpenCV BGR to encoder's format
+        if (!this->running)
+            return;
+
         const uint8_t* src_data[] = { raw_frame.data };
         int src_linesize[] = { static_cast<int>(raw_frame.step) };
         
+        // sw scaling here - expensive
         sws_scale(sws_ctx, src_data, src_linesize, 0, height, 
-                 frame->data, frame->linesize);
+                frame->data, frame->linesize);
 
-        // frame->data[0] = raw_frame.data;
-        // frame->linesize[0] = raw_frame.step;
         frame->pts = convertToRtpTimestamp(header.stamp.sec, header.stamp.nanosec);
 
         // Send for encoding
-        this->sendFrameToEncoder(frame, header, debug_log);
+        this->sendFrameToEncoder(frame, debug_log);
+
     }
 
-    void FFmpegEncoder::sendFrameToEncoder(AVFrame* frame, std_msgs::msg::Header header, bool debug_log) {
+    void FFmpegEncoder::sendFrameToEncoder(AVFrame* frame, bool debug_log) {
         
-        int ret = avcodec_send_frame(this->codec_ctx, frame);
-        if (ret < 0) {
-            throw std::runtime_error("["+this->toString()+"] Error sending frame to encoder");
-        }
+        std::lock_guard<std::mutex> queue_lock(this->mutex);
+        this->queue.push(frame);
+        this->encoder_cv.notify_one();
+    }
 
-        auto pkt = av_packet_alloc();
+    void FFmpegEncoder::flush() {
+        sendFrameToEncoder(nullptr, false);  // Flush the encoder
+    }
+
+    void FFmpegEncoder::encoderWorker() {
+
+        log("["+this->toString()+"] FFmpegEncoder worker runnig...");
+
+        while (this->running) {
+
+            auto pkt = av_packet_alloc();
             if (!pkt) {
                 throw std::runtime_error("["+this->toString()+"] Could not allocate packet");
             }
-            
-        ret = avcodec_receive_packet(this->codec_ctx, pkt);
-        if (ret == AVERROR(EAGAIN)) { // The encoder needs more input frames before it can output a packet
+
+            std::unique_lock<std::mutex> queue_lock(this->mutex);
+            this->encoder_cv.wait(queue_lock, [this] { return !this->queue.empty() || !this->running; });
+
+            if (this->queue.empty()) 
+                break;
+
+            auto frame = this->queue.front();
+            this->queue.pop();
+
+            queue_lock.unlock();
+
+            int ret = avcodec_send_frame(this->codec_ctx, frame);
+            if (ret < 0) {
+                throw std::runtime_error("["+this->toString()+"] Error sending frame to encoder");
+            }
+
+            if (frame == nullptr) { // flushed
+                this->running = false;
+                break;
+            }
+                
+            // Convert from OpenCV BGR to encoder's format
+            ret = avcodec_receive_packet(this->codec_ctx, pkt);
+
+            if (ret == AVERROR(EAGAIN)) { // The encoder needs more input frames before it can output a packet
                 // No more packets will be produced (flush completed)
-            av_packet_free(&pkt);
-            return;
-        } else if (ret == AVERROR_EOF) {
-            av_packet_free(&pkt);
-            // this->packet_receiver_running = false;
-            return;
-        } else if (ret < 0) {
-            av_packet_free(&pkt);
-            log("["+this->toString()+"] Error during encoding" + std::to_string(ret), true);
-            return;
-        }
-            
-        // if (debug_log) {
-        //     log("Done encoding frame w pts=" + std::to_string(pkt->pts));
-        // }
+                // log("["+this->toString()+"] Error during receiving frame - EAGAIN");
+                av_packet_free(&pkt);
+                continue;
+            } else if (ret == AVERROR_EOF) {
+                log("["+this->toString()+"] Error during receiving frame - AVERROR_EOF");
+                av_packet_free(&pkt);
+                this->running = false;
+                break;
+            } else if (ret < 0) {
+                log("["+this->toString()+"] Error during receiving frame, " + std::to_string(ret), true);
+                av_packet_free(&pkt);
+                this->running = false;
+                break;
+            }
 
-        if (packet_callback) {
-            auto frame = std::make_shared<ffmpeg_image_transport_msgs::msg::FFMPEGPacket>();
-            frame->header = std_msgs::msg::Header();
-            frame->header.frame_id = this->frame_id;
-            frame->header.stamp = node->now();
-            frame->encoding = "h.264";
-            frame->width = width;
-            frame->height = height;
-            frame->flags = pkt->flags;
-            frame->is_bigendian = false;
-            frame->pts = pkt->pts; //calculated from the initial header stamp
-            // frame->data.resize(pkt->size);
-            frame->data.assign(pkt->data, pkt->data + pkt->size);
-            packet_callback(frame);
-        }
-        
-        av_packet_unref(pkt);
+            if (packet_callback) {
+                auto frame = std::make_shared<ffmpeg_image_transport_msgs::msg::FFMPEGPacket>();
+                frame->header = std_msgs::msg::Header();
+                frame->header.frame_id = this->frame_id;
+                frame->header.stamp = node->now();
+                frame->encoding = "h.264";
+                frame->width = width;
+                frame->height = height;
+                frame->flags = pkt->flags;
+                frame->is_bigendian = false;
+                frame->pts = frame->pts; //calculated from the initial header stamp
+                // frame->data.resize(pkt->size);
+                frame->data.assign(pkt->data, pkt->data + pkt->size);
+                packet_callback(frame);
+            }
+            
+            av_packet_unref(pkt);
+
+        }    
+        log("["+this->toString()+"] FFmpegEncoder worker finished.");
     }
-
-    // void FFmpegEncoder::packetReceiverWorker() {
-
-    //     log(GRAY + "Encoder packet receiver running" + CLR);
-    //     while (this->packet_receiver_running) {
-
-            
-    //     }
-    //     log(GRAY + "Encoder packet receiver stopped" + CLR);
-    // }
 
     FFmpegEncoder::~FFmpegEncoder() {
 
-        log("["+this->toString()+"] Destroying");
+        log("["+this->toString()+"] Destroying encoder...");
 
-        flush(); // flush encoder, kills the thread when complete
+        this->flush(); // flush encoder, kills the thread when complete
 
+        while (this->running) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        
+        log("["+this->toString()+"] Claning up...");
         // Cleanup
         if (this->frame)
             av_frame_free(&this->frame);
@@ -216,10 +248,10 @@ namespace phntm {
 
         if (this->node.get() != nullptr)
             this->node.reset();
+
+        log("["+this->toString()+"] Cleanup done.");
     }
 
-    void FFmpegEncoder::flush() {
-        sendFrameToEncoder(nullptr, std_msgs::msg::Header(), false);  // Flush the encoder
-    }
+    
 
 }

@@ -857,6 +857,7 @@ namespace phntm {
         ui_config->get_map().emplace("wifi_monitor_topic", sio::string_message::create(config->ui_wifi_monitor_topic));
         ui_config->get_map().emplace("enable_wifi_scan", sio::bool_message::create(config->ui_enable_wifi_scan));
         ui_config->get_map().emplace("enable_wifi_roam", sio::bool_message::create(config->ui_enable_wifi_roam));
+        ui_config->get_map().emplace("description_header", sio::string_message::create(config->description_header));
         ui_config->get_map().emplace("description", sio::string_message::create(config->description));
         auto collapse_services = sio::array_message::create();
         for (auto one : config->collapse_services) {

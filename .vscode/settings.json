@@ -11,5 +11,6 @@
     ],
     "clangd.arguments": [
         "--fallback-style={IndentWidth: 4, TabWidth: 4, UseTab: Never}"
-    ]
+    ],
+    "workbench.colorTheme": "Tomorrow Night Blue"
 }

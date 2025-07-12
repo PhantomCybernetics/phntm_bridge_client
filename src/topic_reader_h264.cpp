@@ -325,7 +325,7 @@ namespace phntm {
                 cv::applyColorMap(mono8, frame, this->colormap); // Apply color map
             }
 
-            this->encoder->encodeFrame(frame, im->header, debug_log);
+            this->encoder->encodeFrame(frame, im->header, debug_log); // encodes and sends on a separate thread
         } catch (const std::runtime_error & ex) {
             RCLCPP_ERROR(this->node->get_logger(), "Error encoding frame: %s", ex.what());
         }
@@ -532,43 +532,12 @@ namespace phntm {
         log(GRAY + "[" + getThreadId() + "] Subscriuber spinning for " + topic + CLR);
 
         while (rclcpp::ok() && this->subscriber_running) {
-            this->executor->spin_once();
+            std::lock_guard<std::mutex> lock(this->start_stop_mutex);
+            if (this->executor.get() != nullptr)
+                this->executor->spin_once();
         }
 
         log(BLUE + "[" + getThreadId() + "] Subscriber spinning finished for "+ topic + CLR);
-        this->executor->remove_node(this->node);
-            
-        if (rclcpp::ok()) {
-            if (this->sub_enc.get() != nullptr) {
-                try {
-                    this->sub_enc.reset(); // removes sub
-                    log(BLUE + "[" + this->topic + "] Removed subscriber" + CLR);
-                } catch (const std::exception & ex) {
-                    log("Exception closing media subscriber: " + std::string(ex.what()), true);
-                }    
-            }
-            if (this->sub_img.get() != nullptr) {
-                try {
-                    this->sub_img.reset(); // removes sub
-                    log(BLUE + "[" + this->topic + "] Removed subscriber" + CLR);
-                } catch (const std::exception & ex) {
-                    log("Exception closing media subscriber: " + std::string(ex.what()), true);
-                }    
-            }
-            if (this->sub_cmp.get() != nullptr) {
-                try {
-                    this->sub_cmp.reset(); // removes sub
-                    log(BLUE + "[" + this->topic + "] Removed subscriber" + CLR);
-                } catch (const std::exception & ex) {
-                    log("Exception closing media subscriber: " + std::string(ex.what()), true);
-                }    
-            }
-            
-            this->node.reset();
-            this->executor.reset();
-        }
-        
-        log(GRAY + "[" + getThreadId() + "] Subscriber cleared for " + topic + CLR);
     }
 
     bool TopicReaderH264::removeOutput(std::shared_ptr<MediaTrackInfo> track_info) {
@@ -613,32 +582,64 @@ namespace phntm {
 
     void TopicReaderH264::stop() {
         std::lock_guard<std::mutex> lock(this->start_stop_mutex);
-        if (this->subscriber_running && this->create_node) {
-            log(GRAY + "Stopping reader for " + this->topic + CLR);
-            this->subscriber_running = false; //kills the sub thread]]]
-            while (this->node.get() != nullptr) { // wait fo the thread to stop and destroy node
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+        if (!this->subscriber_running)
+            return;
+
+        log(GRAY + "Stopping reader for " + this->topic + CLR);
+        this->subscriber_running = false; 
+  
+        //     while (this->node.get() != nullptr) { // wait fo the thread to stop and destroy node
+        //         std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        //     }
+        // }
+
+        if (rclcpp::ok()) {
+            if (this->sub_enc.get() != nullptr) {
+                try {
+                    this->sub_enc.reset(); // removes sub
+                    log(BLUE + "[" + this->topic + "] Removed subscriber" + CLR);
+                } catch (const std::exception & ex) {
+                    log("Exception closing media subscriber: " + std::string(ex.what()), true);
+                }    
             }
-        } else {
-            this->subscriber_running = false; 
+            if (this->sub_img.get() != nullptr) {
+                try {
+                    this->sub_img.reset(); // removes sub
+                    log(BLUE + "[" + this->topic + "] Removed subscriber" + CLR);
+                } catch (const std::exception & ex) {
+                    log("Exception closing media subscriber: " + std::string(ex.what()), true);
+                }    
+            }
+            if (this->sub_cmp.get() != nullptr) {
+                try {
+                    this->sub_cmp.reset(); // removes sub
+                    log(BLUE + "[" + this->topic + "] Removed subscriber" + CLR);
+                } catch (const std::exception & ex) {
+                    log("Exception closing media subscriber: " + std::string(ex.what()), true);
+                }    
+            }
+            
+            this->executor->remove_node(this->node);
+            // if (this->create_node) {
+            this->node.reset();
+            this->executor.reset();
         }
+
         {
             std::lock_guard<std::mutex> lock(this->outputs_mutex);
             for (auto & o : this->outputs) {
                 o->active = false; //kill worker
-                // {
-                //     std::lock_guard<std::mutex> output_lock (o->output_to_send_mutex);
-                //     while (!o->output_to_send.empty()) {
-                //         o->output_to_send.pop();
-                //     }
-                // }
                 o->in_queue_cv.notify_one();
             }
             this->outputs.clear();
         }
+
         if (this->encoder.get() != nullptr) {
             this->encoder.reset();
         }
+
+        log(GRAY + "[" + getThreadId() + "] Subscriber cleared for " + topic + CLR);
     }
 
      TopicReaderH264::~TopicReaderH264() {
