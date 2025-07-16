@@ -153,8 +153,7 @@ Add phntm_bridge service to your `~/compose.yaml` file with both `~/phntm_bridge
 ```yaml
 services:
   phntm_bridge:
-    image: ghcr.io/phantomcybernetics/phntm_bridge_client:main-jazzy
-	# or phntm/bridge:$ROS_DISTRO if image is built locally locally
+    image: ghcr.io/phantomcybernetics/phntm_bridge_client:main-jazzy # or phntm/bridge:$ROS_DISTRO if image is built locally locally
     container_name: phntm-bridge
     hostname: phntm-bridge.local
     restart: unless-stopped # restarts after first run
