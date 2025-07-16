@@ -50,9 +50,9 @@ sudo usermod -aG docker ${USER}
 # log out & back in
 ```
 
-### Clone this repo and build the Docker image
+### (Optional) Clone this repo and build the Docker image
 
-You can also use built Docker images, see [ghcr.io/phantomcybernetics/phntm_bridge_client](https://github.com/PhantomCybernetics/phntm_bridge_client/pkgs/container/phntm_bridge_client) for ROS distributions and architectures.
+You can also use our pre-built Docker images, see [ghcr.io/phantomcybernetics/phntm_bridge_client](https://github.com/PhantomCybernetics/phntm_bridge_client/pkgs/container/phntm_bridge_client) for ROS distributions and architectures.
 
 ```bash
 cd ~
@@ -153,7 +153,7 @@ Add phntm_bridge service to your `~/compose.yaml` file with both `~/phntm_bridge
 ```yaml
 services:
   phntm_bridge:
-    image: ghcr.io/phantomcybernetics/phntm_bridge_client:main-jazzy # or phntm/bridge:$ROS_DISTRO if image is built locally locally
+    image: ghcr.io/phantomcybernetics/phntm_bridge_client:main-jazzy # or phntm/bridge:$ROS_DISTRO if image is built locally
     container_name: phntm-bridge
     hostname: phntm-bridge.local
     restart: unless-stopped # restarts after first run
@@ -162,7 +162,7 @@ services:
     network_mode: host # webrtc needs this
     ipc: host # bridge needs this to see other local containers
     volumes:
-      - ~/phntm_bridge_client:/ros2_ws/src/phntm_bridge # live repo mapped here for easy updates
+      - ~/phntm_bridge_client:/ros2_ws/src/phntm_bridge # (optional) live repo mapped here for easy updates
       - ~/phntm_bridge.yaml:/ros2_ws/phntm_bridge_params.yaml # bridge config goes here
       - ~/phntm_agent.yaml:/ros2_ws/phntm_agent_params.yaml # agent config goes here
       - /var/run:/host_run # docker file extractor and wifi control need this
@@ -185,7 +185,7 @@ Please note that Firefox is not fully supported at this time, [reasons are expla
 
 ## Upgrading
 ```bash
-# Eemove previous version
+# Remove previous version
 docker stop phntm-bridge && docker rm phntm-bridge && docker image rm phntm/bridge:humble
 
 # Update & rebiuld the docker image
