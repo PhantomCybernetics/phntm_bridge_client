@@ -6,8 +6,8 @@
 #include "phntm_bridge/sio.hpp"
 #include "phntm_bridge/config.hpp"
 
-#include "rtc/datachannel.hpp"
-#include "rtc/rtc.hpp"
+#include <rtc/datachannel.hpp>
+#include <rtc/rtc.hpp>
 
 #include "phntm_bridge/topic_reader_data.hpp"
 #include "phntm_bridge/topic_writer_data.hpp"

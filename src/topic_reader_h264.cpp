@@ -18,7 +18,7 @@
 #include <mutex>
 #include <opencv2/core/hal/interface.h>
 #include <rclcpp/executors/multi_threaded_executor.hpp>
-#include <rclcpp/executors/static_single_threaded_executor.hpp>
+#include <rclcpp/executors/single_threaded_executor.hpp>
 #include <rclcpp/logging.hpp>
 #include <stdexcept>
 #include <string>
@@ -471,7 +471,7 @@ namespace phntm {
                 this->node = std::make_shared<rclcpp::Node>("phntm_media_"+std::to_string(this->media_reader_node_no));
 
                 log(GRAY + "[" + getThreadId() + "] Making executor " + this->topic + CLR);
-                this->executor = std::make_shared<rclcpp::executors::StaticSingleThreadedExecutor>();
+                this->executor = std::make_shared<rclcpp::executors::SingleThreadedExecutor>();
                // this->executor = std::make_shared<rclcpp::executors::MultiThreadedExecutor>();
                 this->executor->add_node(this->node);
             }

@@ -13,19 +13,9 @@ RUN apt-get install -y vim mc \
                        gdb gdbserver \
                        clangd
 
-# aiorc neeed pip update or fails on cffi version inconsistency
-# RUN pip install --upgrade pip
-
 RUN apt-get install -y libjsoncpp-dev
 
 RUN apt-get install -y python3-setuptools
-
-# socket.io cpp
-# WORKDIR /root
-# RUN git clone --recurse-submodules https://github.com/socketio/socket.io-client-cpp.git
-# WORKDIR /root/socket.io-client-cpp
-# RUN cmake ./
-# RUN make install
 
 RUN apt install -y libwebsocketpp-dev
 RUN apt install -y libyaml-cpp-dev
@@ -34,26 +24,17 @@ RUN apt install -y gpiod libgpiod-dev
 RUN apt install -y uuid-dev
 RUN apt install -y libcurl4-openssl-dev
 
-# wget https://sourceforge.net/projects/asio/files/asio/1.30.2%20%28Stable%29/asio-1.30.2.tar.bz2/download
-# RUN git clone https://github.com/chriskohlhoff/asio.git
-
 WORKDIR /root
 RUN git clone https://github.com/chriskohlhoff/asio.git
-# RUN wget https://phoenixnap.dl.sourceforge.net/project/asio/asio/1.30.2%20%28Stable%29/asio-1.30.2.tar.gz
-# RUN tar -xvzf asio-1.30.2.tar.gz
-# WORKDIR /root/asio-1.30.2
-# RUN ./configure
-# RUN make
-# RUN make install
+WORKDIR /root/asio
+RUN git checkout tags/asio-1-34-2
 
 WORKDIR /root
 RUN git clone --single-branch --branch support-new-asio https://github.com/toonetown/websocketpp.git
 
-# RUN apt install -y libasio-dev
 RUN apt install -y rapidjson-dev
 
 # libdatachannel deps
-# RUN apt install -y libnice-dev
 RUN apt install -y meson libglib2.0-dev libssl-dev libsrtp2-dev libjansson-dev libgstreamer1.0-dev
 WORKDIR /root
 RUN wget https://libnice.freedesktop.org/releases/libnice-0.1.22.tar.gz

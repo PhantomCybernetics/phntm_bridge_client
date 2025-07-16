@@ -3,7 +3,6 @@
 #include <map>
 #include <rclcpp/executors/multi_threaded_executor.hpp>
 #include <rclcpp/executors/single_threaded_executor.hpp>
-#include <rclcpp/executors/static_single_threaded_executor.hpp>
 #include <rclcpp/subscription.hpp>
 #include <sensor_msgs/msg/detail/compressed_image__struct.hpp>
 #include <sensor_msgs/msg/detail/image__struct.hpp>

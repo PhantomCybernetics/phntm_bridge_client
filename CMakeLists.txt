@@ -124,15 +124,15 @@ target_include_directories(phntm_bridge PUBLIC
 )
 target_compile_features(phntm_bridge PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
 
-ament_target_dependencies(phntm_bridge
-                          ament_index_cpp
-                          rclcpp
-                          std_msgs
-                          sensor_msgs
-                          std_srvs
-                          ffmpeg_image_transport_msgs
-                          phntm_interfaces
-                          )
+#ament_target_dependencies(phntm_bridge
+#                          ament_index_cpp
+#                          rclcpp
+#                          std_msgs
+#                          sensor_msgs
+#                          std_srvs
+#                          ffmpeg_image_transport_msgs
+#                          phntm_interfaces
+#                          )
 
 link_directories(${FFMPEG_LIBRARY_DIRS})
 
@@ -147,6 +147,14 @@ set(FFMPEG_LINK_FLAGS
 )
 
 target_link_libraries(phntm_bridge
+  ${ffmpeg_image_transport_msgs_TARGETS}
+  ${phntm_interfaces_TARGETS}
+  ${sensor_msgs_TARGETS}
+  ${std_msgs_TARGETS}
+  ${std_srvs_TARGETS}
+  ament_index_cpp::ament_index_cpp
+  rclcpp::rclcpp
+  sensor_msgs::sensor_msgs_library
   ${FMT_LIBRARY}
   ${JSONCPP_LIBRARY}
   ${OPENSSL_LIBRARY}
