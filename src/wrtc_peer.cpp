@@ -285,6 +285,7 @@ namespace phntm {
             
             TopicReaderData::onPCSignalingStateChange(this->pc);
             TopicReaderH264::onPCSignalingStateChange(shared_from_this());
+            
         });
         this->pc->onLocalCandidate([&](rtc::Candidate candidate){
             if (this->config->webrtc_debug)
@@ -334,7 +335,7 @@ namespace phntm {
 
     void WRTCPeer::processSubscriptionsSync(int ack_msg_id, sio::object_message::ptr ack) {
 
-        std::lock_guard<std::mutex> lock(this->processing_subscriptions_mutex); // wait until previus pressing completes
+        std::lock_guard<std::mutex> lock(this->processing_subscriptions_mutex); // wait until previus proceessing completes (one peer at the time)
 
         log(BLUE + this->toString() + "Processing peer subs begins" + (ack_msg_id > -1 ? " [msg #" + std::to_string(ack_msg_id) + "]" : "") + " >>" + CLR);
 
@@ -462,12 +463,14 @@ namespace phntm {
             this->awaiting_peer_reply = true;
         }
 
-        if (!this->is_connected && !is_reconnect) { //cleanup and end here
+        // disconnect - cleanup and end here
+        if (!this->is_connected && !is_reconnect) { 
 
             log(GRAY + this->toString() + "Disconnected, closing PC" + CLR);
             this->removePeerConnection();
 
-        } else if (this->is_connected) { // produce update and wait for peer reply
+        // produce update and wait for peer reply            
+        } else if (this->is_connected) { 
 
             if (ack_msg_id < 0) { // emit as new sio peer:update message 
                 if (!this->id_app.empty())
@@ -480,10 +483,18 @@ namespace phntm {
                 BridgeSocket::ack(ack_msg_id, { reply });
             }
 
+            log(GRAY + this->toString() + " Waiting for peer reply..."+ CLR);
+            auto start_time = std::chrono::steady_clock::now();
             while(this->awaiting_peer_reply && this->is_connected) { // block the mutex until reply is received and processed
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            }
 
+                auto elapsed = std::chrono::steady_clock::now() - start_time;
+                if (std::chrono::duration_cast<std::chrono::seconds>(elapsed).count() >= 5) { // 5s timeout, then stop blocking peer subs processing
+                    RCLCPP_ERROR(this->node->get_logger(), "%s Timeout 5s waiting for peer reply.", this->toString().c_str());
+                    break;
+                }
+            }
+            log(GRAY + this->toString() + "... waiting finished"+ CLR);
         }
         
         log(BLUE + this->toString() + "<< Processing subs finished" + (ack_msg_id > -1 ? " [msg #" + std::to_string(ack_msg_id) + "]" : "") + "." + CLR);

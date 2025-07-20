@@ -17,7 +17,6 @@
 #include <memory>
 #include <mutex>
 #include <opencv2/core/hal/interface.h>
-#include <rclcpp/executors/multi_threaded_executor.hpp>
 #include <rclcpp/executors/single_threaded_executor.hpp>
 #include <rclcpp/logging.hpp>
 #include <stdexcept>
@@ -472,7 +471,7 @@ namespace phntm {
 
                 log(GRAY + "[" + getThreadId() + "] Making executor " + this->topic + CLR);
                 this->executor = std::make_shared<rclcpp::executors::SingleThreadedExecutor>();
-               // this->executor = std::make_shared<rclcpp::executors::MultiThreadedExecutor>();
+        
                 this->executor->add_node(this->node);
             }
 
@@ -534,7 +533,7 @@ namespace phntm {
         while (rclcpp::ok() && this->subscriber_running) {
             std::lock_guard<std::mutex> lock(this->start_stop_mutex);
             if (this->executor.get() != nullptr)
-                this->executor->spin_once();
+                this->executor->spin_once(std::chrono::nanoseconds(100));
         }
 
         log(BLUE + "[" + getThreadId() + "] Subscriber spinning finished for "+ topic + CLR);
@@ -575,8 +574,11 @@ namespace phntm {
     void TopicReaderH264::destroy(std::string topic) {
         std::lock_guard<std::mutex> lock(readers_mutex);
         if (readers.find(topic) != readers.end()) {
+            log(GRAY + "[destroy] Stopping reader for " + topic + CLR);
+            readers[topic]->stop();
             log(GRAY + "Destroying reader for " + topic + CLR);
             readers.erase(topic);
+            log(GRAY + "Destroyed reader " + topic + CLR);
         }
     }
 
@@ -586,7 +588,7 @@ namespace phntm {
         if (!this->subscriber_running)
             return;
 
-        log(GRAY + "Stopping reader for " + this->topic + CLR);
+        log(GRAY + "[stop] Stopping reader for " + this->topic + CLR);
         this->subscriber_running = false; 
   
         //     while (this->node.get() != nullptr) { // wait fo the thread to stop and destroy node
@@ -620,23 +622,35 @@ namespace phntm {
                 }    
             }
             
-            this->executor->remove_node(this->node);
+            if (this->create_node) {
+                log(GRAY + "[" + this->topic + "] Removing dedicated node from executor" + CLR);
+                this->executor->remove_node(this->node);
+            }
             // if (this->create_node) {
+            log(GRAY + "[" + this->topic + "] Unreffing dedicated node" + CLR);
             this->node.reset();
-            this->executor.reset();
+            if (this->create_node) {
+                log(GRAY + "[" + this->topic + "] Unreffing dedicated executor" + CLR);
+                this->executor.reset();
+            }
+            log(GRAY + "[" + this->topic + "] Cleanup done" + CLR);
         }
 
         {
+            log(GRAY + "[" + this->topic + "] Stopping outputs" + CLR);
             std::lock_guard<std::mutex> lock(this->outputs_mutex);
             for (auto & o : this->outputs) {
                 o->active = false; //kill worker
                 o->in_queue_cv.notify_one();
             }
             this->outputs.clear();
+            log(GRAY + "[" + this->topic + "] Outputs clear" + CLR);
         }
 
         if (this->encoder.get() != nullptr) {
+            log(GRAY + "[" + this->topic + "] Clearing encoder" + CLR);
             this->encoder.reset();
+            log(GRAY + "[" + this->topic + "] Encoder clear" + CLR);
         }
 
         log(GRAY + "[" + getThreadId() + "] Subscriber cleared for " + topic + CLR);

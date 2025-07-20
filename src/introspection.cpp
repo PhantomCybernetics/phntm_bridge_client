@@ -401,8 +401,10 @@ namespace phntm {
             this->reportNodes();
         }
 
-        if (topics_changed)
+        if (topics_changed) {
+            log(GRAY + L + "Topic changed, processing peerSubscriptions..." + CLR);
             WRTCPeer::processAllPeerSubscriptions();
+        }
 
         this->introspection_in_progress = false;
 
@@ -606,11 +608,10 @@ namespace phntm {
             auto one_idl = sio::string_message::create(idl.second);
             msg->get_map().emplace(idl.first, one_idl);
         }
-
+       
         log(GRAY + L + "Reporting " + std::to_string(this->discovered_idls.size()) + " IDLs" + CLR);
         if (this->config->introspection_verbose)
             log(GRAY + BridgeSocket::printMessage(msg) + CLR);
-
         BridgeSocket::emit("idls", { msg } , nullptr);
     }
 
@@ -628,6 +629,7 @@ namespace phntm {
     }
 
     void Introspection::reportNodes() {
+
         auto msg = sio::object_message::create();
 
         for (auto &n : this->discovered_nodes) {
@@ -719,6 +721,7 @@ namespace phntm {
 
             msg->get_map().emplace(p.first, host_msg);
         }
+        
         if (hosts.size()) {
             log(GRAY + L + "Reporting " + std::to_string(this->discovered_docker_containers.size()) + " Docker containers for " + join(hosts) + CLR);
             if (this->config->introspection_verbose)
@@ -726,7 +729,6 @@ namespace phntm {
         } else {
             log(GRAY + L + "Reporting empty Docker containers" + CLR);
         }
-        
         BridgeSocket::emit("docker", { msg }, nullptr);
     }
 
