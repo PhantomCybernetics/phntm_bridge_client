@@ -400,7 +400,7 @@ namespace phntm {
         this->declare_parameter("service_calls_verbose", false);
         config->service_calls_verbose = this->get_parameter("service_calls_verbose").as_bool();    
 
-        this->declare_parameter("webrtc_debug", false);
+        this->declare_parameter("webrtc_debug", true);
         config->webrtc_debug = this->get_parameter("webrtc_debug").as_bool(); 
 
         this->declare_parameter("webrtc_verbose", false);
@@ -409,7 +409,6 @@ namespace phntm {
         this->declare_parameter("file_chunks_topic", "/file_chunks");
         config->file_chunks_topic = this->get_parameter("file_chunks_topic").as_string();
 
-        
         this->declare_parameter("low_fps_default", 30); // overwrite per topic
 
         this->declare_parameter("encoder_hw_device_default", ""); // none, cuda, vaapi
