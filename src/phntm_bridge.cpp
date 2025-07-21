@@ -103,7 +103,7 @@ int main(int argc, char ** argv)
   WRTCPeer::initLogging(config);
 
   while (!g_interrupt_requested.load() && rclcpp::ok()) {
-    executor.spin_once();
+    executor.spin_once(std::chrono::nanoseconds(100));
   }
     
   log(BLUE + "Shutting down..." + CLR);
