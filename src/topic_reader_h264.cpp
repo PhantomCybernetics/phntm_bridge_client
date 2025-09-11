@@ -1,6 +1,7 @@
 //#include "h264rtppacketizer.hpp"
 #include "phntm_bridge/ffmpeg_encoder.hpp"
 #include "phntm_bridge/lib.hpp"
+#include "phntm_bridge/introspection.hpp"
 #include "rtc/message.hpp"
 #include "phntm_bridge/const.hpp"
 #include "phntm_bridge/phntm_bridge.hpp"
@@ -18,6 +19,7 @@
 #include <mutex>
 #include <opencv2/core/hal/interface.h>
 #include <rclcpp/executors/single_threaded_executor.hpp>
+#include <rclcpp/executors/multi_threaded_executor.hpp>
 #include <rclcpp/logging.hpp>
 #include <stdexcept>
 #include <string>
@@ -55,7 +57,7 @@ namespace phntm {
     TopicReaderH264::TopicReaderH264(std::string topic, std::string msg_type, rclcpp::QoS qos, std::shared_ptr<rclcpp::Node> node, rclcpp::CallbackGroup::SharedPtr callback_group, sio::message::ptr topic_conf)
         : topic(topic), msg_type(msg_type), qos(qos), node(node), callback_group(callback_group) {
         
-        this->use_pts = topic_conf->get_map().at("use_pts")->get_bool();
+        this->pts_source = topic_conf->get_map().at("pts_source")->get_int();
         this->debug_verbose = topic_conf->get_map().at("debug_verbose")->get_bool();
         this->debug_num_frames = topic_conf->get_map().at("debug_num_frames")->get_int();
 
@@ -162,10 +164,22 @@ namespace phntm {
 
         auto is_keyframe = msg->flags == 1;
         uint ts;
-        if (this->use_pts) {
-            ts = msg->pts; // this must be in 1/90000 increments
-        } else {
-            ts = convertToRtpTimestamp(msg->header.stamp.sec, msg->header.stamp.nanosec); // convert message timestamp to 1/90000 increments
+        switch (this->pts_source) {
+            case PTS_SOURCE_PACKET_PTS:
+                ts = msg->pts; // this must be in 1/90000 increments
+                break;
+            case PTS_SOURCE_MESSAGE_HEADER:
+                ts = convertToRtpTimestamp(msg->header.stamp.sec, msg->header.stamp.nanosec); // convert message timestamp to 1/90000 increments
+                break;
+            default: // set pts from local time
+                std::chrono::steady_clock::duration timestamp = std::chrono::steady_clock::now().time_since_epoch();
+                auto seconds = std::chrono::duration_cast<std::chrono::seconds>(timestamp);
+                std::int32_t sec = static_cast<std::int32_t>(seconds.count());
+                // Get remaining nanoseconds
+                auto nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(timestamp - seconds);
+                std::uint32_t nsec = static_cast<std::uint32_t>(nanoseconds.count());
+                ts = convertToRtpTimestamp(sec, nsec);
+                break;  
         }
 
         if (!this->logged_receiving) {
@@ -257,39 +271,23 @@ namespace phntm {
             log(this->topic + " Received Image frame w enc=" + im->encoding+"; sending to encoder");
         }
 
-        auto enc = strToLower(im->encoding);
+        // auto enc = strToLower();
 
-        if (this->encoder.get() != nullptr && !this->encoder->checkCompatibility(im->width, im->height, enc)) {
+        if (this->encoder.get() != nullptr && !this->encoder->checkCompatibility(im->width, im->height, im->encoding)) {
             RCLCPP_INFO(this->node->get_logger(), "Removing old encoder for %s {%s}, format change detected",
                         this->topic.c_str(), this->msg_type.c_str());
-            this->encoder.reset();
+            this->encoder.reset(); // re-create encoder below
         }
 
         // make encoder
         if (this->encoder.get() == nullptr) {
 
-            AVPixelFormat opencv_format;
-            if (enc == "rgb8") {
-                opencv_format = AV_PIX_FMT_RGB24;
-            } else if (enc == "bgr8") {
-                opencv_format = AV_PIX_FMT_BGR24;
-            } else if (enc == "mono8" || enc == "8uc1") {
-                opencv_format = AV_PIX_FMT_GRAY8;
-            } else if (enc == "16uc1" || enc == "mono16") {
-                opencv_format = AV_PIX_FMT_RGB24;
-            } else {
-                if (!this->logged_error) {
-                    this->logged_error = true;
-                    RCLCPP_ERROR(this->node->get_logger(), "Image topic %s received frame with unsupported encoding: %s", this->topic.c_str(), enc.c_str());
-                }
-                return;
-            }
-
             RCLCPP_INFO(this->node->get_logger(), "Making encoder %dx%d for %s {%s} with hw_device=%s",
                         im->width, im->height, this->topic.c_str(), this->msg_type.c_str(), encoder_hw_device.c_str());
             try {
-                this->encoder = std::make_shared<FFmpegEncoder>(im->width, im->height, enc, opencv_format,
-                                                im->header.frame_id, this->topic, this->node,
+                this->encoder = std::make_shared<FFmpegEncoder>(im->width, im->height, im->encoding,
+                                                im->header.frame_id, this->topic, this->colormap, this->max_sensor_value,
+                                                this->node,
                                                 this->encoder_hw_device,
                                                 this->encoder_thread_count,
                                                 this->encoder_gop_size,
@@ -298,33 +296,20 @@ namespace phntm {
             } catch (const std::runtime_error & ex) {
                 this->encoder.reset();
                 this->encoder_error = true;
+                this->debug_num_frames = 0;
                 RCLCPP_ERROR(this->node->get_logger(), "%s", ex.what());
                 return;
             }
-            this->use_pts = true; // pts calculated from header stamp
         }
-        if (this->encoder.get() == nullptr)
+
+        if (this->encoder.get() == nullptr) {
+            this->debug_num_frames = 0;
+            RCLCPP_ERROR(this->node->get_logger(), "Encoder not ready for %s", this->topic.c_str());
             return;
+        }
 
         try {
-            cv::Mat frame;
-            if (enc == "rgb8") {
-                frame = cv::Mat(im->height, im->width, CV_8UC3, im->data.data());
-            }
-            else if (enc == "bgr8") {
-                frame = cv::Mat(im->height, im->width, CV_8UC3, im->data.data());
-            }
-            else if (enc == "mono8" || enc == "8uc1") {
-                frame = cv::Mat(im->height, im->width, CV_8UC1, im->data.data());
-            }
-            else if (enc == "16uc1" || enc == "mono16") {
-                cv::Mat mono16(im->height, im->width, CV_16UC1, im->data.data());
-                cv::Mat mono8;
-                mono16.convertTo(mono8, CV_8UC1, 255.0 / this->max_sensor_value); // Convert to 8-bit (0-255 range)
-                cv::applyColorMap(mono8, frame, this->colormap); // Apply color map
-            }
-
-            this->encoder->encodeFrame(frame, im->header, debug_log); // encodes and sends on a separate thread
+            this->encoder->encodeFrame(im); // sw-scales and sends to encoder on a separate thread
         } catch (const std::runtime_error & ex) {
             RCLCPP_ERROR(this->node->get_logger(), "Error encoding frame: %s", ex.what());
         }
@@ -352,107 +337,108 @@ namespace phntm {
             std::unique_lock<std::mutex> queue_lock(output->in_queue_mutex);
             output->in_queue_cv.wait(queue_lock, [this, output] { return !output->in_queue.empty() || !this->subscriber_running || !output->active; });
 
-            if (!output->in_queue.empty()) {
-                auto frame = output->in_queue.front();
-                output->in_queue.pop();
-                
-                if (!output->active || !this->subscriber_running) {
-                    log("[" + getThreadId() + "] Output closed for " + this->topic + " track #" + std::to_string(output->track_info->ssrc));
-                    continue;
-                }
-
-                queue_lock.unlock();
-
-                auto debug_log = this->debug_num_frames > 0;
-
-                if (frame.ts <= output->last_raw_ts) {
-                    output->ts_first = 0; //reset
-                }
-                output->last_raw_ts = frame.ts;
-                uint64_t pts_client;
-                if (output->ts_first == 0) {
-                    output->ts_first = frame.ts;
-                    output->ts_offset = getCurrentRtpTimestamp(); // synchrinize clocks
-                    pts_client = output->ts_offset;
-                    // pts_client = getCurrentRtpTimestamp();
-                    pts_client -= output->peer->connectedRTPTimeBase();
-                    // output->track_info->rtpConfig->timestamp = pts_client;
-                    if (!output->start_ts_set) {
-                        output->start_ts_set = true;
-                        //output->track_info->rtpConfig->timestamp = pts_client;
-                        output->track_info->rtpConfig->startTimestamp = (uint32_t) output->peer->connectedRTPTimeBase();
-                    }
-                    if (this->debug_verbose || debug_log) {
-                        log(GRAY + "[" + getThreadId() + "] Track #" + std::to_string(output->track_info->ssrc) + " initial ts set to " + std::to_string(pts_client)
-                          + " msg.sec=" + std::to_string(frame.msg->header.stamp.sec) + " msg.nanosec=" + std::to_string(frame.msg->header.stamp.nanosec) + CLR);
-                    }
-                } else {
-                    pts_client = (frame.ts - output->ts_first) + output->ts_offset;
-                    // pts_client = getCurrentRtpTimestamp();
-                    pts_client -= output->peer->connectedRTPTimeBase();
-                    // pts_client = (uint) getCurrentRtpTimestamp();
-                }
-
-                rtc::FrameInfo info { (uint32_t) pts_client };
-                // info.isKeyframe = frame.is_keyframe;
-
-                try {                
-                    // this->latest_payload_size = msg->data.size();
-                    // this->latest_payload.resize(this->latest_payload_size);
-                    // std::memcpy(this->latest_payload.data(), msg->data.data(), this->latest_payload_size);
-                    if (this->debug_verbose || debug_log)
-                        log("[" + getThreadId() + "] Track #" + std::to_string(output->track_info->ssrc) + " sending " + (frame.is_keyframe ? CYAN + "KEYFRAME" + CLR : "frame") + " w pts_client=" + std::to_string(pts_client) + " orig " + std::to_string(frame.ts)+" msg.sec=" + std::to_string(frame.msg->header.stamp.sec) + " msg.nanosec=" + std::to_string(frame.msg->header.stamp.nanosec));
-
-                    output->track_info->rtpConfig->timestamp = pts_client;
-                    // auto output_to_send = std::make_shared<SendMsg>(reinterpret_cast<std::byte*>(frame.msg->data.data()), frame.msg->data.size(), info);
-                    // {
-                    //     std::unique_lock<std::mutex> output_lock (output->output_to_send_mutex);
-                    //     output->output_to_send.push(output_to_send);
-                    // }
-                    // {
-                    //     std::unique_lock<std::mutex> peer_queue_lock(output->peer->h264_queue_mutex);
-                    //     output->peer->h264_queue.push(output);
-                    // }
-                    // output->peer->h264_queue_cv.notify_one(); // notify the waiting peer thread
-                    output->track_info->track->sendFrame(reinterpret_cast<const std::byte*>(frame.msg->data.data()), frame.msg->data.size(), info);
-                    // output->track_info->track->sendPrepacketizedFrame(fragments, info);
-                    // output->track_info->track->send(*message);
-
-                    output->num_sent++;
-                    //msg_sent = true; // flash LED
-
-                    // reset
-                    output->logged_closed = false;
-                    output->logged_init_incomplete = false;
-                    output->logged_error = false;
-                    output->logged_exception = false;
-            
-                    // }
-                } catch(const std::runtime_error & ex) {
-                    if (!output->logged_exception) {
-                        output->logged_exception = true;
-                        RCLCPP_ERROR(this->node->get_logger(), "Error sending %s into track #%i: %s", this->topic.c_str(), output->track_info->ssrc, ex.what());
-                    }
-                } catch(const std::invalid_argument & ex) {
-                    if (!output->logged_exception) {
-                        output->logged_exception = true;
-                        RCLCPP_ERROR(this->node->get_logger(), "Error sending %s into track #%i: %s", this->topic.c_str(), output->track_info->ssrc, ex.what());
-                    }
-                } catch(const std::exception & ex) {
-                    if (!output->logged_exception) {
-                        output->logged_exception = true;
-                        RCLCPP_ERROR(this->node->get_logger(), "Exception while sending %s into track #%i: %s", this->topic.c_str(), output->track_info->ssrc, ex.what());
-                    }
-                }
-
-                queue_lock.lock();
+            if (output->in_queue.empty() || !output->active || !this->subscriber_running) {
+                log("[" + getThreadId() + "] Output closed for " + this->topic + " track #" + std::to_string(output->track_info->ssrc));
+                break;
             }
+
+            auto out_frame_msg = output->in_queue.front();
+            output->in_queue.pop();
+            queue_lock.unlock();
+
+            auto debug_log = this->debug_num_frames > 0;
+
+            if (out_frame_msg.ts <= output->last_raw_ts) {
+                log(GRAY + "[" + getThreadId() + "] Track #" + std::to_string(output->track_info->ssrc) + " Resetting TS" + CLR);
+                output->ts_first = 0; // reset
+            }
+            output->last_raw_ts = out_frame_msg.ts;
+
+            uint64_t pts_client;
+            if (output->ts_first == 0) {
+                output->ts_first = out_frame_msg.ts;
+                output->ts_offset = getCurrentRtpTimestamp() - output->peer->connectedRTPTimeBase(); // synchrinize clocks
+                // pts_client = output->ts_offset;
+                // // pts_client = getCurrentRtpTimestamp();
+                // pts_client -= ;
+                // output->track_info->rtpConfig->timestamp = pts_client;
+                if (!output->start_ts_set) {
+                    //output->track_info->rtpConfig->timestamp = pts_client;
+                    output->track_info->rtpConfig->startTimestamp = (uint32_t) output->peer->connectedRTPTimeBase();
+                    output->start_ts_set = true;
+                }
+                if (this->debug_verbose || debug_log) {
+                    log(GRAY + "[" + getThreadId() + "] Track #" + std::to_string(output->track_info->ssrc) + " initial ts set to " + std::to_string(pts_client)
+                        + " msg.sec=" + std::to_string(out_frame_msg.msg->header.stamp.sec) + " msg.nanosec=" + std::to_string(out_frame_msg.msg->header.stamp.nanosec) + CLR);
+                }
+            }
+
+            pts_client = (out_frame_msg.ts - output->ts_first) + output->ts_offset;
+            // pts_client = getCurrentRtpTimestamp();
+            // pts_client -= output->peer->connectedRTPTimeBase();
+                // pts_client = (uint) getCurrentRtpTimestamp();
+            //}
+
+            rtc::FrameInfo info { (uint32_t) pts_client };
+            // info.isKeyframe = frame.is_keyframe;
+
+            try {                
+                // this->latest_payload_size = msg->data.size();
+                // this->latest_payload.resize(this->latest_payload_size);
+                // std::memcpy(this->latest_payload.data(), msg->data.data(), this->latest_payload_size);
+                if (this->debug_verbose || debug_log)
+                    log("[" + getThreadId() + "] Track #" + std::to_string(output->track_info->ssrc) + " sending " + (out_frame_msg.is_keyframe ? CYAN + "KEYFRAME" + CLR : "frame") + " w pts_client=" + std::to_string(pts_client) + " orig " + std::to_string(out_frame_msg.ts)+" msg.sec=" + std::to_string(out_frame_msg.msg->header.stamp.sec) + " msg.nanosec=" + std::to_string(out_frame_msg.msg->header.stamp.nanosec));
+
+                output->track_info->rtpConfig->timestamp = pts_client;
+                // auto output_to_send = std::make_shared<SendMsg>(reinterpret_cast<std::byte*>(frame.msg->data.data()), frame.msg->data.size(), info);
+                // {
+                //     std::unique_lock<std::mutex> output_lock (output->output_to_send_mutex);
+                //     output->output_to_send.push(output_to_send);
+                // }
+                // {
+                //     std::unique_lock<std::mutex> peer_queue_lock(output->peer->h264_queue_mutex);
+                //     output->peer->h264_queue.push(output);
+                // }
+                // output->peer->h264_queue_cv.notify_one(); // notify the waiting peer thread
+                output->track_info->track->sendFrame(reinterpret_cast<const std::byte*>(out_frame_msg.msg->data.data()), out_frame_msg.msg->data.size(), info);
+                // output->track_info->track->sendPrepacketizedFrame(fragments, info);
+                // output->track_info->track->send(*message);
+
+                output->num_sent++;
+                //msg_sent = true; // flash LED
+
+                // reset
+                output->logged_closed = false;
+                output->logged_init_incomplete = false;
+                output->logged_error = false;
+                output->logged_exception = false;
+        
+                // }
+            } catch(const std::runtime_error & ex) {
+                if (!output->logged_exception) {
+                    output->logged_exception = true;
+                    RCLCPP_ERROR(this->node->get_logger(), "Error sending %s into track #%i: %s", this->topic.c_str(), output->track_info->ssrc, ex.what());
+                }
+            } catch(const std::invalid_argument & ex) {
+                if (!output->logged_exception) {
+                    output->logged_exception = true;
+                    RCLCPP_ERROR(this->node->get_logger(), "Error sending %s into track #%i: %s", this->topic.c_str(), output->track_info->ssrc, ex.what());
+                }
+            } catch(const std::exception & ex) {
+                if (!output->logged_exception) {
+                    output->logged_exception = true;
+                    RCLCPP_ERROR(this->node->get_logger(), "Exception while sending %s into track #%i: %s", this->topic.c_str(), output->track_info->ssrc, ex.what());
+                }
+            }
+
+            queue_lock.lock();
         }
         log(BLUE + "[" + getThreadId() + "] Track #" + std::to_string(output->track_info->ssrc) + " frames worker finished" /*worker_running=" + std::to_string(this->worker_running) + ", " */ + " output.active=" + std::to_string(output->active) + CLR); 
     }
 
     void TopicReaderH264::start() {
         std::lock_guard<std::mutex> lock(this->start_stop_mutex);
+        std::lock_guard<std::mutex> introspection_lock(Introspection::mutex);
         if (this->subscriber_running)
             return;
 
@@ -533,7 +519,7 @@ namespace phntm {
         while (rclcpp::ok() && this->subscriber_running) {
             std::lock_guard<std::mutex> lock(this->start_stop_mutex);
             if (this->executor.get() != nullptr)
-                this->executor->spin_once(std::chrono::nanoseconds(100));
+                this->executor->spin_once(std::chrono::milliseconds(10));
         }
 
         log(BLUE + "[" + getThreadId() + "] Subscriber spinning finished for "+ topic + CLR);
@@ -584,6 +570,7 @@ namespace phntm {
 
     void TopicReaderH264::stop() {
         std::lock_guard<std::mutex> lock(this->start_stop_mutex);
+        std::lock_guard<std::mutex> introspection_lock(Introspection::mutex);
 
         if (!this->subscriber_running)
             return;
@@ -621,19 +608,7 @@ namespace phntm {
                     log("Exception closing media subscriber: " + std::string(ex.what()), true);
                 }    
             }
-            
-            if (this->create_node) {
-                log(GRAY + "[" + this->topic + "] Removing dedicated node from executor" + CLR);
-                this->executor->remove_node(this->node);
-            }
-            // if (this->create_node) {
-            log(GRAY + "[" + this->topic + "] Unreffing dedicated node" + CLR);
-            this->node.reset();
-            if (this->create_node) {
-                log(GRAY + "[" + this->topic + "] Unreffing dedicated executor" + CLR);
-                this->executor.reset();
-            }
-            log(GRAY + "[" + this->topic + "] Cleanup done" + CLR);
+            log(GRAY + "[" + this->topic + "] Subs cleanup done" + CLR);
         }
 
         {
@@ -653,7 +628,19 @@ namespace phntm {
             log(GRAY + "[" + this->topic + "] Encoder clear" + CLR);
         }
 
-        log(GRAY + "[" + getThreadId() + "] Subscriber cleared for " + topic + CLR);
+        if (this->create_node) {
+            log(GRAY + "[" + this->topic + "] Removing dedicated node from executor" + CLR);
+            this->executor->remove_node(this->node);
+        }
+        // if (this->create_node) {
+        log(GRAY + "[" + this->topic + "] Unreffing node" + CLR);
+        this->node.reset();
+        if (this->create_node) {
+            log(GRAY + "[" + this->topic + "] Unreffing dedicated executor" + CLR);
+            this->executor.reset();
+        }
+
+        log(GRAY + "[" + getThreadId() + "] All cleared for " + topic + CLR);
     }
 
      TopicReaderH264::~TopicReaderH264() {

@@ -147,7 +147,7 @@ namespace phntm {
             //size_t latest_payload_size = 0;
             // rtc::FrameInfo latest_frame_info = rtc::FrameInfo(0);
 
-            bool use_pts;
+            uint pts_source;
             bool debug_verbose = false;
             int debug_num_frames = 0; // set number of frames to be analyzed (nal units debug)
             bool logged_receiving = false;

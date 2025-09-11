@@ -1,6 +1,8 @@
 #pragma once
 
 #include <opencv2/opencv.hpp>
+#include "sensor_msgs/msg/image.hpp"
+#include "phntm_bridge/lib.hpp"
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -22,21 +24,36 @@ namespace phntm {
     public:
         using PacketCallback = std::function<void(std::shared_ptr<ffmpeg_image_transport_msgs::msg::FFMPEGPacket> frame)>;
 
-        FFmpegEncoder(int width, int height, const std::string src_encoding, AVPixelFormat opencv_format, std::string frame_id, std::string topic, std::shared_ptr<rclcpp::Node> node, std::string& hw_device, int thread_count, int gop_size, int bit_rate, PacketCallback callback = nullptr);
+        FFmpegEncoder(int width, int height, const std::string src_encoding, std::string frame_id,
+                      std::string topic, int depth_colormap, double depth_max_sensor_value,
+                      std::shared_ptr<rclcpp::Node> node,
+                      std::string& hw_device, int thread_count, int gop_size, int bit_rate,
+                      PacketCallback callback = nullptr);
         ~FFmpegEncoder();
         
-        void encodeFrame(const cv::Mat& raw_frame, std_msgs::msg::Header header, bool debug_log);
-        bool checkCompatibility(const int width, const int height, const std::string & src_encoding) { return width == this->width && height == this->height && src_encoding == this->src_encoding; };
+        void encodeFrame(const std::shared_ptr<sensor_msgs::msg::Image> im);
+        bool checkCompatibility(const int width, const int height, const std::string & src_encoding) {
+            return width == this->width && height == this->height
+                  && strToLower(src_encoding) == this->src_encoding;
+        };
 
     private:
         int width, height;
         const int fps = 30;
         std::string src_encoding;
         int64_t pts_counter = 0;
+    
+        std::string frame_id, topic;
+
+        int depth_colormap; // used to colorize mono images
+        double depth_max_sensor_value; // used to normalize raw sensor data
+        std::shared_ptr<rclcpp::Node> node;
+
         PacketCallback packet_callback;
 
         bool running = false;
 
+        std::thread scaler_thread;
         std::thread encoder_thread;
         std::condition_variable encoder_cv;
 
@@ -44,22 +61,42 @@ namespace phntm {
         AVCodec* codec = nullptr;
         // AVStream* stream = nullptr;
         AVCodecContext* codec_ctx = nullptr;
-        AVFrame* frame = nullptr;
-        std::queue<AVFrame*> queue;
-        std::mutex mutex;
+        // AVFrame* frame = nullptr;
+        std::vector<AVFrame*> sw_frame_buffers;
+        std::vector<AVFrame*> hw_frame_buffers;
+        uint num_frame_buffers = 16;
+        uint current_frame_buffer = 0;
+        // std::queue<AVFrame*> queue;
+        // std::mutex mutex;
         SwsContext* sws_ctx = nullptr;
         
         AVBufferRef* hw_device_ctx = nullptr;
         enum AVHWDeviceType hw_device_type = AV_HWDEVICE_TYPE_NONE;
-
-        void sendFrameToEncoder(AVFrame* frame, bool debug_log);
+        
+        void sendFrameToEncoder(AVFrame* frame);
+        void scalerWorker();
         void encoderWorker();
         void flush();
 
-        std::string frame_id, topic;
-        std::shared_ptr<rclcpp::Node> node;
+        // struct ScalerRequest {
+        //     cv::Mat raw_frame;
+        //     std_msgs::msg::Header header;
+        //     std::shared_ptr<sensor_msgs::msg::Image> im_ref;
+        // };
+
+        std::queue<std::shared_ptr<sensor_msgs::msg::Image>> scaler_queue;
+        std::condition_variable scaler_cv;
+        std::mutex scaler_mutex;
+
+        std::queue<AVFrame*> encoder_queue;
+        std::mutex encoder_mutex;
+
+        
+        
 
         std::string toString() { return "Enc " + this->topic; };
+
+        static std::vector<AVCodecID> encoder_input_logged;
     };
 
 }

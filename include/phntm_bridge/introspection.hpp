@@ -25,6 +25,7 @@ namespace phntm {
             static std::string getTopic(std::string topic); //msg type or empty 
             static std::map<std::string, rclcpp::Client<phntm_interfaces::srv::FileRequest>::SharedPtr> getFileExtractors();
             static const std::string L;
+            static std::mutex mutex;
             
         private:
             

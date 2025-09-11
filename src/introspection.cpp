@@ -2,6 +2,7 @@
 #include "phntm_bridge/sio.hpp"
 #include "phntm_bridge/wrtc_peer.hpp"
 #include "sio_message.h"
+#include <mutex>
 #include <ostream>
 #include <iostream>
 #include <phntm_interfaces/msg/detail/docker_status__struct.hpp>
@@ -18,6 +19,7 @@ namespace phntm {
 
     Introspection* Introspection::instance = nullptr;
     const std::string Introspection::L = "[I] ";
+    std::mutex Introspection::mutex;
 
     Introspection::Introspection(std::shared_ptr<PhntmBridge> node, std::shared_ptr<BridgeConfig> config) {
 
@@ -78,6 +80,8 @@ namespace phntm {
     }
 
     void Introspection::runIntrospection() {
+        std::lock_guard<std::mutex> introspection_lock(Introspection::mutex);
+        
         if (!this->running || this->introspection_in_progress) {
             return;
         }

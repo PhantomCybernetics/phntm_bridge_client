@@ -21,5 +21,8 @@ namespace phntm {
     const std::string VIDEO_STREAM_MSG_TYPE = "ffmpeg_image_transport_msgs/msg/FFMPEGPacket";
 
     const std::string HEARTBEAT_CHANNEL_ID = "_heartbeat";
-
+    
+    const uint PTS_SOURCE_PACKET_PTS     = 0;
+    const uint PTS_SOURCE_MESSAGE_HEADER = 1;
+    const uint PTS_SOURCE_LOCAL_TIME     = 2;
 }

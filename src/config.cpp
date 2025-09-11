@@ -411,13 +411,24 @@ namespace phntm {
 
         this->declare_parameter("low_fps_default", 30); // overwrite per topic
 
-        this->declare_parameter("encoder_hw_device_default", ""); // none, cuda, vaapi
-        this->declare_parameter("encoder_thread_count_default", 2);
-        this->declare_parameter("encoder_gop_size_default", 60); // kf every 
-        this->declare_parameter("encoder_bit_rate_default", 5000000); // 610 KB/s
-    }   
+        // defaults overriden by topic
+        this->declare_parameter("encoder_default_hw_device", "sw"); // sw, cuda, vaapi
+        this->declare_parameter("encoder_default_thread_count", 2);
+        this->declare_parameter("encoder_default_gop_size", 30); // kf every 
+        this->declare_parameter("encoder_default_bit_rate", 5000000); // 610 KB/s
 
-    rclcpp::QoS PhntmBridge::loadTopicQoSConfig(std::string topic, size_t default_depth, rclcpp::ReliabilityPolicy default_reliability, rclcpp::DurabilityPolicy default_durability, float default_lifespan_sec) {
+        this->declare_parameter("video_topics_default_depth", 10); // don't miss keyframes
+        this->declare_parameter("video_topics_default_reliability", "RELIABLE"); // don't miss keyframes
+        this->declare_parameter("video_topics_default_durability", "VOLATILE");
+        this->declare_parameter("video_topics_default_lifespan_sec", -1.0);
+
+        this->declare_parameter("image_topics_default_depth", 1);
+        this->declare_parameter("image_topics_default_reliability", "BEST_EFFORT");
+        this->declare_parameter("image_topics_default_durability", "VOLATILE");
+        this->declare_parameter("image_topics_default_lifespan_sec", -1.0);
+    }
+
+    rclcpp::QoS PhntmBridge::loadTopicQoSConfig(std::string topic, size_t default_depth, std::string default_reliability, std::string default_durability, float default_lifespan_sec) {
     
         try {
             this->declare_parameter(topic + ".history_depth", static_cast<int>(default_depth)); // 0 = system default, 1 = reliable, 2 = best effort (default)
@@ -426,14 +437,36 @@ namespace phntm {
         rclcpp::QoS qos(depth); // keep last 1
 
         try {
-            this->declare_parameter(topic + ".reliability", static_cast<int>(default_reliability)); // 0 = system default, 1 = reliable, 2 = best effort (default)
+            this->declare_parameter(topic + ".reliability", default_reliability); // 0 = system default, 1 = reliable, 2 = best effort (default)
         } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         try {
-            this->declare_parameter(topic + ".durability", static_cast<int>(default_durability)); // 0 = system default, 1 = transient local, 2 = volatile (default)
-        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }        
-        qos.reliability((rclcpp::ReliabilityPolicy) this->get_parameter(topic + ".reliability").as_int());
-        qos.durability((rclcpp::DurabilityPolicy) this->get_parameter(topic + ".durability").as_int());
+            this->declare_parameter(topic + ".durability", default_durability); // 0 = system default, 1 = transient local, 2 = volatile (default)
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
 
+        auto reliability_str = trim(strToLower(this->get_parameter(topic + ".reliability").as_string()));
+        if (reliability_str == "reliable") {
+            qos.reliability(rclcpp::ReliabilityPolicy::Reliable);
+        } else if (reliability_str == "best_effort" || reliability_str == "besteffort") {
+            qos.reliability(rclcpp::ReliabilityPolicy::BestEffort);
+        } else if (reliability_str == "system_default" || reliability_str == "systemdefault") {
+            qos.reliability(rclcpp::ReliabilityPolicy::SystemDefault);
+        } else {
+            log("Invalid reliability specified for " + topic + ": '" + reliability_str + "'; using system_default", true);
+            qos.reliability(rclcpp::ReliabilityPolicy::SystemDefault);
+        }
+
+        auto durability_str = trim(strToLower(this->get_parameter(topic + ".durability").as_string()));
+        if (durability_str == "transient_local" || durability_str == "transientlocal") {
+            qos.durability(rclcpp::DurabilityPolicy::TransientLocal);
+        } else if (durability_str == "volatile") {
+            qos.durability(rclcpp::DurabilityPolicy::Volatile);
+        } else if (durability_str == "system_default" || durability_str == "systemdefault") {
+            qos.durability(rclcpp::DurabilityPolicy::SystemDefault);
+        } else {
+            log("Invalid durability specified for " + topic + ": '" + durability_str + "'; using system_default", true);
+            qos.durability(rclcpp::DurabilityPolicy::SystemDefault);
+        }
+        
         try {
             this->declare_parameter(topic + ".lifespan_sec", default_lifespan_sec); // num sec as double, -1.0 infinity (default)
         } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
@@ -470,11 +503,24 @@ namespace phntm {
                 this->declare_parameter(topic + ".create_node", true); // if false, subscriber is created on the main node
             } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
             try {
-                this->declare_parameter(topic + ".use_pts", true); // if false, message timestamp is converted to 1/90000
+                this->declare_parameter(topic + ".pts_source", isEncodedVideoType(msg_type) ? "PACKET" : "MESSAGE"); // PACKET, MESSAGE or LOCAL
             } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+            
             res->get_map().emplace("debug_num_frames", sio::int_message::create(this->get_parameter(topic + ".debug_num_frames").as_int()));
             res->get_map().emplace("debug_verbose", sio::bool_message::create(this->get_parameter(topic + ".debug_verbose").as_bool()));
-            res->get_map().emplace("use_pts", sio::bool_message::create(this->get_parameter(topic + ".use_pts").as_bool()));
+            auto pts_source_str = trim(strToLower(this->get_parameter(topic + ".pts_source").as_string()));
+            uint pts_source;
+            if (pts_source_str == "packet") {
+                pts_source = PTS_SOURCE_PACKET_PTS;
+            } else if (pts_source_str == "message") {
+                pts_source = PTS_SOURCE_MESSAGE_HEADER;
+            } else if (pts_source_str == "local") {
+                pts_source = PTS_SOURCE_LOCAL_TIME;
+            } else {
+                log("Invalid value for "+topic+".pts_source: " + pts_source_str+"; using local time");
+                pts_source = PTS_SOURCE_LOCAL_TIME;
+            }
+            res->get_map().emplace("pts_source", sio::int_message::create(pts_source));
             res->get_map().emplace("create_node", sio::bool_message::create(this->get_parameter(topic + ".create_node").as_bool()));
         }
 
@@ -487,16 +533,16 @@ namespace phntm {
                 this->declare_parameter(topic + ".max_sensor_value", 255.0f); // will debug this many frames (instects NAL units)
             } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
              try {
-                this->declare_parameter(topic + ".encoder_hw_device", this->get_parameter("encoder_hw_device_default").as_string()); // none, cuda, vaapi
+                this->declare_parameter(topic + ".encoder_hw_device", this->get_parameter("encoder_default_hw_device").as_string()); // none, cuda, vaapi
             } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
              try {
-                this->declare_parameter(topic + ".encoder_thread_count", this->get_parameter("encoder_thread_count_default").as_int()); //2
+                this->declare_parameter(topic + ".encoder_thread_count", this->get_parameter("encoder_default_thread_count").as_int()); //2
             } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
              try {
-                this->declare_parameter(topic + ".encoder_gop_size", this->get_parameter("encoder_gop_size_default").as_int()); //60,  kf every 
+                this->declare_parameter(topic + ".encoder_gop_size", this->get_parameter("encoder_default_gop_size").as_int()); //60,  kf every 
             } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
              try {
-                this->declare_parameter(topic + ".encoder_bit_rate", this->get_parameter("encoder_bit_rate_default").as_int()); // 5 * 8 * 1024
+                this->declare_parameter(topic + ".encoder_bit_rate", this->get_parameter("encoder_default_bit_rate").as_int()); // 5 * 8 * 1024
             } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
 
             res->get_map().emplace("colormap", sio::int_message::create(this->get_parameter(topic + ".colormap").as_int()));

@@ -744,7 +744,14 @@ namespace phntm {
 
     sio::array_message::ptr WRTCPeer::subscribeMediaTopic(std::string topic, std::string msg_type) {
         
-        auto qos = this->node->loadTopicQoSConfig(topic);
+        std::string defaults_prefix = isEncodedVideoType(msg_type) ? "video" : "image";
+        auto qos = this->node->loadTopicQoSConfig(
+            topic,
+            this->node->get_parameter(defaults_prefix + "_topics_default_depth").as_int(),
+            this->node->get_parameter(defaults_prefix + "_topics_default_reliability").as_string(),
+            this->node->get_parameter(defaults_prefix + "_topics_default_durability").as_string(),
+            this->node->get_parameter(defaults_prefix + "_topics_default_lifespan_sec").as_double()
+        );
         auto topic_conf = this->node->loadTopicMsgTypeExtraConfig(topic, msg_type); // get topic extras from yaml
 
         std::string stream_id;

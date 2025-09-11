@@ -34,5 +34,4 @@ namespace phntm {
         std::string class_name;
         Json::Value data;
     };
-    
 }
