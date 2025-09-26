@@ -164,22 +164,19 @@ namespace phntm {
 
         auto is_keyframe = msg->flags == 1;
         uint ts;
-        switch (this->pts_source) {
-            case PTS_SOURCE_PACKET_PTS:
-                ts = msg->pts; // this must be in 1/90000 increments
-                break;
-            case PTS_SOURCE_MESSAGE_HEADER:
-                ts = convertToRtpTimestamp(msg->header.stamp.sec, msg->header.stamp.nanosec); // convert message timestamp to 1/90000 increments
-                break;
-            default: // set pts from local time
-                std::chrono::steady_clock::duration timestamp = std::chrono::steady_clock::now().time_since_epoch();
-                auto seconds = std::chrono::duration_cast<std::chrono::seconds>(timestamp);
-                std::int32_t sec = static_cast<std::int32_t>(seconds.count());
-                // Get remaining nanoseconds
-                auto nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(timestamp - seconds);
-                std::uint32_t nsec = static_cast<std::uint32_t>(nanoseconds.count());
-                ts = convertToRtpTimestamp(sec, nsec);
-                break;  
+        
+        if (this->pts_source == PTS_SOURCE_PACKET_PTS) {
+            ts = msg->pts; // this must be in 1/90000 increments
+        } else if (this->pts_source == PTS_SOURCE_MESSAGE_HEADER || this->local_received_ts_passed_in_encoded_frame) {
+            ts = convertToRtpTimestamp(msg->header.stamp.sec, msg->header.stamp.nanosec); // convert message timestamp to 1/90000 increments
+        } else { // set pts from local time
+            std::chrono::steady_clock::duration timestamp = std::chrono::steady_clock::now().time_since_epoch();
+            auto seconds = std::chrono::duration_cast<std::chrono::seconds>(timestamp);
+            std::int32_t sec = static_cast<std::int32_t>(seconds.count());
+            // Get remaining nanoseconds
+            auto nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(timestamp - seconds);
+            std::uint32_t nsec = static_cast<std::uint32_t>(nanoseconds.count());
+            ts = convertToRtpTimestamp(sec, nsec);
         }
 
         if (!this->logged_receiving) {
@@ -236,8 +233,8 @@ namespace phntm {
                     if (this->debug_verbose || this->debug_num_frames > 0)
                         log(GRAY + "[" + getThreadId() + "] Pushing one of " + this->topic + " to output queue for track #" + std::to_string(output->track_info->ssrc) + CLR);
                     // std::lock_guard<std::mutex> ouput_lock(output->queue_mutex); 
-                    OutputMsg frame { msg, ts, is_keyframe };
-                    output->in_queue.push(frame);
+                    OutputMsg out { msg, ts, is_keyframe };
+                    output->in_queue.push(out);
                     output->in_queue_cv.notify_one(); // notify one waiting thread
                     msg_sent = true; // flash LED
                 }
@@ -258,8 +255,8 @@ namespace phntm {
     }
 
     // on subscriber thread
-    void TopicReaderH264::onImageFrame(const std::shared_ptr<sensor_msgs::msg::Image> im) {
-        auto size = im->data.size();
+    void TopicReaderH264::onImageFrame(const std::shared_ptr<sensor_msgs::msg::Image> msg) {
+        auto size = msg->data.size();
         // log("Got Image " + std::to_string(size)+ "B for " + this->topic + "; encoding=" + im->encoding);
 
         if (!this->subscriber_running || size == 0 || this->encoder_error)
@@ -268,12 +265,18 @@ namespace phntm {
         auto debug_log = this->debug_num_frames > 0;
 
         if (debug_log) {
-            log(this->topic + " Received Image frame w enc=" + im->encoding+"; sending to encoder");
+            log(this->topic + " Received Image frame w enc=" + msg->encoding+"; sending to encoder");
         }
 
-        // auto enc = strToLower();
+        if (this->pts_source ==  PTS_SOURCE_LOCAL_TIME) { // overwrite msg header stamp with local
+            std::chrono::steady_clock::duration timestamp = std::chrono::steady_clock::now().time_since_epoch();
+            auto seconds = std::chrono::duration_cast<std::chrono::seconds>(timestamp);
+            auto nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(timestamp - seconds);
+            msg->header.stamp.sec = static_cast<std::int32_t>(seconds.count());
+            msg->header.stamp.nanosec = static_cast<std::uint32_t>(nanoseconds.count());
+        }
 
-        if (this->encoder.get() != nullptr && !this->encoder->checkCompatibility(im->width, im->height, im->encoding)) {
+        if (this->encoder.get() != nullptr && !this->encoder->checkCompatibility(msg->width, msg->height, msg->encoding)) {
             RCLCPP_INFO(this->node->get_logger(), "Removing old encoder for %s {%s}, format change detected",
                         this->topic.c_str(), this->msg_type.c_str());
             this->encoder.reset(); // re-create encoder below
@@ -283,10 +286,10 @@ namespace phntm {
         if (this->encoder.get() == nullptr) {
 
             RCLCPP_INFO(this->node->get_logger(), "Making encoder %dx%d for %s {%s} with hw_device=%s",
-                        im->width, im->height, this->topic.c_str(), this->msg_type.c_str(), encoder_hw_device.c_str());
+                        msg->width, msg->height, this->topic.c_str(), this->msg_type.c_str(), encoder_hw_device.c_str());
             try {
-                this->encoder = std::make_shared<FFmpegEncoder>(im->width, im->height, im->encoding,
-                                                im->header.frame_id, this->topic, this->colormap, this->max_sensor_value,
+                this->encoder = std::make_shared<FFmpegEncoder>(msg->width, msg->height, msg->encoding,
+                                                msg->header.frame_id, this->topic, this->colormap, this->max_sensor_value,
                                                 this->node,
                                                 this->encoder_hw_device,
                                                 this->encoder_thread_count,
@@ -309,15 +312,15 @@ namespace phntm {
         }
 
         try {
-            this->encoder->encodeFrame(im); // sw-scales and sends to encoder on a separate thread
+            this->encoder->encodeFrame(msg); // sw-scales and sends to encoder on a separate thread
         } catch (const std::runtime_error & ex) {
             RCLCPP_ERROR(this->node->get_logger(), "Error encoding frame: %s", ex.what());
         }
     }
 
     // on subscriber thread
-    void TopicReaderH264::onCompressedFrame(const std::shared_ptr<sensor_msgs::msg::CompressedImage> data) {
-        log("Got CompressedImage for " + this->topic + "; format=" + data->format);
+    void TopicReaderH264::onCompressedFrame(const std::shared_ptr<sensor_msgs::msg::CompressedImage> msg) {
+        log("Got CompressedImage for " + this->topic + "; format=" + msg->format);
     }
 
     // void TopicReaderH264::onH264Encoded(std::shared_ptr<>) {
@@ -348,32 +351,36 @@ namespace phntm {
 
             auto debug_log = this->debug_num_frames > 0;
 
-            if (out_frame_msg.ts <= output->last_raw_ts) {
-                log(GRAY + "[" + getThreadId() + "] Track #" + std::to_string(output->track_info->ssrc) + " Resetting TS" + CLR);
+            if (out_frame_msg.ts < output->last_raw_ts || output->last_raw_ts == 0) {
+                log(GRAY + "[" + getThreadId() + "] Track #" + std::to_string(output->track_info->ssrc) + " Resetting TS (last was " + std::to_string(output->last_raw_ts) +" new is " + std::to_string(out_frame_msg.ts)+ ")" + CLR);
                 output->ts_first = 0; // reset
+                // output->start_ts_set = false;
             }
             output->last_raw_ts = out_frame_msg.ts;
 
             uint64_t pts_client;
             if (output->ts_first == 0) {
                 output->ts_first = out_frame_msg.ts;
-                output->ts_offset = getCurrentRtpTimestamp() - output->peer->connectedRTPTimeBase(); // synchrinize clocks
+                //output->ts_offset = getCurrentRtpTimestamp() - output->peer->connectedRTPTimeBase(); // synchrinize clocks
                 // pts_client = output->ts_offset;
                 // // pts_client = getCurrentRtpTimestamp();
                 // pts_client -= ;
                 // output->track_info->rtpConfig->timestamp = pts_client;
-                if (!output->start_ts_set) {
+                // if (!output->start_ts_set) {
                     //output->track_info->rtpConfig->timestamp = pts_client;
-                    output->track_info->rtpConfig->startTimestamp = (uint32_t) output->peer->connectedRTPTimeBase();
-                    output->start_ts_set = true;
-                }
+                pts_client = out_frame_msg.ts - output->ts_first;
+                // output->track_info->rtpConfig->startTimestamp = (uint32_t) pts_client;
+                // output->start_ts_set = true;
+                // }
                 if (this->debug_verbose || debug_log) {
                     log(GRAY + "[" + getThreadId() + "] Track #" + std::to_string(output->track_info->ssrc) + " initial ts set to " + std::to_string(pts_client)
                         + " msg.sec=" + std::to_string(out_frame_msg.msg->header.stamp.sec) + " msg.nanosec=" + std::to_string(out_frame_msg.msg->header.stamp.nanosec) + CLR);
                 }
+            } else {
+                pts_client = out_frame_msg.ts - output->ts_first;
             }
 
-            pts_client = (out_frame_msg.ts - output->ts_first) + output->ts_offset;
+            
             // pts_client = getCurrentRtpTimestamp();
             // pts_client -= output->peer->connectedRTPTimeBase();
                 // pts_client = (uint) getCurrentRtpTimestamp();
@@ -479,6 +486,7 @@ namespace phntm {
                     options
                 );
             } else if (isImageType(this->msg_type)) {
+                this->local_received_ts_passed_in_encoded_frame = true;
                 this->sub_img = this->node->create_subscription<sensor_msgs::msg::Image>(
                     this->topic,
                     this->qos,
@@ -486,6 +494,7 @@ namespace phntm {
                     options
                 );
             } else if (isCompressedImageType(this->msg_type)) {
+                this->local_received_ts_passed_in_encoded_frame = true;
                 this->sub_cmp = this->node->create_subscription<sensor_msgs::msg::CompressedImage>(
                     this->topic,
                     this->qos,
@@ -519,7 +528,7 @@ namespace phntm {
         while (rclcpp::ok() && this->subscriber_running) {
             std::lock_guard<std::mutex> lock(this->start_stop_mutex);
             if (this->executor.get() != nullptr)
-                this->executor->spin_once(std::chrono::milliseconds(10));
+                this->executor->spin_once(std::chrono::milliseconds(1));
         }
 
         log(BLUE + "[" + getThreadId() + "] Subscriber spinning finished for "+ topic + CLR);

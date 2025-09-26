@@ -409,7 +409,7 @@ namespace phntm {
         this->declare_parameter("file_chunks_topic", "/file_chunks");
         config->file_chunks_topic = this->get_parameter("file_chunks_topic").as_string();
 
-        this->declare_parameter("low_fps_default", 30); // overwrite per topic
+        this->declare_parameter("low_fps_default", 25); // overwrite per topic
 
         // defaults overriden by topic
         this->declare_parameter("encoder_default_hw_device", "sw"); // sw, cuda, vaapi
@@ -503,7 +503,7 @@ namespace phntm {
                 this->declare_parameter(topic + ".create_node", true); // if false, subscriber is created on the main node
             } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
             try {
-                this->declare_parameter(topic + ".pts_source", isEncodedVideoType(msg_type) ? "PACKET" : "MESSAGE"); // PACKET, MESSAGE or LOCAL
+                this->declare_parameter(topic + ".pts_source", "LOCAL"); // LOCAL, PACKET or MESSAGE
             } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
             
             res->get_map().emplace("debug_num_frames", sio::int_message::create(this->get_parameter(topic + ".debug_num_frames").as_int()));
@@ -565,13 +565,13 @@ namespace phntm {
                 this->declare_parameter(topic + ".label_map", std::vector<std::string>());  // array of nn class labels
             } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
                 
-            res->get_map().emplace("nn_input_w", sio::int_message::create(this->get_parameter(topic + ".input_width").as_int()));
-            res->get_map().emplace("nn_input_h", sio::int_message::create(this->get_parameter(topic + ".input_height").as_int()));
+            res->get_map().emplace("input_width", sio::int_message::create(this->get_parameter(topic + ".input_width").as_int()));
+            res->get_map().emplace("input_height", sio::int_message::create(this->get_parameter(topic + ".input_height").as_int()));
             auto labels = sio::array_message::create();
             auto labels_arr = this->get_parameter(topic + ".label_map").as_string_array();
             for (auto l : labels_arr)
                 labels->get_vector().push_back(sio::string_message::create(l));
-            res->get_map().emplace("nn_detection_labels", labels);
+            res->get_map().emplace("label_map", labels);
         }
 
         // Camera Info

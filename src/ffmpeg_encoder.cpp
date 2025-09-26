@@ -232,7 +232,7 @@ namespace phntm {
         this->encoder_thread.detach();
     }
 
-    void FFmpegEncoder::encodeFrame(const std::shared_ptr<sensor_msgs::msg::Image> im) {
+    void FFmpegEncoder::encodeFrame(const std::shared_ptr<sensor_msgs::msg::Image> msg) {
     
         // if (raw_frame.empty()) {
         //     throw std::invalid_argument("["+this->toString()+"] Empty frame provided");
@@ -244,19 +244,26 @@ namespace phntm {
         // auto req = ScalerRequest { raw_frame, header, im_ref};
         {
             std::lock_guard<std::mutex> queue_lock(this->scaler_mutex);
-            this->scaler_queue.push(im);
+            this->scaler_queue.push(msg);
             this->scaler_cv.notify_one();
         }
     }
 
-    void FFmpegEncoder::sendFrameToEncoder(AVFrame* input_frame) {
+    void FFmpegEncoder::sendFrameToEncoder(AVFrame* input_frame, std_msgs::msg::Header header) {
         std::lock_guard<std::mutex> queue_lock(this->encoder_mutex);
-        this->encoder_queue.push(input_frame);
+        EncoderRequest req;
+        req.frame = input_frame;
+        req.header = header;
+        this->encoder_queue.push(req);
         this->encoder_cv.notify_one();
     }
 
-    void FFmpegEncoder::flush() {
-        sendFrameToEncoder(nullptr);  // Flush the encoder
+    void FFmpegEncoder::flush() { 
+       std::lock_guard<std::mutex> queue_lock(this->encoder_mutex);
+        EncoderRequest req;
+        req.frame = nullptr; //flush the encoder
+        this->encoder_queue.push(req);
+        this->encoder_cv.notify_one();
     }
 
     void FFmpegEncoder::scalerWorker() {
@@ -271,9 +278,9 @@ namespace phntm {
             if (this->scaler_queue.empty() || !this->running) 
                 break;
             
-            std::shared_ptr<sensor_msgs::msg::Image> im;
+            std::shared_ptr<sensor_msgs::msg::Image> msg;
             while (!this->scaler_queue.empty()) {
-                im = this->scaler_queue.front();
+                msg = this->scaler_queue.front();
                 this->scaler_queue.pop();
             }
 
@@ -281,23 +288,23 @@ namespace phntm {
 
             cv::Mat raw_frame;
             if (this->src_encoding == "rgb8") {
-                raw_frame = cv::Mat(im->height, im->width, CV_8UC3, im->data.data());
+                raw_frame = cv::Mat(msg->height, msg->width, CV_8UC3, msg->data.data());
             } else if (this->src_encoding == "bgr8") {
-                raw_frame = cv::Mat(im->height, im->width, CV_8UC3, im->data.data());
+                raw_frame = cv::Mat(msg->height, msg->width, CV_8UC3, msg->data.data());
             } else if (this->src_encoding == "mono8" || this->src_encoding == "8uc1") {
-                raw_frame = cv::Mat(im->height, im->width, CV_8UC1, im->data.data());
+                raw_frame = cv::Mat(msg->height, msg->width, CV_8UC1, msg->data.data());
             } else if (this->src_encoding == "16uc1" || this->src_encoding == "mono16") {
-                cv::Mat mono16(im->height, im->width, CV_16UC1, im->data.data());
+                cv::Mat mono16(msg->height, msg->width, CV_16UC1, msg->data.data());
                 cv::Mat mono8;
                 mono16.convertTo(mono8, CV_8UC1, 255.0 / this->depth_max_sensor_value); // Convert to 8-bit (0-255 range)
                 cv::applyColorMap(mono8, raw_frame, this->depth_colormap); // Apply color map
             } else if (this->src_encoding == "32uc1") {
-                cv::Mat mono32(im->height, im->width, CV_32SC1, im->data.data());
+                cv::Mat mono32(msg->height, msg->width, CV_32SC1, msg->data.data());
                 cv::Mat mono8;
                 mono32.convertTo(mono8, CV_8UC1, 255.0 / this->depth_max_sensor_value); // Convert to 8-bit (0-255 range)
                 cv::applyColorMap(mono8, raw_frame, this->depth_colormap); // Apply color map
             } else if (this->src_encoding == "32fc1") {
-                cv::Mat mono32(im->height, im->width, CV_32FC1, im->data.data());
+                cv::Mat mono32(msg->height, msg->width, CV_32FC1, msg->data.data());
                 cv::Mat mono8;
                 mono32.convertTo(mono8, CV_8UC1, 255.0 / this->depth_max_sensor_value); // Convert to 8-bit (0-255 range)
                 cv::applyColorMap(mono8, raw_frame, this->depth_colormap); // Apply color map
@@ -326,11 +333,11 @@ namespace phntm {
                 if ((err = av_hwframe_transfer_data(hw_frame, sw_frame, 0)) < 0) {
                     throw std::runtime_error("Error while transferring frame data to surface. Error code: " + std::to_string(err));
                 }
-                hw_frame->pts = convertToRtpTimestamp(im->header.stamp.sec, im->header.stamp.nanosec);
-                this->sendFrameToEncoder(hw_frame);
+                // hw_frame->pts = convertToRtpTimestamp(im->header.stamp.sec, im->header.stamp.nanosec);
+                this->sendFrameToEncoder(hw_frame, msg->header);
             } else {
-                sw_frame->pts = convertToRtpTimestamp(im->header.stamp.sec, im->header.stamp.nanosec);
-                this->sendFrameToEncoder(sw_frame);
+                // sw_frame->pts = convertToRtpTimestamp(im->header.stamp.sec, im->header.stamp.nanosec);
+                this->sendFrameToEncoder(sw_frame, msg->header);
             }
         }
 
@@ -354,20 +361,20 @@ namespace phntm {
             if (this->encoder_queue.empty()) 
                 break;
 
-            AVFrame* frame;
+            EncoderRequest req;
             while (!this->encoder_queue.empty()) {
-                frame = this->encoder_queue.front();
+                req = this->encoder_queue.front();
                 this->encoder_queue.pop();
             }
 
             queue_lock.unlock();
 
-            int ret = avcodec_send_frame(this->codec_ctx, frame);
+            int ret = avcodec_send_frame(this->codec_ctx, req.frame);
             if (ret < 0) {
                 throw std::runtime_error("["+this->toString()+"] Error sending frame to encoder");
             }
 
-            if (frame == nullptr) { // flushed
+            if (req.frame == nullptr) { // flushed
                 this->running = false;
                 this->scaler_cv.notify_one(); // clear the scaler too
                 break;
@@ -397,13 +404,14 @@ namespace phntm {
                 auto frame = std::make_shared<ffmpeg_image_transport_msgs::msg::FFMPEGPacket>();
                 frame->header = std_msgs::msg::Header();
                 frame->header.frame_id = this->frame_id;
-                frame->header.stamp = node->now();
+                frame->header.stamp.sec = req.header.stamp.sec;
+                frame->header.stamp.nanosec = req.header.stamp.nanosec;
                 frame->encoding = "h.264";
                 frame->width = width;
                 frame->height = height;
                 frame->flags = pkt->flags;
                 frame->is_bigendian = false;
-                frame->pts = frame->pts; //calculated from the initial header stamp
+                frame->pts = 0; // header stamp is used
                 // frame->data.resize(pkt->size);
                 frame->data.assign(pkt->data, pkt->data + pkt->size);
                 packet_callback(frame);

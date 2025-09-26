@@ -83,9 +83,9 @@ namespace phntm {
                 bool active = true;
                 // bool initial_ts_set = false;
                 uint64_t ts_first = 0; // 1st pts from ros
-                uint64_t ts_offset = 0; // trp time on 1st frame (1/90000)
+                //uint64_t ts_offset = 0; // trp time on 1st frame (1/90000)
                 uint64_t last_raw_ts = 0; // last received pts form ros
-                bool start_ts_set = false;
+                // bool start_ts_set = false;
 
                 std::optional<std::vector<uint8_t>> last_nal_unit_7 = std::nullopt;
                 std::optional<std::vector<uint8_t>> last_nal_unit_8 = std::nullopt;
@@ -124,9 +124,9 @@ namespace phntm {
             void start();
             void stop();
 
-            void onEncodedFrame(const std::shared_ptr<ffmpeg_image_transport_msgs::msg::FFMPEGPacket> data);
-            void onImageFrame(const std::shared_ptr<sensor_msgs::msg::Image> data);
-            void onCompressedFrame(const std::shared_ptr<sensor_msgs::msg::CompressedImage> data);
+            void onEncodedFrame(const std::shared_ptr<ffmpeg_image_transport_msgs::msg::FFMPEGPacket> msg);
+            void onImageFrame(const std::shared_ptr<sensor_msgs::msg::Image> msg);
+            void onCompressedFrame(const std::shared_ptr<sensor_msgs::msg::CompressedImage> msg);
             
             // only one of these used at the time
             std::shared_ptr<rclcpp::Subscription<ffmpeg_image_transport_msgs::msg::FFMPEGPacket>> sub_enc;
@@ -148,6 +148,7 @@ namespace phntm {
             // rtc::FrameInfo latest_frame_info = rtc::FrameInfo(0);
 
             uint pts_source;
+            bool local_received_ts_passed_in_encoded_frame = false; 
             bool debug_verbose = false;
             int debug_num_frames = 0; // set number of frames to be analyzed (nal units debug)
             bool logged_receiving = false;

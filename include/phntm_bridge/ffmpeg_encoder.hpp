@@ -31,7 +31,7 @@ namespace phntm {
                       PacketCallback callback = nullptr);
         ~FFmpegEncoder();
         
-        void encodeFrame(const std::shared_ptr<sensor_msgs::msg::Image> im);
+        void encodeFrame(const std::shared_ptr<sensor_msgs::msg::Image> msg);
         bool checkCompatibility(const int width, const int height, const std::string & src_encoding) {
             return width == this->width && height == this->height
                   && strToLower(src_encoding) == this->src_encoding;
@@ -59,40 +59,33 @@ namespace phntm {
 
         AVFormatContext* fmt_ctx = nullptr;
         AVCodec* codec = nullptr;
-        // AVStream* stream = nullptr;
         AVCodecContext* codec_ctx = nullptr;
-        // AVFrame* frame = nullptr;
         std::vector<AVFrame*> sw_frame_buffers;
         std::vector<AVFrame*> hw_frame_buffers;
         uint num_frame_buffers = 16;
         uint current_frame_buffer = 0;
-        // std::queue<AVFrame*> queue;
-        // std::mutex mutex;
         SwsContext* sws_ctx = nullptr;
         
         AVBufferRef* hw_device_ctx = nullptr;
         enum AVHWDeviceType hw_device_type = AV_HWDEVICE_TYPE_NONE;
         
-        void sendFrameToEncoder(AVFrame* frame);
+        void sendFrameToEncoder(AVFrame* frame,  std_msgs::msg::Header header);
         void scalerWorker();
         void encoderWorker();
         void flush();
 
-        // struct ScalerRequest {
-        //     cv::Mat raw_frame;
-        //     std_msgs::msg::Header header;
-        //     std::shared_ptr<sensor_msgs::msg::Image> im_ref;
-        // };
+        struct EncoderRequest {
+            AVFrame* frame;
+            std_msgs::msg::Header header;
+        };
 
         std::queue<std::shared_ptr<sensor_msgs::msg::Image>> scaler_queue;
         std::condition_variable scaler_cv;
         std::mutex scaler_mutex;
 
-        std::queue<AVFrame*> encoder_queue;
+        std::queue<EncoderRequest> encoder_queue;
         std::mutex encoder_mutex;
 
-        
-        
 
         std::string toString() { return "Enc " + this->topic; };
 
