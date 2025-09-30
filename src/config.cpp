@@ -574,6 +574,22 @@ namespace phntm {
             res->get_map().emplace("label_map", labels);
         }
 
+        if (msg_type == "vision_msgs/msg/Detection3DArray") { 
+            try {
+                this->declare_parameter(topic + ".model_map", std::vector<std::string>());  // array of nn class models
+            } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+            try {
+                this->declare_parameter(topic + ".use_model_materials", true);
+            } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+
+            auto models = sio::array_message::create();
+            auto models_arr = this->get_parameter(topic + ".model_map").as_string_array();
+            for (auto l : models_arr)
+                models->get_vector().push_back(sio::string_message::create(l));
+            res->get_map().emplace("model_map", models);
+            res->get_map().emplace("use_model_materials", sio::bool_message::create(this->get_parameter(topic + ".use_model_materials").as_bool()));
+        }
+
         // Camera Info
         else if (msg_type == "sensor_msgs/msg/CameraInfo") {
             try {

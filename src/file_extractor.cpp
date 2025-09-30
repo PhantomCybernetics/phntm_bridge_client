@@ -40,6 +40,14 @@ namespace phntm {
         request->path = search_path;
         bool success = false;
 
+        {
+            std::lock_guard<std::mutex> lock(FileExtractor::uploaded_chunks_mutex);
+            if (FileExtractor::uploaded_chunks.find(search_path) != FileExtractor::uploaded_chunks.end()) {
+                FileExtractor::uploaded_chunks.erase(search_path);
+            }
+            FileExtractor::uploaded_chunks.emplace(search_path, std::map<int, bool>()); // reset
+        }
+
         std::vector<std::shared_ptr<std::thread>> extractor_threads;
         for (auto & e: extractors) { // node id => service client
             auto t = std::make_shared<std::thread>([&]() {
@@ -82,20 +90,12 @@ namespace phntm {
 
                     log(GREEN + "Success from " + node_name + ", awaiting " + std::to_string(result->total_bytes) + " B in "+ std::to_string(result->num_parts) + " chunks for " + search_path + CLR);
                     
-                    {
-                        std::lock_guard<std::mutex> lock(uploaded_chunks_mutex);
-                        if (uploaded_chunks.find(search_path) != uploaded_chunks.end()) {
-                            uploaded_chunks.erase(search_path);
-                        }
-                        uploaded_chunks.emplace(search_path, std::map<int, bool>()); // reset
-                    }
-
-                    while (uploaded_chunks.at(search_path).size() < result->num_parts) {
+                    while (FileExtractor::uploaded_chunks.at(search_path).size() < result->num_parts) {
                         std::this_thread::sleep_for(std::chrono::milliseconds(10));
                     }
 
                     int num_ok = 0, num_err = 0;
-                    for (auto chunk : uploaded_chunks.at(search_path)) {
+                    for (auto chunk : FileExtractor::uploaded_chunks.at(search_path)) {
                         if (chunk.second) {
                             num_ok++;
                         } else {
@@ -202,9 +202,9 @@ namespace phntm {
     }
 
     void FileExtractor::markChunkResult(std::string file_path, const int chunk_number, bool success) {
-        std::lock_guard<std::mutex> lock(uploaded_chunks_mutex);
-        if (uploaded_chunks.find(file_path) != uploaded_chunks.end()) {
-            uploaded_chunks.at(file_path).emplace(chunk_number, success);
+        std::lock_guard<std::mutex> lock(FileExtractor::uploaded_chunks_mutex);
+        if (FileExtractor::uploaded_chunks.find(file_path) != FileExtractor::uploaded_chunks.end()) {
+            FileExtractor::uploaded_chunks.at(file_path).emplace(chunk_number, success);
         }
     }
 
