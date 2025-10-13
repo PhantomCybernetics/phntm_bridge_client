@@ -194,7 +194,7 @@ namespace phntm {
         this->declare_parameter("blacklist_topics", std::vector<std::string>(), blacklist_topics_descriptor);
         auto blacklist_topics_val = this->get_parameter("blacklist_topics").as_string_array();
         for (auto t : blacklist_topics_val) {
-            if (std::find(config->blacklist_topics.begin(), config->blacklist_topics.end(), t) == config->blacklist_services.end()) {
+            if (std::find(config->blacklist_topics.begin(), config->blacklist_topics.end(), t) == config->blacklist_topics.end()) {
                 config->blacklist_topics.push_back(t);
             }
         }
@@ -494,7 +494,7 @@ namespace phntm {
         // h.264 encoded frames
         if (isImageOrVideoType(msg_type)) { 
             try {
-                this->declare_parameter(topic + ".debug_num_frames", 1); // will debug this many frames (instects NAL units)
+                this->declare_parameter(topic + ".debug_num_frames", 1); // will debug this many frames (inspects NAL units)
             } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
             try {
                 this->declare_parameter(topic + ".debug_verbose", false); // will debug this many frames (instects NAL units)
