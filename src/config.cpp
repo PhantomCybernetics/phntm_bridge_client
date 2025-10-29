@@ -564,6 +564,9 @@ namespace phntm {
             try {
                 this->declare_parameter(topic + ".label_map", std::vector<std::string>());  // array of nn class labels
             } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+             try {
+                this->declare_parameter(topic + ".color_map", std::vector<std::string>());  // array of nn class labels
+            } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
                 
             res->get_map().emplace("input_width", sio::int_message::create(this->get_parameter(topic + ".input_width").as_int()));
             res->get_map().emplace("input_height", sio::int_message::create(this->get_parameter(topic + ".input_height").as_int()));
@@ -572,22 +575,27 @@ namespace phntm {
             for (auto l : labels_arr)
                 labels->get_vector().push_back(sio::string_message::create(l));
             res->get_map().emplace("label_map", labels);
+            auto colors = sio::array_message::create();
+            auto colors_arr = this->get_parameter(topic + ".color_map").as_string_array();
+            for (auto c : colors_arr)
+                colors->get_vector().push_back(sio::string_message::create(c));
+            res->get_map().emplace("color_map", colors);
         }
 
         if (msg_type == "vision_msgs/msg/Detection3DArray") { 
             try {
                 this->declare_parameter(topic + ".model_map", std::vector<std::string>());  // array of nn class models
             } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
-            try {
-                this->declare_parameter(topic + ".use_model_materials", true);
-            } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+            // try {
+            //     this->declare_parameter(topic + ".use_model_materials", true);
+            // } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
 
             auto models = sio::array_message::create();
             auto models_arr = this->get_parameter(topic + ".model_map").as_string_array();
             for (auto l : models_arr)
                 models->get_vector().push_back(sio::string_message::create(l));
             res->get_map().emplace("model_map", models);
-            res->get_map().emplace("use_model_materials", sio::bool_message::create(this->get_parameter(topic + ".use_model_materials").as_bool()));
+            // res->get_map().emplace("use_model_materials", sio::bool_message::create(this->get_parameter(topic + ".use_model_materials").as_bool()));
         }
 
         // Camera Info
@@ -624,6 +632,19 @@ namespace phntm {
 
             res->get_map().emplace("min_voltage", sio::double_message::create(this->get_parameter(topic + ".min_voltage").as_double()));
             res->get_map().emplace("max_voltage", sio::double_message::create(this->get_parameter(topic + ".max_voltage").as_double()));
+        }
+
+        // IMU
+        else if (msg_type == "sensor_msgs/msg/Imu") {
+            try {
+                this->declare_parameter(topic + ".min_acceleration", -11.0f); // in m/sv
+            } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+            try {
+                this->declare_parameter(topic + ".max_acceleration", 11.0f); // in m/s²
+            } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+
+            res->get_map().emplace("min_acceleration", sio::double_message::create(this->get_parameter(topic + ".min_acceleration").as_double()));
+            res->get_map().emplace("max_acceleration", sio::double_message::create(this->get_parameter(topic + ".max_acceleration").as_double()));
         }
 
         return res;

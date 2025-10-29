@@ -7,6 +7,7 @@
 #include <libavutil/pixfmt.h>
 #include <libswscale/swscale.h>
 #include <mutex>
+#include <ostream>
 #include <rclcpp/logging.hpp>
 #include <rclcpp/node.hpp>
 #include <string>
@@ -331,7 +332,8 @@ namespace phntm {
             // Send for encoding
             if (this->hw_device_type == AV_HWDEVICE_TYPE_VAAPI) {
                 if ((err = av_hwframe_transfer_data(hw_frame, sw_frame, 0)) < 0) {
-                    throw std::runtime_error("Error while transferring frame data to surface. Error code: " + std::to_string(err));
+                   std::cerr << "FFMpegEncoder: Error while transferring frame data to surface. Error code: " << std::to_string(err) << std::endl;
+                   continue;
                 }
                 // hw_frame->pts = convertToRtpTimestamp(im->header.stamp.sec, im->header.stamp.nanosec);
                 this->sendFrameToEncoder(hw_frame, msg->header);
