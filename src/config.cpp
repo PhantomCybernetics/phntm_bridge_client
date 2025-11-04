@@ -5,6 +5,7 @@
 #include "sio_message.h"
 #include <fstream>
 #include <chrono>
+#include <string>
 
 namespace phntm {
 
@@ -317,39 +318,9 @@ namespace phntm {
         std::vector<std::string> default_input_drivers { "Joy" };
         this->declare_parameter("input_drivers", default_input_drivers); // empty array to disable input entirely, services are still set up
         config->input_drivers = this->get_parameter("input_drivers").as_string_array();
-
-        // custom input drivers to be injected into the web UI
-        // array of 'ClassName https://public.url/file.js'
-        this->declare_parameter("custom_input_drivers", std::vector<std::string>());
-        auto custom_input_drivers = this->get_parameter("custom_input_drivers").as_string_array();
-        for (auto one: custom_input_drivers) {
-            if (one.empty()) continue;
-            auto def = parseCustomPluginDef(one);
-            if (!def) {
-                RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Invalid custom input driver definition: %s", one.c_str());
-                exit(1);
-            }
-            config->custom_input_drivers.push_back(def.value());
-            log("Adding custom input driver: " + def.value().class_name + " from " + def.value().url);
-        }
-        
-        // custom service menu widgets to be injected into the web UI
-        // array of 'ClassName https://public.url/file.js'
-        this->declare_parameter("custom_service_widgets", std::vector<std::string>());
-        auto custom_service_widgets = this->get_parameter("custom_service_widgets").as_string_array();
-        for (auto one : custom_service_widgets) {
-            if (one.empty()) continue;
-            auto def = parseCustomPluginDef(one);
-            if (!def) {
-                RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Invalid custom service widget definition: %s", one.c_str());
-                exit(1);
-            }
-            config->custom_service_widgets.push_back(def.value());
-            log("Adding custom service widget: " + def.value().class_name + " from " + def.value().url);
-        }
         
         // service widget mapping with custom payload
-        // array of '/id_service ClassName { "var1" 1, "var2": 2, ... }' (JSON payload is optional)
+        // array of '/id_service ClassName { "var1" 1, "var2": 2, ... }' (JSON config payload is optional)
         this->declare_parameter("service_widgets", std::vector<std::string>());
         auto service_widgets_map = this->get_parameter("service_widgets").as_string_array();
         for (auto one : service_widgets_map) {
@@ -394,8 +365,8 @@ namespace phntm {
             }
         }
 
-        this->declare_parameter("service_timeout_sec", 20.0f); // 20 sec
-        config->service_timeout_ns = this->get_parameter("service_timeout_sec").as_double() * 1000000000;
+        this->declare_parameter("default_service_timeout_sec", 20.0f); // 20 sec
+        config->default_service_timeout_sec = this->get_parameter("default_service_timeout_sec").as_double();
 
         this->declare_parameter("service_calls_verbose", false);
         config->service_calls_verbose = this->get_parameter("service_calls_verbose").as_bool();    
@@ -426,6 +397,47 @@ namespace phntm {
         this->declare_parameter("image_topics_default_reliability", "BEST_EFFORT");
         this->declare_parameter("image_topics_default_durability", "VOLATILE");
         this->declare_parameter("image_topics_default_lifespan_sec", -1.0);
+
+        // ui peer limit
+        rcl_interfaces::msg::ParameterDescriptor ui_peer_limit_descriptor;
+        ui_peer_limit_descriptor.description = "UI connected peers limit (0 = no limit)";
+        this->declare_parameter("ui_peer_limit", 10, ui_peer_limit_descriptor);
+        config->ui_peer_limit = this->get_parameter("ui_peer_limit").as_int();
+        log("UI connected peers limit: " + std::to_string(config->ui_peer_limit));
+
+        // custom JS includes
+        rcl_interfaces::msg::ParameterDescriptor custom_includes_js_descriptor;
+        custom_includes_js_descriptor.description = "Custom JS includes";
+        this->declare_parameter("ui_custom_includes_js", std::vector<std::string>(), custom_includes_js_descriptor);
+        auto custom_includes_js_val = this->get_parameter("ui_custom_includes_js").as_string_array();
+        for (auto inc : custom_includes_js_val) {
+            if (std::find(config->ui_custom_includes_js.begin(), config->ui_custom_includes_js.end(), inc) == config->ui_custom_includes_js.end()) {
+                config->ui_custom_includes_js.push_back(inc);
+            }
+        }
+        if (config->ui_custom_includes_js.size()) {
+            log("Custom UI JS includes:");
+            for (size_t i = 0; i < config->ui_custom_includes_js.size(); ++i) {
+                log("\t" + config->ui_custom_includes_js[i]);
+            }
+        }
+
+        // custom CSS includes
+        rcl_interfaces::msg::ParameterDescriptor custom_includes_css_descriptor;
+        custom_includes_css_descriptor.description = "Custom CSS includes";
+        this->declare_parameter("ui_custom_includes_css", std::vector<std::string>(), custom_includes_css_descriptor);
+        auto custom_includes_css_val = this->get_parameter("ui_custom_includes_css").as_string_array();
+        for (auto inc : custom_includes_css_val) {
+            if (std::find(config->ui_custom_includes_css.begin(), config->ui_custom_includes_css.end(), inc) == config->ui_custom_includes_css.end()) {
+                config->ui_custom_includes_css.push_back(inc);
+            }
+        }
+        if (config->ui_custom_includes_css.size()) {
+            log("Custom UI CSS includes:");
+            for (size_t i = 0; i < config->ui_custom_includes_css.size(); ++i) {
+                log("\t" + config->ui_custom_includes_css[i]);
+            }
+        }
     }
 
     rclcpp::QoS PhntmBridge::loadTopicQoSConfig(std::string topic, size_t default_depth, std::string default_reliability, std::string default_durability, float default_lifespan_sec) {

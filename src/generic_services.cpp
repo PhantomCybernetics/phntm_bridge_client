@@ -27,15 +27,16 @@ namespace phntm {
 
   // calling generic ROS services from the socket.io
   // running on an async thread
-  void PhntmBridge::callGenericService(std::string service_name, std::string service_type, sio::event const &ev) {
+  void PhntmBridge::callGenericService(std::string service_name, std::string service_type, double timeout_sec, sio::event const &ev) {
 
     if (this->config->service_calls_verbose)
-      log("Handling service call for: "+ service_name + " {" + service_type + "} msg_id=" + std::to_string(ev.get_msgId()));
+      log("Handling service call for: "+ service_name + " {" + service_type + "}, timeout=" + std::to_string(timeout_sec) + "s, msg_id=" + std::to_string(ev.get_msgId()));
 
     auto parts = split(service_type, '/');
     std::string package_name = parts[0];
     std::string srv_name = parts[2];
     rcl_ret_t ret;
+    int64_t timeout_ns = timeout_sec * 1000000000;
 
     if (this->config->service_calls_verbose)
       log("package_name: " + package_name + " srv_name: " + srv_name);
@@ -219,7 +220,7 @@ namespace phntm {
         log("Waiting for " + service_name + "...");
 
       // wait for a response (timeout in ns)
-      ret = rcl_wait(&wait_set, this->config->service_timeout_ns);
+      ret = rcl_wait(&wait_set, timeout_ns);
       if (ret == RCL_RET_TIMEOUT)
         return this->returnServiceError("Service call timed out.", ev);
       else if (ret != RCL_RET_OK)
@@ -288,7 +289,7 @@ namespace phntm {
         if (verbose)
           log(s_indent + GREEN + ">> BYTE: ", false, false);
         uint8_t *v = new uint8_t();
-        *v = static_cast<uint8_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : 0);
+        *v = static_cast<uint8_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : (value->get_flag() == sio::message::flag::flag_double ? value->get_double() : 0));
         if (verbose)
           log(std::to_string(*v) + CLR);
         if (member->is_array_) {
@@ -303,7 +304,7 @@ namespace phntm {
         if (verbose)
           log(s_indent + GREEN + ">> ROS_TYPE_CHAR: ", false, false);
         int8_t *v = new int8_t();
-        *v = static_cast<int8_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : 0);
+        *v = static_cast<int8_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : (value->get_flag() == sio::message::flag::flag_double ? value->get_double() : 0));
         if (verbose)
           log(std::to_string(*v) + CLR);
         if (member->is_array_) {
@@ -317,7 +318,7 @@ namespace phntm {
         if (verbose)
           log(s_indent + GREEN + ">> ROS_TYPE_FLOAT32: ", false, false);
         float *v = new float();
-        *v = static_cast<float>(value->get_flag() == sio::message::flag::flag_double ? value->get_double() : 0.0f);
+        *v = static_cast<float>(value->get_flag() == sio::message::flag::flag_double ? value->get_double() : (value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : 0.0f));
         if (verbose)
           log(std::to_string(*v) + CLR);
         if (member->is_array_) {
@@ -331,7 +332,7 @@ namespace phntm {
         if (verbose)
           log(s_indent + GREEN + ">> ROS_TYPE_FLOAT64: ", false, false);
         double *v = new double();
-        *v = static_cast<double>(value->get_flag() == sio::message::flag::flag_double ? value->get_double() : 0.0f);
+        *v = static_cast<double>(value->get_flag() == sio::message::flag::flag_double ? value->get_double() : (value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : 0.0f));
         if (verbose)
           log(std::to_string(*v) + CLR);
         if (member->is_array_) {
@@ -345,7 +346,7 @@ namespace phntm {
         if (verbose)
           log(s_indent + GREEN + ">> ROS_TYPE_INT16: ", false, false);
         int16_t *v = new int16_t();
-        *v = static_cast<int16_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : 0);
+        *v = static_cast<int16_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : (value->get_flag() == sio::message::flag::flag_double ? value->get_double() : 0));
         if (verbose)
           log(std::to_string(*v) + CLR);
         if (member->is_array_) {
@@ -359,7 +360,7 @@ namespace phntm {
         if (verbose)
           log(s_indent + GREEN + ">> ROS_TYPE_UINT16: ", false, false);
         uint16_t *v = new uint16_t();
-        *v = static_cast<uint16_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : 0);
+        *v = static_cast<uint16_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : (value->get_flag() == sio::message::flag::flag_double ? value->get_double() : 0));
         if (verbose)
           log(std::to_string(*v) + CLR);
         if (member->is_array_) {
@@ -373,7 +374,7 @@ namespace phntm {
         if (verbose)
           log(s_indent + GREEN + ">> ROS_TYPE_INT32: ", false, false);
         int32_t *v = new int32_t();
-        *v = static_cast<int32_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : 0);
+        *v = static_cast<int32_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : (value->get_flag() == sio::message::flag::flag_double ? value->get_double() : 0));
         if (verbose)
           log(std::to_string(*v) + CLR);
         if (member->is_array_) {
@@ -387,7 +388,7 @@ namespace phntm {
         if (verbose)
           log(s_indent + GREEN + ">> ROS_TYPE_UINT32: ", false, false);
         uint32_t *v = new uint32_t();
-        *v = static_cast<uint32_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : 0);
+        *v = static_cast<uint32_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : (value->get_flag() == sio::message::flag::flag_double ? value->get_double() : 0));
         if (verbose)
           log(std::to_string(*v) + CLR);
         if (member->is_array_) {
@@ -401,7 +402,7 @@ namespace phntm {
         if (verbose)
           log(s_indent + GREEN + ">> INT64: ", false, false);
         int64_t *v = new int64_t();
-        *v =  static_cast<int64_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : 0);
+        *v =  static_cast<int64_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : (value->get_flag() == sio::message::flag::flag_double ? value->get_double() : 0));
         if (verbose)
           log(std::to_string(*v) + CLR);
         if (member->is_array_) {
@@ -415,7 +416,7 @@ namespace phntm {
         if (verbose)
           log(s_indent + GREEN + ">> ROS_TYPE_UINT64: ", false, false);
         uint64_t *v = new uint64_t();
-        *v = static_cast<uint64_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : 0);
+        *v = static_cast<uint64_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : (value->get_flag() == sio::message::flag::flag_double ? value->get_double() : 0));
         if (verbose)
           log(std::to_string(*v) + CLR);
         if (member->is_array_) {

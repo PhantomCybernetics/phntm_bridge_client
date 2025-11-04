@@ -25,5 +25,4 @@ namespace phntm {
     const uint PTS_SOURCE_LOCAL_TIME     = 0; // default
     const uint PTS_SOURCE_PACKET_PTS     = 1;
     const uint PTS_SOURCE_MESSAGE_HEADER = 2;
-    
 }

@@ -32,7 +32,7 @@ namespace phntm {
       rclcpp::QoS loadTopicQoSConfig(std::string topic, size_t default_depth=1, std::string default_reliability="BEST_EFFORT", std::string default_durability="VOLATILE", float default_lifespan_sec=-1.0);
       sio::message::ptr loadTopicMsgTypeExtraConfig(std::string topic, std::string msg_type);
       void setupLocalServices();
-      void callGenericService(std::string service_name, std::string service_type, sio::event const& ev);
+      void callGenericService(std::string service_name, std::string service_type, double timeout_sec, sio::event const& ev);
       void readGitRepoHead(std::string repo_path);
 
       std::shared_ptr<BridgeConfig> config = std::make_shared<BridgeConfig>();

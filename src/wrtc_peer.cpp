@@ -820,6 +820,7 @@ namespace phntm {
     }
 
     void WRTCPeer::addUIConfigToMessage(sio::object_message::ptr msg, std::shared_ptr<BridgeConfig> config) {
+
         // enabled input drivers
         auto input_drivers = sio::array_message::create();
         for (auto & one : config->input_drivers) {
@@ -829,29 +830,9 @@ namespace phntm {
 
         // default input mappings json
         msg->get_map().emplace("input_defaults", BridgeSocket::jsonToSioMessage(config->input_defaults));
-        
-        //  custom input driver includes
-        auto custom_input_drivers = sio::array_message::create();
-        for (auto & one : config->custom_input_drivers) {
-            auto one_msg = sio::object_message::create();
-            one_msg->get_map().emplace("class", sio::string_message::create(one.class_name));
-            one_msg->get_map().emplace("url", sio::string_message::create(one.url));
-            custom_input_drivers->get_vector().push_back(one_msg);
-        }
-        msg->get_map().emplace("custom_input_drivers", custom_input_drivers);
 
         // pass service buttons json
         msg->get_map().emplace("service_defaults", BridgeSocket::jsonToSioMessage(config->service_defaults));
-
-        // custom service widget includes
-        auto custom_service_widgets = sio::array_message::create();
-        for (auto & one : config->custom_service_widgets) {
-            auto one_msg = sio::object_message::create();
-            one_msg->get_map().emplace("class", sio::string_message::create(one.class_name));
-            one_msg->get_map().emplace("url", sio::string_message::create(one.url));
-            custom_service_widgets->get_vector().push_back(one_msg);
-        }
-        msg->get_map().emplace("custom_service_widgets", custom_service_widgets);
 
         // custom service widget-class mapping + custom data payload
         auto service_widgets = sio::array_message::create();
@@ -875,6 +856,7 @@ namespace phntm {
         ui_config->get_map().emplace("wifi_monitor_topic", sio::string_message::create(config->ui_wifi_monitor_topic));
         ui_config->get_map().emplace("enable_wifi_scan", sio::bool_message::create(config->ui_enable_wifi_scan));
         ui_config->get_map().emplace("enable_wifi_roam", sio::bool_message::create(config->ui_enable_wifi_roam));
+        ui_config->get_map().emplace("default_service_timeout_sec", sio::double_message::create(config->default_service_timeout_sec));
         ui_config->get_map().emplace("description_header", sio::string_message::create(config->description_header));
         ui_config->get_map().emplace("description", sio::string_message::create(config->description));
         auto collapse_services = sio::array_message::create();

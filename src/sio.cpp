@@ -75,6 +75,23 @@ namespace phntm {
         instance->auth_data->get_map()["ros_distro"] = sio::string_message::create(instance->config->ros_distro);
         instance->auth_data->get_map()["git_sha"] = sio::string_message::create(instance->config->git_head_sha);
         instance->auth_data->get_map()["git_tag"] = sio::string_message::create(instance->config->latest_git_tag);
+        instance->auth_data->get_map()["ui_peer_limit"] = sio::int_message::create(instance->config->ui_peer_limit);
+        // // custom ui js includes
+        if (instance->config->ui_custom_includes_js.size()) {
+            auto custom_includes_js = sio::array_message::create();
+            for (auto & one : instance->config->ui_custom_includes_js) {
+                custom_includes_js->get_vector().push_back(sio::string_message::create(one));
+            }
+            instance->auth_data->get_map()["ui_custom_includes_js"] = custom_includes_js;
+        }
+        // custom ui css includes
+        if (instance->config->ui_custom_includes_css.size()) {
+             auto custom_includes_css = sio::array_message::create();
+            for (auto & one : instance->config->ui_custom_includes_css) {
+                custom_includes_css->get_vector().push_back(sio::string_message::create(one));
+            }
+            instance->auth_data->get_map()["ui_custom_includes_css"] = custom_includes_css;
+        }
 
         instance->handled_events.emplace("ice-servers", std::bind(&BridgeSocket::onIceServers, instance, std::placeholders::_1));
         instance->handled_events.emplace("peer", std::bind(&BridgeSocket::onPeerConnected, instance, std::placeholders::_1));
@@ -415,10 +432,15 @@ namespace phntm {
             return this->returnError("Service '" + service_name + "' not discovered", ev);
         }
 
+        double timeout_sec = 0.0;
+        if (ev.get_message()->get_map().find("timeout_sec") != ev.get_message()->get_map().end()) {
+            timeout_sec = ev.get_message()->get_map().at("timeout_sec")->get_double();
+        }
+
         // async thread
-        std::thread newThread([this, ev, service_name, service_type]() {
+        std::thread newThread([this, ev, service_name, service_type, timeout_sec]() {
             DataLED::once();
-            this->node->callGenericService(service_name, service_type, ev);
+            this->node->callGenericService(service_name, service_type, timeout_sec, ev);
         });
         newThread.detach();
     }
