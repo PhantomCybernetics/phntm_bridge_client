@@ -1,6 +1,7 @@
 # Phantom Bridge Client
 
-Fast WebRTC + Socket.io ROS2 Bridge for real-time data and video streaming, teleoperation, HRI, and remote robot monitoring. Comes with Docker Container control for the host machine, CPU and Wi-Fi monitoring, and customizable [Web Interface](https://docs.phntm.io/bridge/ui/overview.html). \
+Fast WebRTC + Socket.io ROS2 Bridge for real-time data and video streaming, teleoperation, HRI, and remote robot monitoring.
+Comes with Docker Container control for the host machine, CPU and Wi-Fi monitoring, and customizable [Web Interface](https://docs.phntm.io/bridge/ui/overview.html). \
 \
 [See full documentation here](https://docs.phntm.io/bridge)
 
@@ -87,12 +88,11 @@ Full list of configuration options can be found [here](https://docs.phntm.io/bri
     discovery_period_sec: 3.0 # < 0 introspection OFF
     stop_discovery_after_sec: 10.0 # < 0 run forever
 
-    ## Extra packages to install on the 1st container run
-    ## This is either a package folder mounted into the container,
-    ## or a ROS2 package name to be installed via apt-get (e.g. for "ros-distro-some-package" only use "some_package")
+    ## Extra packages to install, this is either a package folder mounted into the container,
+    ## or a ROS2 package name to be installed via apt-get (for e.g. "ros-distro-some-package" use only "some-package")
     extra_packages:
       - /ros2_ws/src/vision_msgs
-      - /ros2_ws/src/astra_camera_msgs
+      - some-package
 
     ## Blink LEDs via GPIO on network activity
     conn_led_gpio_chip: /dev/gpiochip0
@@ -100,17 +100,20 @@ Full list of configuration options can be found [here](https://docs.phntm.io/bri
     data_led_pin: 24
 
     ## Custom topic configs
+    /rosout: # TODO add to default config
+      reliability: RELIABLE
+      durability: TRANSIENT_LOCAL
     /robot_description:
-      reliability: 1 # Reliable
-      durability: 1 # Transient local
-      lifespan_sec: -1 # Infinity
+      reliability: RELIABLE
+      durability: TRANSIENT_LOCAL
+      lifespan_sec: -1.0
     /tf_static:
-      reliability: 1 # Reliable
-      durability: 1 # Transient local
-      lifespan_sec: -1 # Infinity
+      reliability: RELIABLE
+      durability: TRANSIENT_LOCAL
+      lifespan_sec: -1.0
     /battery:
-      min_voltage: 9.0 # empty voltage
-      max_voltage: 12.6 # full voltage
+      min_voltage: 19.2 # set empty voltage
+      max_voltage: 25.2 # set set full voltage
 
     ui_battery_topic: /battery # battery to show in the UI, '' to disable
 
