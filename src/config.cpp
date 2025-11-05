@@ -5,6 +5,7 @@
 #include "sio_message.h"
 #include <fstream>
 #include <chrono>
+#include <rclcpp/parameter_value.hpp>
 #include <string>
 
 namespace phntm {
@@ -54,12 +55,16 @@ namespace phntm {
         rcl_interfaces::msg::ParameterDescriptor id_robot_descriptor;
         id_robot_descriptor.description = "Robot ID on Phntm Cloud Brudge";
         id_robot_descriptor.read_only = true;
-        this->declare_parameter("id_robot", "", id_robot_descriptor);
-        
+        try {
+            this->declare_parameter("id_robot", "", id_robot_descriptor);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+
         // Robot auth key
         rcl_interfaces::msg::ParameterDescriptor key_descriptor;
         key_descriptor.description = "Robot auth key on Phntm Cloud Brudge";
-        this->declare_parameter("key", "", key_descriptor);
+        try {
+            this->declare_parameter("key", "", key_descriptor);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
 
         config->id_robot = this->get_parameter("id_robot").as_string();
         config->auth_key = this->get_parameter("key").as_string();
@@ -77,13 +82,17 @@ namespace phntm {
         // Robot name
         rcl_interfaces::msg::ParameterDescriptor name_descriptor;
         name_descriptor.description = "Robot name";
-        this->declare_parameter("name", "Unnamed Robot", name_descriptor);
+        try {
+            this->declare_parameter("name", "Unnamed Robot", name_descriptor);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->robot_name = this->get_parameter("name").as_string();
 
         // Maintainer's email
         rcl_interfaces::msg::ParameterDescriptor email_descriptor;
         email_descriptor.description = "Maintainer e-mail address";
-        this->declare_parameter("maintainer_email", "", email_descriptor);
+        try {
+            this->declare_parameter("maintainer_email", "", email_descriptor);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->maintainer_email = this->get_parameter("maintainer_email").as_string();
 
         // description shown in the UI
@@ -91,28 +100,42 @@ namespace phntm {
         rcl_interfaces::msg::ParameterDescriptor description_header_descriptor;
         description_header_descriptor.description = "Robot description ehader shown in the UI";
         description_header_descriptor.additional_constraints = "Some HTML is ok";
-        this->declare_parameter("description_header", "", description_header_descriptor);
+        try {
+            this->declare_parameter("description_header", "", description_header_descriptor);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->description_header = this->get_parameter("description_header").as_string();
 
         rcl_interfaces::msg::ParameterDescriptor description_descriptor;
         description_descriptor.description = "Robot description shown in the UI";
         description_descriptor.additional_constraints = "Some HTML is ok";
-        this->declare_parameter("description", "", description_descriptor);
+        try {
+            this->declare_parameter("description", "", description_descriptor);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->description = this->get_parameter("description").as_string();
 
         // will check these packages on 1st (container) start
         rcl_interfaces::msg::ParameterDescriptor extra_pkg_descriptor;
         extra_pkg_descriptor.description = "ROS packages to check for on first Bridge run";
         extra_pkg_descriptor.additional_constraints = "Folder path or ROS package name";
-        this->declare_parameter("extra_packages", std::vector<std::string>(), extra_pkg_descriptor);
+        try {
+            this->declare_parameter("extra_packages", std::vector<std::string>(), extra_pkg_descriptor);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->extra_packages = this->get_parameter("extra_packages").as_string_array();
         
         // webrtc config
-        this->declare_parameter("use_cloud_ice_config", true);
+        try {
+            this->declare_parameter("use_cloud_ice_config", true);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->use_cloud_ice_config = this->get_parameter("use_cloud_ice_config").as_bool();
-        this->declare_parameter("ice_servers", std::vector<std::string>());
-        this->declare_parameter("ice_username", ""); // id_robot if empty
-        this->declare_parameter("ice_secret", "");
+        try {
+            this->declare_parameter("ice_servers", std::vector<std::string>());
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        try {
+            this->declare_parameter("ice_username", ""); // id_robot if empty
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        try {
+            this->declare_parameter("ice_secret", "");
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
 
         config->ice_servers_custom = this->get_parameter("ice_servers").as_string_array(); // these get added to cloud config, or used when use_cloud_ice_config=false
         if (config->ice_servers_custom.size()) {
@@ -129,9 +152,15 @@ namespace phntm {
             config->ice_username = config->id_robot;
         config->ice_secret = this->get_parameter("ice_secret").as_string();
 
-        this->declare_parameter("enable_ice_udp_mux", true); // multiple WebRTC peer connections can be multiplexed over a single UDP port
-        this->declare_parameter("enable_ice_tcp", false); // in addition to the default UDP candidates, the library will also attempt to establish peer-to-peer connections over TCP if UDP is unavailable or blocked by network restrictions.
-        this->declare_parameter("disable_fingerprint_verification", false);
+        try {
+            this->declare_parameter("enable_ice_udp_mux", true); // multiple WebRTC peer connections can be multiplexed over a single UDP port
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        try {
+            this->declare_parameter("enable_ice_tcp", false); // in addition to the default UDP candidates, the library will also attempt to establish peer-to-peer connections over TCP if UDP is unavailable or blocked by network restrictions.
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        try {
+            this->declare_parameter("disable_fingerprint_verification", false);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->enable_ice_udp_mux = this->get_parameter("enable_ice_udp_mux").as_bool();
         config->enable_ice_tcp = this->get_parameter("enable_ice_tcp").as_bool();
         config->disable_fingerprint_verification = this->get_parameter("disable_fingerprint_verification").as_bool();
@@ -142,18 +171,34 @@ namespace phntm {
         this->set_parameter(rclcpp::Parameter("ice_secret", "*************"));
         
         // Cloud Bridge host
-        this->declare_parameter("bridge_server_address", "https://us-ca.bridge.phntm.io");
+        try {
+            this->declare_parameter("bridge_server_address", "https://us-ca.bridge.phntm.io");
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         
         /// Cloud Bridge files uploader port
-        this->declare_parameter("file_upload_port", 1336);
+        try {
+            this->declare_parameter("file_upload_port", 1336);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         
         // socket.io config
-        this->declare_parameter("sio_port", 1337);
-        this->declare_parameter("sio_path", "/robot/socket.io/"); // needs to end with /
-        this->declare_parameter("sio_connection_retry_sec", 2.0);
-        this->declare_parameter("sio_ssl_verify", true);
-        this->declare_parameter("sio_debug", false); // prints internal sio debug
-        this->declare_parameter("sio_verbose", false); // prints received and sent messages
+        try {
+            this->declare_parameter("sio_port", 1337);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        try {
+            this->declare_parameter("sio_path", "/robot/socket.io/"); // needs to end with /
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        try {
+            this->declare_parameter("sio_connection_retry_sec", 2.0);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        try {
+            this->declare_parameter("sio_ssl_verify", true);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        try {
+            this->declare_parameter("sio_debug", false); // prints internal sio debug
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        try {
+            this->declare_parameter("sio_verbose", false); // prints received and sent messages
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
 
         // services collapsed in the ui menu (still operational, parameneter services by default)
         std::vector<std::string> collapse_services_default = { "rcl_interfaces/srv/DescribeParameters", // we have UI for better access to parameteres
@@ -166,12 +211,16 @@ namespace phntm {
                                                                "rcl_interfaces/srv/GetLoggerLevels",
                                                                "rcl_interfaces/srv/SetLoggerLevels"
                                                              };
-        this->declare_parameter("collapse_services_default", collapse_services_default);
+        try {
+            this->declare_parameter("collapse_services_default", collapse_services_default);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->collapse_services = this->get_parameter("collapse_services_default").as_string_array(); // system defaults
         rcl_interfaces::msg::ParameterDescriptor collapse_services_descriptor;
         collapse_services_descriptor.description = "The UI will collapse these services";
         collapse_services_descriptor.additional_constraints="Service id or type";
-        this->declare_parameter("collapse_services", std::vector<std::string>(), collapse_services_descriptor); // custom - will be added to defauls
+        try {
+            this->declare_parameter("collapse_services", std::vector<std::string>(), collapse_services_descriptor); // custom - will be added to defauls
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         auto collapse_services_val = this->get_parameter("collapse_services").as_string_array();
         for (auto srv : collapse_services_val) {
             if (std::find(config->collapse_services.begin(), config->collapse_services.end(), srv) == config->collapse_services.end()) {
@@ -182,17 +231,23 @@ namespace phntm {
         // UI will collapse services we can't handle
         rcl_interfaces::msg::ParameterDescriptor collape_unhandled_services_descriptor;
         collape_unhandled_services_descriptor.description = "The UI will collapse services with unsupported message types";
-        this->declare_parameter("collapse_unhandled_services", true, collape_unhandled_services_descriptor);
+        try {
+            this->declare_parameter("collapse_unhandled_services", true, collape_unhandled_services_descriptor);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->collapse_unhandled_services = this->get_parameter("collapse_unhandled_services").as_bool();
 
         // blacklist topics from discovery (msg type or full topic id)
         std::vector<std::string> blacklist_topics_default { }; // no system defaults here
-        this->declare_parameter("blacklist_topics_default", blacklist_topics_default); 
+        try {
+            this->declare_parameter("blacklist_topics_default", blacklist_topics_default); 
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->blacklist_topics = this->get_parameter("blacklist_topics_default").as_string_array(); // system default
         rcl_interfaces::msg::ParameterDescriptor blacklist_topics_descriptor;
         blacklist_topics_descriptor.description = "Blacklist topics from discovery";
         blacklist_topics_descriptor.additional_constraints="Topic id or type";
-        this->declare_parameter("blacklist_topics", std::vector<std::string>(), blacklist_topics_descriptor);
+        try {
+            this->declare_parameter("blacklist_topics", std::vector<std::string>(), blacklist_topics_descriptor);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         auto blacklist_topics_val = this->get_parameter("blacklist_topics").as_string_array();
         for (auto t : blacklist_topics_val) {
             if (std::find(config->blacklist_topics.begin(), config->blacklist_topics.end(), t) == config->blacklist_topics.end()) {
@@ -208,12 +263,16 @@ namespace phntm {
         
         // blacklist services from discovery (msg type or full service id)
         std::vector<std::string> blacklist_services_default { "phntm_interfaces/srv/FileRequest" }; // FileRequest srv only intended for internal use between Bridge and Agents
-        this->declare_parameter("blacklist_services_default", blacklist_services_default);
+        try {
+            this->declare_parameter("blacklist_services_default", blacklist_services_default);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->blacklist_services = this->get_parameter("blacklist_services_default").as_string_array(); // system defaults
         rcl_interfaces::msg::ParameterDescriptor blacklist_services_descriptor;
         blacklist_services_descriptor.description = "Blacklist services from discovery";
         blacklist_services_descriptor.additional_constraints="Service id or type";
-        this->declare_parameter("blacklist_services", std::vector<std::string>(), blacklist_services_descriptor);
+        try {
+            this->declare_parameter("blacklist_services", std::vector<std::string>(), blacklist_services_descriptor);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         auto blacklist_services_val = this->get_parameter("blacklist_services").as_string_array();
         for (auto srv : blacklist_services_val) {
             if (std::find(config->blacklist_services.begin(), config->blacklist_services.end(), srv) == config->blacklist_services.end()) {
@@ -234,12 +293,16 @@ namespace phntm {
                                                                 "nav_msgs/msg/OccupancyGrid",
                                                                 "phntm_interfaces/msg/FileChunk" // only intended for internal use between Bridge and Agents
                                                               };
-        this->declare_parameter("blacklist_msg_types_default", blacklist_msg_types_default);
+        try {
+            this->declare_parameter("blacklist_msg_types_default", blacklist_msg_types_default);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->blacklist_msg_types = this->get_parameter("blacklist_msg_types_default").as_string_array(); // system defaults;
         rcl_interfaces::msg::ParameterDescriptor blacklist_msg_types_descriptor;
         blacklist_msg_types_descriptor.description = "Blacklist message types discovery";
         blacklist_msg_types_descriptor.additional_constraints="Topic or service type";
-        this->declare_parameter("blacklist_msg_types", std::vector<std::string>(), blacklist_msg_types_descriptor);
+        try {
+            this->declare_parameter("blacklist_msg_types", std::vector<std::string>(), blacklist_msg_types_descriptor);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         auto blacklist_msg_types_val = this->get_parameter("blacklist_msg_types").as_string_array();
         for (auto msg_type : blacklist_msg_types_val) {
             if (std::find(config->blacklist_msg_types.begin(), config->blacklist_msg_types.end(), msg_type) == config->blacklist_services.end()) {
@@ -254,11 +317,17 @@ namespace phntm {
         }
         
         // logging
-        this->declare_parameter("log_sdp", false);
+        try {
+            this->declare_parameter("log_sdp", false);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->log_sdp = this->get_parameter("log_sdp").as_bool();
-        this->declare_parameter("log_heartbeat", false);
+        try {
+            this->declare_parameter("log_heartbeat", false);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->log_heartbeat = this->get_parameter("log_heartbeat").as_bool();
-        this->declare_parameter("log_message_every_sec", 10.0f);
+        try {
+            this->declare_parameter("log_message_every_sec", 10.0f);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->log_message_every_sec = this->get_parameter("log_message_every_sec").as_double();
 
         // bloud bridge stuffs
@@ -277,51 +346,83 @@ namespace phntm {
         config->uploader_address = fmt::format("{}:{}", config->bridge_server_address, config->file_upload_port);
 
         // conn LED control via topic (blinks when connecting; on when connected; off = bridge not running)
-        this->declare_parameter("conn_led_topic", "");
+        try {
+            this->declare_parameter("conn_led_topic", "");
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->conn_led_topic = this->get_parameter("conn_led_topic").as_string();
         // data LED control via topic (flashes when any data is sent via webrtc; off when not connected)
-        this->declare_parameter("data_led_topic", "");
+        try {
+            this->declare_parameter("data_led_topic", "");
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->data_led_topic = this->get_parameter("data_led_topic").as_string();
         
         // conn/data LED control via GPIO
-        this->declare_parameter("conn_led_gpio_chip", "/dev/gpiochip0"); // PI5 default, use gpiodetect to list available
+        try {
+            this->declare_parameter("conn_led_gpio_chip", "/dev/gpiochip0"); // PI5 default, use gpiodetect to list available
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->conn_led_gpio_chip = this->get_parameter("conn_led_gpio_chip").as_string();
-        this->declare_parameter("conn_led_pin", -1); // set GPIO number
+        try {
+            this->declare_parameter("conn_led_pin", -1); // set GPIO number
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->conn_led_pin = this->get_parameter("conn_led_pin").as_int();
-        this->declare_parameter("data_led_pin", -1); // set GPIO number
+        try {
+            this->declare_parameter("data_led_pin", -1); // set GPIO number
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->data_led_pin = this->get_parameter("data_led_pin").as_int();
 
         // introspection
-        this->declare_parameter("discovery_period_sec", 2.0f);
+        try {
+            this->declare_parameter("discovery_period_sec", 2.0f);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->discovery_period_sec = this->get_parameter("discovery_period_sec").as_double();
-        this->declare_parameter("stop_discovery_after_sec", -1.0f); // <0 = run indefinitely (don't show control)
+        try {
+            this->declare_parameter("stop_discovery_after_sec", -1.0f); // <0 = run indefinitely (don't show control)
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->stop_discovery_after_sec = this->get_parameter("stop_discovery_after_sec").as_double();
-        this->declare_parameter("introspection_verbose", false);
+        try {
+            this->declare_parameter("introspection_verbose", false);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->introspection_verbose = this->get_parameter("introspection_verbose").as_bool();
 
         // wifi monitoring + scan
-        this->declare_parameter("ui_wifi_monitor_topic", "/iw_status"); // Agent writes here
+        try {
+            this->declare_parameter("ui_wifi_monitor_topic", "/iw_status"); // Agent writes here
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->ui_wifi_monitor_topic = this->get_parameter("ui_wifi_monitor_topic").as_string();
-        this->declare_parameter("ui_enable_wifi_scan", true); // enables scan without roaming
+        try {
+            this->declare_parameter("ui_enable_wifi_scan", true); // enables scan without roaming
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->ui_enable_wifi_scan = this->get_parameter("ui_enable_wifi_scan").as_bool();
-        this->declare_parameter("ui_enable_wifi_roam", false); // enables roaming (potentially dangerous)
+        try {
+            this->declare_parameter("ui_enable_wifi_roam", false); // enables roaming (potentially dangerous)
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->ui_enable_wifi_roam = this->get_parameter("ui_enable_wifi_roam").as_bool();
         
-        this->declare_parameter("ui_battery_topic", "/battery"); // use this in the ui 
+        try {
+            this->declare_parameter("ui_battery_topic", "/battery"); // use this in the ui 
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->ui_battery_topic = this->get_parameter("ui_battery_topic").as_string();
-        this->declare_parameter("ui_docker_control", true);
+        try {
+            this->declare_parameter("ui_docker_control", true);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->docker_control_enabled = this->get_parameter("ui_docker_control").as_bool();
-        this->declare_parameter("docker_monitor_topic", "/docker_info");
+        try {
+            this->declare_parameter("docker_monitor_topic", "/docker_info");
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->docker_monitor_topic = this->get_parameter("docker_monitor_topic").as_string();
 
         // input configs that get passed to ui
         std::vector<std::string> default_input_drivers { "Joy" };
-        this->declare_parameter("input_drivers", default_input_drivers); // empty array to disable input entirely, services are still set up
+        try {
+            this->declare_parameter("input_drivers", default_input_drivers); // empty array to disable input entirely, services are still set up
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->input_drivers = this->get_parameter("input_drivers").as_string_array();
         
         // service widget mapping with custom payload
         // array of '/id_service ClassName { "var1" 1, "var2": 2, ... }' (JSON config payload is optional)
-        this->declare_parameter("service_widgets", std::vector<std::string>());
+        try {
+            this->declare_parameter("service_widgets", std::vector<std::string>());
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         auto service_widgets_map = this->get_parameter("service_widgets").as_string_array();
         for (auto one : service_widgets_map) {
             if (one.empty()) continue;
@@ -342,7 +443,9 @@ namespace phntm {
         }
 
         // default input config for the web UI
-        this->declare_parameter("input_defaults", "");
+        try {
+            this->declare_parameter("input_defaults", "");
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         auto input_defaults_file = this->get_parameter("input_defaults").as_string();
         if (!input_defaults_file.empty()) {
             Json::Reader reader;
@@ -354,7 +457,9 @@ namespace phntm {
         }
         
         // default services config for the web UI
-        this->declare_parameter("service_defaults", "");
+        try {
+            this->declare_parameter("service_defaults", "");
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         auto service_defaults_file = this->get_parameter("service_defaults").as_string();
         if (!service_defaults_file.empty()) {
             Json::Reader reader;
@@ -365,50 +470,90 @@ namespace phntm {
             }
         }
 
-        this->declare_parameter("default_service_timeout_sec", 20.0f); // 20 sec
+        try {
+            this->declare_parameter("default_service_timeout_sec", 20.0f); // 20 sec
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->default_service_timeout_sec = this->get_parameter("default_service_timeout_sec").as_double();
 
-        this->declare_parameter("service_calls_verbose", false);
+        try {
+            this->declare_parameter("service_calls_verbose", false);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->service_calls_verbose = this->get_parameter("service_calls_verbose").as_bool();    
 
-        this->declare_parameter("webrtc_debug", true);
+        try {
+            this->declare_parameter("webrtc_debug", true);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->webrtc_debug = this->get_parameter("webrtc_debug").as_bool(); 
 
-        this->declare_parameter("webrtc_verbose", false);
+        try {
+            this->declare_parameter("webrtc_verbose", false);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->webrtc_verbose = this->get_parameter("webrtc_verbose").as_bool();
 
-        this->declare_parameter("file_chunks_topic", "/file_chunks");
+        try {
+            this->declare_parameter("file_chunks_topic", "/file_chunks");
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->file_chunks_topic = this->get_parameter("file_chunks_topic").as_string();
 
-        this->declare_parameter("low_fps_default", 25); // overwrite per topic
+        try {
+            this->declare_parameter("low_fps_default", 25); // overwrite per topic
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
 
         // defaults overriden by topic
-        this->declare_parameter("encoder_default_hw_device", "sw"); // sw, cuda, vaapi
-        this->declare_parameter("encoder_default_thread_count", 2);
-        this->declare_parameter("encoder_default_gop_size", 30); // kf every 
-        this->declare_parameter("encoder_default_bit_rate", 5000000); // 610 KB/s
+        try {
+            this->declare_parameter("encoder_default_hw_device", "sw"); // sw, cuda, vaapi
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        try {
+            this->declare_parameter("encoder_default_thread_count", 2);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        try {
+            this->declare_parameter("encoder_default_gop_size", 30); // kf every 
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        try {
+            this->declare_parameter("encoder_default_bit_rate", 5000000); // 610 KB/s
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
 
-        this->declare_parameter("video_topics_default_depth", 10); // don't miss keyframes
-        this->declare_parameter("video_topics_default_reliability", "RELIABLE"); // don't miss keyframes
-        this->declare_parameter("video_topics_default_durability", "VOLATILE");
-        this->declare_parameter("video_topics_default_lifespan_sec", -1.0);
+        try {
+            this->declare_parameter("video_topics_default_depth", 10); // don't miss keyframes
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        try {
+            this->declare_parameter("video_topics_default_reliability", "RELIABLE"); // don't miss keyframes
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        try {
+            this->declare_parameter("video_topics_default_durability", "VOLATILE");
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        try {
+            this->declare_parameter("video_topics_default_lifespan_sec", -1.0);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
 
-        this->declare_parameter("image_topics_default_depth", 1);
-        this->declare_parameter("image_topics_default_reliability", "BEST_EFFORT");
-        this->declare_parameter("image_topics_default_durability", "VOLATILE");
-        this->declare_parameter("image_topics_default_lifespan_sec", -1.0);
+        try {
+            this->declare_parameter("image_topics_default_depth", 1);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        try {
+            this->declare_parameter("image_topics_default_reliability", "BEST_EFFORT");
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        try {
+            this->declare_parameter("image_topics_default_durability", "VOLATILE");
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        try {
+            this->declare_parameter("image_topics_default_lifespan_sec", -1.0);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
 
         // ui peer limit
         rcl_interfaces::msg::ParameterDescriptor ui_peer_limit_descriptor;
         ui_peer_limit_descriptor.description = "UI connected peers limit (0 = no limit)";
-        this->declare_parameter("ui_peer_limit", 10, ui_peer_limit_descriptor);
+        try {
+            this->declare_parameter("ui_peer_limit", 10, ui_peer_limit_descriptor);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->ui_peer_limit = this->get_parameter("ui_peer_limit").as_int();
         log("UI connected peers limit: " + std::to_string(config->ui_peer_limit));
 
         // custom JS includes
         rcl_interfaces::msg::ParameterDescriptor custom_includes_js_descriptor;
         custom_includes_js_descriptor.description = "Custom JS includes";
-        this->declare_parameter("ui_custom_includes_js", std::vector<std::string>(), custom_includes_js_descriptor);
+        try {
+            this->declare_parameter("ui_custom_includes_js", std::vector<std::string>(), custom_includes_js_descriptor);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         auto custom_includes_js_val = this->get_parameter("ui_custom_includes_js").as_string_array();
         for (auto inc : custom_includes_js_val) {
             if (std::find(config->ui_custom_includes_js.begin(), config->ui_custom_includes_js.end(), inc) == config->ui_custom_includes_js.end()) {
@@ -425,7 +570,9 @@ namespace phntm {
         // custom CSS includes
         rcl_interfaces::msg::ParameterDescriptor custom_includes_css_descriptor;
         custom_includes_css_descriptor.description = "Custom CSS includes";
-        this->declare_parameter("ui_custom_includes_css", std::vector<std::string>(), custom_includes_css_descriptor);
+        try {
+            this->declare_parameter("ui_custom_includes_css", std::vector<std::string>(), custom_includes_css_descriptor);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         auto custom_includes_css_val = this->get_parameter("ui_custom_includes_css").as_string_array();
         for (auto inc : custom_includes_css_val) {
             if (std::find(config->ui_custom_includes_css.begin(), config->ui_custom_includes_css.end(), inc) == config->ui_custom_includes_css.end()) {
@@ -495,15 +642,20 @@ namespace phntm {
         return qos;
     }
 
-    sio::message::ptr PhntmBridge::loadTopicMsgTypeExtraConfig(std::string topic, std::string msg_type) {
+    bool isQoSParam(std::string param) {
+        return param == "durability" || param == "reliability" || param == "history_depth" || param == "lifespan_sec";
+    }
+
+    sio::message::ptr PhntmBridge::loadTopicExtraConfig(std::string topic, std::string msg_type) {
         auto res = sio::object_message::create();
 
+        // Low FPS warning
         try {
             this->declare_parameter(topic + ".low_fps", this->get_parameter("low_fps_default").as_int()); // if 0, no fps warning is shown
         } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         res->get_map().emplace("low_fps", sio::int_message::create(this->get_parameter(topic + ".low_fps").as_int()));
 
-        // h.264 encoded frames
+        // H.264 encoded frames
         if (isImageOrVideoType(msg_type)) { 
             try {
                 this->declare_parameter(topic + ".debug_num_frames", 1); // will debug this many frames (inspects NAL units)
@@ -536,7 +688,7 @@ namespace phntm {
             res->get_map().emplace("create_node", sio::bool_message::create(this->get_parameter(topic + ".create_node").as_bool()));
         }
 
-        // depth visualization extras
+        // Depth visualization extras
         if (isImageType(msg_type)) {
             try {
                 this->declare_parameter(topic + ".colormap", 0); // will debug this many frames (instects NAL units)
@@ -565,7 +717,7 @@ namespace phntm {
             res->get_map().emplace("encoder_bit_rate", sio::int_message::create(this->get_parameter(topic + ".encoder_bit_rate").as_int()));
         }
 
-        // NN Detections
+        // NN Detections 2D & 3D
         if (msg_type == "vision_msgs/msg/Detection2DArray" || msg_type == "vision_msgs/msg/Detection3DArray") { 
             try {
                 this->declare_parameter(topic + ".input_width", 416);
@@ -594,6 +746,7 @@ namespace phntm {
             res->get_map().emplace("color_map", colors);
         }
 
+        // NN Detections 3D
         if (msg_type == "vision_msgs/msg/Detection3DArray") { 
             try {
                 this->declare_parameter(topic + ".model_map", std::vector<std::string>());  // array of nn class models
@@ -659,6 +812,67 @@ namespace phntm {
             res->get_map().emplace("max_acceleration", sio::double_message::create(this->get_parameter(topic + ".max_acceleration").as_double()));
         }
 
+        // All other custom topic params
+        
+        std::map< std::string, rclcpp::Parameter> all_topic_params;
+        this->get_parameters(topic, all_topic_params);
+        for (const auto& p : all_topic_params) {
+            if (res->get_map().find(p.first) == res->get_map().end() && !isQoSParam(p.first)) {
+                auto key = p.first;
+                auto param = p.second;
+                std::cout << CYAN << "Passing custom conf '" << key << "' for " << topic << ": " << key << "=" << param << CLR << std::endl;
+                switch (param.get_type()) {
+                    case rclcpp::ParameterType::PARAMETER_BOOL:
+                        res->get_map().emplace(key, sio::bool_message::create(param.as_bool()));
+                        break;
+                    case rclcpp::ParameterType::PARAMETER_INTEGER:
+                        res->get_map().emplace(key, sio::int_message::create(param.as_int()));
+                        break;
+                    case rclcpp::ParameterType::PARAMETER_DOUBLE:
+                        res->get_map().emplace(key, sio::double_message::create(param.as_double()));
+                        break;
+                    case rclcpp::ParameterType::PARAMETER_STRING:
+                        res->get_map().emplace(key, sio::string_message::create(param.as_string()));
+                        break;
+                    case rclcpp::ParameterType::PARAMETER_BOOL_ARRAY: {
+                        auto vals = param.as_bool_array();
+                        auto arr = sio::array_message::create();
+                        for (auto v : vals) {
+                            arr->get_vector().push_back(sio::bool_message::create(v));
+                        }
+                        res->get_map().emplace(key, arr);
+                        } break;
+                    case rclcpp::ParameterType::PARAMETER_INTEGER_ARRAY: {
+                        auto vals = param.as_integer_array();
+                        auto arr = sio::array_message::create();
+                        for (auto v : vals) {
+                            arr->get_vector().push_back(sio::int_message::create(v));
+                        }
+                        res->get_map().emplace(key, arr);
+                        } break;
+                    case rclcpp::ParameterType::PARAMETER_DOUBLE_ARRAY: {
+                        auto vals = param.as_double_array();
+                        auto arr = sio::array_message::create();
+                        for (auto v : vals) {
+                            arr->get_vector().push_back(sio::double_message::create(v));
+                        }
+                        res->get_map().emplace(key, arr);
+                        } break;
+                    case rclcpp::ParameterType::PARAMETER_STRING_ARRAY: {
+                        auto vals = param.as_string_array();
+                        auto arr = sio::array_message::create();
+                        for (auto v : vals) {
+                            arr->get_vector().push_back(sio::string_message::create(v));
+                        }
+                        res->get_map().emplace(key, arr);
+                        } break;
+                    default:
+                        std::cout << "Conf " << key << " type invalid; ignoring" << std::endl;
+                        break;
+                }
+            }
+        }
+        
         return res;
     }
 

@@ -18,7 +18,8 @@
 
 namespace phntm {
 
-  PhntmBridge::PhntmBridge(std::string node_name, rclcpp::NodeOptions node_options, std::shared_ptr<BridgeConfig> config) : Node(node_name, node_options)
+  PhntmBridge::PhntmBridge(std::string node_name, rclcpp::NodeOptions node_options, std::shared_ptr<BridgeConfig> config)
+    : Node(node_name, node_options)
   {   
       this->config = config;
 
@@ -83,7 +84,8 @@ int main(int argc, char ** argv)
   log("Git commit: " + YELLOW + config->git_head_sha + CLR + " Tag: "+ YELLOW + (config->latest_git_tag.empty() ? "-" : config->latest_git_tag) + CLR);
 
   rclcpp::NodeOptions node_options;
-  node_options.automatically_declare_parameters_from_overrides(false);
+  node_options.automatically_declare_parameters_from_overrides(true);
+  node_options.allow_undeclared_parameters(true);
   auto base_node = std::make_shared<PhntmBridge>("phntm_bridge", node_options, config);
   base_node->loadConfig(config);
   base_node->setupLocalServices();

@@ -648,7 +648,7 @@ namespace phntm {
     sio::array_message::ptr WRTCPeer::subscribeReadDataTopic(std::string topic, std::string msg_type) {
         
         auto qos = this->node->loadTopicQoSConfig(topic); // get topic qos config from yaml
-        auto topic_conf = this->node->loadTopicMsgTypeExtraConfig(topic, msg_type); // get topic extras from yaml
+        auto topic_conf = this->node->loadTopicExtraConfig(topic, msg_type); // get topic extras from yaml
         bool is_reliable = qos.reliability() == rclcpp::ReliabilityPolicy::Reliable;
 
         uint16_t id_dc;
@@ -677,7 +677,7 @@ namespace phntm {
     sio::array_message::ptr WRTCPeer::subscribeWriteDataTopic(std::string topic, std::string msg_type) {
         
         auto qos = this->node->loadTopicQoSConfig(topic);
-        auto topic_conf = this->node->loadTopicMsgTypeExtraConfig(topic, msg_type);
+        auto topic_conf = this->node->loadTopicExtraConfig(topic, msg_type);
         bool is_reliable = qos.reliability() == rclcpp::ReliabilityPolicy::Reliable;
 
         uint16_t id_dc;
@@ -752,7 +752,7 @@ namespace phntm {
             this->node->get_parameter(defaults_prefix + "_topics_default_durability").as_string(),
             this->node->get_parameter(defaults_prefix + "_topics_default_lifespan_sec").as_double()
         );
-        auto topic_conf = this->node->loadTopicMsgTypeExtraConfig(topic, msg_type); // get topic extras from yaml
+        auto topic_conf = this->node->loadTopicExtraConfig(topic, msg_type); // get topic extras from yaml
 
         std::string stream_id;
         std::shared_ptr<TopicReaderH264::MediaTrackInfo> track_info;
