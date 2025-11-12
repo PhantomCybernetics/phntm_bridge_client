@@ -30,7 +30,10 @@ namespace phntm {
       ~PhntmBridge();
       void loadConfig(std::shared_ptr<BridgeConfig> config);
       rclcpp::QoS loadTopicQoSConfig(std::string topic, size_t default_depth=1, std::string default_reliability="BEST_EFFORT", std::string default_durability="VOLATILE", float default_lifespan_sec=-1.0);
-      sio::message::ptr loadTopicExtraConfig(std::string topic, std::string msg_type);
+      BridgeConfig::MediaTopicConfig loadMediaTopicConfig(std::string topic, std::string msg_type);
+
+      std::vector<std::string> getAllConfigPrefixes(); // finds topic/service prefixes in the config
+      sio::message::ptr loadPrefixedUIConfig(std::string prefix); // prefix is topic or service
       void setupLocalServices();
       void callGenericService(std::string service_name, std::string service_type, double timeout_sec, sio::event const& ev);
       void readGitRepoHead(std::string repo_path);

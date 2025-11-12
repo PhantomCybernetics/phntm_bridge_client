@@ -125,7 +125,7 @@ namespace phntm {
         }
 
         auto ack = sio::object_message::create();
-        WRTCPeer::addUIConfigToMessage(ack, config); // adds ui config to reply that is emitted later
+        peer->addUIConfigToMessage(ack, config); // adds ui config to reply that is emitted later
         peer->processSubscriptions(ev.get_msgId(), ack);
     }
 
@@ -648,7 +648,7 @@ namespace phntm {
     sio::array_message::ptr WRTCPeer::subscribeReadDataTopic(std::string topic, std::string msg_type) {
         
         auto qos = this->node->loadTopicQoSConfig(topic); // get topic qos config from yaml
-        auto topic_conf = this->node->loadTopicExtraConfig(topic, msg_type); // get topic extras from yaml
+        //auto topic_conf = this->node->loadTopicExtraConfig(topic, msg_type); // get topic extras from yaml
         bool is_reliable = qos.reliability() == rclcpp::ReliabilityPolicy::Reliable;
 
         uint16_t id_dc;
@@ -670,14 +670,14 @@ namespace phntm {
         channel_config->get_vector().push_back(sio::int_message::create(id_dc));
         channel_config->get_vector().push_back(sio::string_message::create(msg_type));
         channel_config->get_vector().push_back(sio::bool_message::create(is_reliable));
-        channel_config->get_vector().push_back( topic_conf);
+        //channel_config->get_vector().push_back( topic_conf);
         return channel_config;
     }
 
     sio::array_message::ptr WRTCPeer::subscribeWriteDataTopic(std::string topic, std::string msg_type) {
         
         auto qos = this->node->loadTopicQoSConfig(topic);
-        auto topic_conf = this->node->loadTopicExtraConfig(topic, msg_type);
+        //auto topic_conf = this->node->loadTopicExtraConfig(topic, msg_type);
         bool is_reliable = qos.reliability() == rclcpp::ReliabilityPolicy::Reliable;
 
         uint16_t id_dc;
@@ -752,7 +752,7 @@ namespace phntm {
             this->node->get_parameter(defaults_prefix + "_topics_default_durability").as_string(),
             this->node->get_parameter(defaults_prefix + "_topics_default_lifespan_sec").as_double()
         );
-        auto topic_conf = this->node->loadTopicExtraConfig(topic, msg_type); // get topic extras from yaml
+        auto topic_conf = this->node->loadMediaTopicConfig(topic, msg_type); // get topic extras from yaml
 
         std::string stream_id;
         std::shared_ptr<TopicReaderH264::MediaTrackInfo> track_info;
@@ -769,7 +769,7 @@ namespace phntm {
 
         if (isImageOrVideoType(msg_type)) {
             auto topic_reader = TopicReaderH264::getForTopic(topic, msg_type,qos,
-                                        topic_conf->get_map().at("create_node")->get_bool() ? nullptr : this->node,
+                                        topic_conf.create_node ? nullptr : this->node,
                                         nullptr,
                                         topic_conf
                                         );
@@ -783,7 +783,7 @@ namespace phntm {
         channel_config->get_vector().push_back(sio::string_message::create(topic));
         auto stream_id_msg = sio::string_message::create(stream_id);
         channel_config->get_vector().push_back(stream_id_msg);
-        channel_config->get_vector().push_back( topic_conf);
+        //channel_config->get_vector().push_back( topic_conf);
         
         return channel_config;
     }
@@ -834,38 +834,42 @@ namespace phntm {
         // pass service buttons json
         msg->get_map().emplace("service_defaults", BridgeSocket::jsonToSioMessage(config->service_defaults));
 
-        // custom service widget-class mapping + custom data payload
-        auto service_widgets = sio::array_message::create();
-        for (auto & one : config->service_widgets) {
-            auto one_msg = sio::object_message::create();
-            one_msg->get_map().emplace("class", sio::string_message::create(one.class_name));
-            one_msg->get_map().emplace("srv", sio::string_message::create(one.service));
-            if (one.data) {
-                one_msg->get_map().emplace("data", BridgeSocket::jsonToSioMessage(one.data));
-            }
-            service_widgets->get_vector().push_back(one_msg);
-        }
-        msg->get_map().emplace("service_widgets", service_widgets);
-
         // ui config vars
         auto ui_config = sio::object_message::create();
         ui_config->get_map().emplace("introspection_control", sio::bool_message::create(config->stop_discovery_after_sec > 0.0f)); // don't show introspection icon if continuous
-        ui_config->get_map().emplace("battery_topic", sio::string_message::create(config->ui_battery_topic));
-        ui_config->get_map().emplace("docker_control", sio::bool_message::create(config->docker_control_enabled));
-        ui_config->get_map().emplace("docker_monitor_topic", sio::string_message::create(config->docker_monitor_topic));
-        ui_config->get_map().emplace("wifi_monitor_topic", sio::string_message::create(config->ui_wifi_monitor_topic));
-        ui_config->get_map().emplace("enable_wifi_scan", sio::bool_message::create(config->ui_enable_wifi_scan));
-        ui_config->get_map().emplace("enable_wifi_roam", sio::bool_message::create(config->ui_enable_wifi_roam));
+        ui_config->get_map().emplace("battery_topic", sio::string_message::create(config->battery_topic));
+
+        ui_config->get_map().emplace("wifi_monitor_topic", sio::string_message::create(config->wifi_monitor_topic));
+        ui_config->get_map().emplace("enable_wifi_scan", sio::bool_message::create(config->enable_wifi_scan));
+        ui_config->get_map().emplace("enable_wifi_roam", sio::bool_message::create(config->enable_wifi_roam));
+
         ui_config->get_map().emplace("default_service_timeout_sec", sio::double_message::create(config->default_service_timeout_sec));
-        ui_config->get_map().emplace("description_header", sio::string_message::create(config->description_header));
-        ui_config->get_map().emplace("description", sio::string_message::create(config->description));
+
+        ui_config->get_map().emplace("docker_monitor_topic", sio::string_message::create(config->docker_monitor_topic));
+        ui_config->get_map().emplace("enable_docker_control", sio::bool_message::create(config->docker_control_enabled));
+
+        ui_config->get_map().emplace("about_dialog_header", sio::string_message::create(config->about_dialog_header));
+        ui_config->get_map().emplace("about_dialog", sio::string_message::create(config->about_dialog));
+
         auto collapse_services = sio::array_message::create();
         for (auto one : config->collapse_services) {
             collapse_services->get_vector().push_back(sio::string_message::create(one));
         }
         ui_config->get_map().emplace("collapse_services", collapse_services);
         ui_config->get_map().emplace("collapse_unhandled_services", sio::bool_message::create(config->collapse_unhandled_services));
+
+        //load custom ui params
+
         msg->get_map().emplace("ui", ui_config);
+
+        auto prefixed_configs = sio::object_message::create();
+        auto prefixes = this->node->getAllConfigPrefixes();
+        for (auto prefix : prefixes) {
+            auto configs = this->node->loadPrefixedUIConfig(prefix);
+            if (configs->get_map().size() > 0)
+                prefixed_configs->get_map().emplace(prefix, configs);
+        }
+        msg->get_map().emplace("prefixed_configs", prefixed_configs);
 
         // ice config
         auto ice_servers = sio::array_message::create();

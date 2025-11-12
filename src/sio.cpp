@@ -75,7 +75,7 @@ namespace phntm {
         instance->auth_data->get_map()["ros_distro"] = sio::string_message::create(instance->config->ros_distro);
         instance->auth_data->get_map()["git_sha"] = sio::string_message::create(instance->config->git_head_sha);
         instance->auth_data->get_map()["git_tag"] = sio::string_message::create(instance->config->latest_git_tag);
-        instance->auth_data->get_map()["ui_peer_limit"] = sio::int_message::create(instance->config->ui_peer_limit);
+        instance->auth_data->get_map()["peer_limit"] = sio::int_message::create(instance->config->peer_limit);
         // // custom ui js includes
         if (instance->config->ui_custom_includes_js.size()) {
             auto custom_includes_js = sio::array_message::create();

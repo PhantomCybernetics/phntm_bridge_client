@@ -12,7 +12,7 @@ namespace phntm {
     class BridgeConfig {
         public:
             std::string id_robot, auth_key, robot_name, maintainer_email;
-            std::string description, description_header; // shown in the ui
+            std::string about_dialog, about_dialog_header; // shown in the ui pop-up dialog
             std::string ros_distro, git_head_sha, latest_git_tag;
             
             std::vector<std::string> extra_packages;
@@ -36,12 +36,11 @@ namespace phntm {
             int conn_led_pin, data_led_pin;
 
             std::vector<std::string> collapse_services;
-            std::string ui_battery_topic, ui_wifi_monitor_topic, docker_monitor_topic;
-            bool docker_control_enabled, ui_enable_wifi_scan, ui_enable_wifi_roam, collapse_unhandled_services;
+            std::string battery_topic, wifi_monitor_topic, docker_monitor_topic;
+            bool docker_control_enabled, enable_wifi_scan, enable_wifi_roam, collapse_unhandled_services;
             float default_service_timeout_sec;
 
             std::vector<std::string> input_drivers;
-            std::vector<ServiceWidgetConfig> service_widgets;
             bool service_calls_verbose;
 
             Json::Value input_defaults, service_defaults;
@@ -53,7 +52,20 @@ namespace phntm {
             std::string file_chunks_topic;
 
             std::vector<std::string> ui_custom_includes_js, ui_custom_includes_css;
-            uint ui_peer_limit;
+            uint peer_limit;
+
+            struct MediaTopicConfig {
+                size_t debug_num_frames;
+                bool debug_verbose;
+                bool create_node;
+                uint pts_source;
+                uint colormap;
+                double max_sensor_value;
+                std::string encoder_hw_device;
+                int encoder_thread_count;
+                uint encoder_gop_size;
+                uint encoder_bit_rate;
+            };
     };
 
 }

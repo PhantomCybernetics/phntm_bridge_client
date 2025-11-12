@@ -2,6 +2,7 @@
 
 #include <string>
 #include <map>
+#include <vector>
 
 namespace phntm {
     
@@ -25,4 +26,29 @@ namespace phntm {
     const uint PTS_SOURCE_LOCAL_TIME     = 0; // default
     const uint PTS_SOURCE_PACKET_PTS     = 1;
     const uint PTS_SOURCE_MESSAGE_HEADER = 2;
+
+    const std::vector<std::string> QOS_TOPIC_CONFIG_PARAMS = {
+        "durability",
+        "reliability",
+        "history_depth",
+        "lifespan_sec"
+    };
+
+    const std::vector<std::string> UI_BLACKLIST_TOPIC_CONFIG_PARAMS = {
+        "debug_num_frames",
+        "debug_verbose",
+        "create_node",
+        "pts_source",
+        "colormap",
+        "max_sensor_value",
+        "encoder_hw_device",
+        "encoder_thread_count",
+        "encoder_gop_size","",
+        "encoder_bit_rate",
+    };
+
+    const std::vector<std::string> UI_BLACKLIST_GLOBAL_CONFIG_PARAMS = {
+        "",
+        ""
+    };
 }

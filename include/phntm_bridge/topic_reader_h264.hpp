@@ -11,6 +11,7 @@
 #include <vector>
 #include <queue>
 
+#include "phntm_bridge/config.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp/qos.hpp"
 
@@ -34,7 +35,7 @@ namespace phntm {
     class TopicReaderH264 {
 
         public:
-            static std::shared_ptr<TopicReaderH264> getForTopic(std::string topic, std::string msg_type, rclcpp::QoS qos, std::shared_ptr<rclcpp::Node> node, rclcpp::CallbackGroup::SharedPtr callback_group, sio::message::ptr topic_conf);
+            static std::shared_ptr<TopicReaderH264> getForTopic(std::string topic, std::string msg_type, rclcpp::QoS qos, std::shared_ptr<rclcpp::Node> node, rclcpp::CallbackGroup::SharedPtr callback_group, BridgeConfig::MediaTopicConfig topic_conf);
             static std::shared_ptr<TopicReaderH264> getForTopic(std::string topic); // does not create a new one
             static void destroy(std::string topic);
 
@@ -57,7 +58,7 @@ namespace phntm {
             static std::string openMediaTrackForTopic(std::string topic, std::shared_ptr<WRTCPeer> peer);
             static void closeMediaTrackForTopic(std::string topic, std::shared_ptr<WRTCPeer> peer);
 
-            TopicReaderH264(std::string topic, std::string msg_type, rclcpp::QoS qos, std::shared_ptr<rclcpp::Node> node, rclcpp::CallbackGroup::SharedPtr callback_group, sio::message::ptr topic_conf);
+            TopicReaderH264(std::string topic, std::string msg_type, rclcpp::QoS qos, std::shared_ptr<rclcpp::Node> node, rclcpp::CallbackGroup::SharedPtr callback_group, BridgeConfig::MediaTopicConfig topic_conf);
             ~TopicReaderH264();
 
             struct OutputMsg {
@@ -146,22 +147,23 @@ namespace phntm {
             std::vector<std::byte> latest_payload;
             //size_t latest_payload_size = 0;
             // rtc::FrameInfo latest_frame_info = rtc::FrameInfo(0);
-
-            uint pts_source;
+            
+            BridgeConfig::MediaTopicConfig topic_conf;
+            //uint pts_source;
             bool local_received_ts_passed_in_encoded_frame = false; 
-            bool debug_verbose = false;
+            //bool debug_verbose = false;
             int debug_num_frames = 0; // set number of frames to be analyzed (nal units debug)
             bool logged_receiving = false;
             bool logged_error = false;
             
-            int colormap; // used to colorize mono images
-            double max_sensor_value; // used to normalize raw sensor data
+            //int colormap; // used to colorize mono images
+            //double max_sensor_value; // used to normalize raw sensor data
 
             bool encoder_error = false;
-            std::string encoder_hw_device;
-            int encoder_thread_count;
-            int encoder_gop_size;
-            int encoder_bit_rate;
+            //std::string encoder_hw_device;
+            //int encoder_thread_count;
+            //int encoder_gop_size;
+            //int encoder_bit_rate;
 
             std::shared_ptr<FFmpegEncoder> encoder;
             //void onH264Encoded();

@@ -7,6 +7,7 @@
 #include <chrono>
 #include <rclcpp/parameter_value.hpp>
 #include <string>
+#include <vector>
 
 namespace phntm {
 
@@ -97,21 +98,21 @@ namespace phntm {
 
         // description shown in the UI
 
-        rcl_interfaces::msg::ParameterDescriptor description_header_descriptor;
-        description_header_descriptor.description = "Robot description ehader shown in the UI";
-        description_header_descriptor.additional_constraints = "Some HTML is ok";
+        rcl_interfaces::msg::ParameterDescriptor about_dialog_header_descriptor;
+        about_dialog_header_descriptor.description = "Robot description header shown in the pop-up dialog";
+        about_dialog_header_descriptor.additional_constraints = "Some HTML is ok";
         try {
-            this->declare_parameter("description_header", "", description_header_descriptor);
+            this->declare_parameter("about_dialog_header", "", about_dialog_header_descriptor);
         } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
-        config->description_header = this->get_parameter("description_header").as_string();
+        config->about_dialog_header = this->get_parameter("about_dialog_header").as_string();
 
-        rcl_interfaces::msg::ParameterDescriptor description_descriptor;
-        description_descriptor.description = "Robot description shown in the UI";
-        description_descriptor.additional_constraints = "Some HTML is ok";
+        rcl_interfaces::msg::ParameterDescriptor about_dialog_descriptor;
+        about_dialog_descriptor.description = "Robot description shown in the pop-up dialog";
+        about_dialog_descriptor.additional_constraints = "Some HTML is ok";
         try {
-            this->declare_parameter("description", "", description_descriptor);
+            this->declare_parameter("about_dialog", "", about_dialog_descriptor);
         } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
-        config->description = this->get_parameter("description").as_string();
+        config->about_dialog = this->get_parameter("about_dialog").as_string();
 
         // will check these packages on 1st (container) start
         rcl_interfaces::msg::ParameterDescriptor extra_pkg_descriptor;
@@ -386,61 +387,40 @@ namespace phntm {
 
         // wifi monitoring + scan
         try {
-            this->declare_parameter("ui_wifi_monitor_topic", "/iw_status"); // Agent writes here
+            this->declare_parameter("wifi_monitor_topic", "/iw_status"); // Agent writes here
         } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
-        config->ui_wifi_monitor_topic = this->get_parameter("ui_wifi_monitor_topic").as_string();
+        config->wifi_monitor_topic = this->get_parameter("wifi_monitor_topic").as_string();
         try {
-            this->declare_parameter("ui_enable_wifi_scan", true); // enables scan without roaming
+            this->declare_parameter("enable_wifi_scan", true); // enables scan without roaming
         } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
-        config->ui_enable_wifi_scan = this->get_parameter("ui_enable_wifi_scan").as_bool();
+        config->enable_wifi_scan = this->get_parameter("enable_wifi_scan").as_bool();
         try {
-            this->declare_parameter("ui_enable_wifi_roam", false); // enables roaming (potentially dangerous)
+            this->declare_parameter("enable_wifi_roam", false); // enables roaming (potentially dangerous)
         } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
-        config->ui_enable_wifi_roam = this->get_parameter("ui_enable_wifi_roam").as_bool();
+        config->enable_wifi_roam = this->get_parameter("enable_wifi_roam").as_bool();
         
+        // battery
         try {
-            this->declare_parameter("ui_battery_topic", "/battery"); // use this in the ui 
+            this->declare_parameter("battery_topic", "/battery"); // use this in the ui 
         } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
-        config->ui_battery_topic = this->get_parameter("ui_battery_topic").as_string();
+        config->battery_topic = this->get_parameter("battery_topic").as_string();
+
+        // docker
         try {
-            this->declare_parameter("ui_docker_control", true);
+            this->declare_parameter("enable_docker_control", true);
         } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
-        config->docker_control_enabled = this->get_parameter("ui_docker_control").as_bool();
+        config->docker_control_enabled = this->get_parameter("enable_docker_control").as_bool();
         try {
             this->declare_parameter("docker_monitor_topic", "/docker_info");
         } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->docker_monitor_topic = this->get_parameter("docker_monitor_topic").as_string();
 
         // input configs that get passed to ui
-        std::vector<std::string> default_input_drivers { "Joy" };
+        std::vector<std::string> default_input_drivers { "JoyInputDriver" };
         try {
             this->declare_parameter("input_drivers", default_input_drivers); // empty array to disable input entirely, services are still set up
         } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->input_drivers = this->get_parameter("input_drivers").as_string_array();
-        
-        // service widget mapping with custom payload
-        // array of '/id_service ClassName { "var1" 1, "var2": 2, ... }' (JSON config payload is optional)
-        try {
-            this->declare_parameter("service_widgets", std::vector<std::string>());
-        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
-        auto service_widgets_map = this->get_parameter("service_widgets").as_string_array();
-        for (auto one : service_widgets_map) {
-            if (one.empty()) continue;
-            auto conf = parseServiceWidgetConfig(one);
-            if (!conf) {
-                RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Invalid service widget config: %s", one.c_str());
-                exit(1);
-            }
-            config->service_widgets.push_back(conf.value());
-            auto d = "Adding service widget mapping: " + conf.value().service + " is " + conf.value().class_name;
-            if (!conf.value().data.empty()) {
-                d += "; data=" + std::string(conf.value().data.toStyledString());
-                log(d, false, false);
-            }
-            else {
-                log(d);
-            }
-        }
 
         // default input config for the web UI
         try {
@@ -540,13 +520,13 @@ namespace phntm {
         } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
 
         // ui peer limit
-        rcl_interfaces::msg::ParameterDescriptor ui_peer_limit_descriptor;
-        ui_peer_limit_descriptor.description = "UI connected peers limit (0 = no limit)";
+        rcl_interfaces::msg::ParameterDescriptor peer_limit_descriptor;
+        peer_limit_descriptor.description = "UI connected peers limit (0 = no limit)";
         try {
-            this->declare_parameter("ui_peer_limit", 10, ui_peer_limit_descriptor);
+            this->declare_parameter("peer_limit", 10, peer_limit_descriptor);
         } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
-        config->ui_peer_limit = this->get_parameter("ui_peer_limit").as_int();
-        log("UI connected peers limit: " + std::to_string(config->ui_peer_limit));
+        config->peer_limit = this->get_parameter("peer_limit").as_int();
+        log("UI connected peers limit: " + std::to_string(config->peer_limit));
 
         // custom JS includes
         rcl_interfaces::msg::ParameterDescriptor custom_includes_js_descriptor;
@@ -642,20 +622,9 @@ namespace phntm {
         return qos;
     }
 
-    bool isQoSParam(std::string param) {
-        return param == "durability" || param == "reliability" || param == "history_depth" || param == "lifespan_sec";
-    }
+    BridgeConfig::MediaTopicConfig PhntmBridge::loadMediaTopicConfig(std::string topic, std::string msg_type) {
+        auto res = BridgeConfig::MediaTopicConfig();
 
-    sio::message::ptr PhntmBridge::loadTopicExtraConfig(std::string topic, std::string msg_type) {
-        auto res = sio::object_message::create();
-
-        // Low FPS warning
-        try {
-            this->declare_parameter(topic + ".low_fps", this->get_parameter("low_fps_default").as_int()); // if 0, no fps warning is shown
-        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
-        res->get_map().emplace("low_fps", sio::int_message::create(this->get_parameter(topic + ".low_fps").as_int()));
-
-        // H.264 encoded frames
         if (isImageOrVideoType(msg_type)) { 
             try {
                 this->declare_parameter(topic + ".debug_num_frames", 1); // will debug this many frames (inspects NAL units)
@@ -670,22 +639,20 @@ namespace phntm {
                 this->declare_parameter(topic + ".pts_source", "LOCAL"); // LOCAL, PACKET or MESSAGE
             } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
             
-            res->get_map().emplace("debug_num_frames", sio::int_message::create(this->get_parameter(topic + ".debug_num_frames").as_int()));
-            res->get_map().emplace("debug_verbose", sio::bool_message::create(this->get_parameter(topic + ".debug_verbose").as_bool()));
+            res.debug_num_frames = this->get_parameter(topic + ".debug_num_frames").as_int();
+            res.debug_verbose = this->get_parameter(topic + ".debug_verbose").as_bool();
             auto pts_source_str = trim(strToLower(this->get_parameter(topic + ".pts_source").as_string()));
-            uint pts_source;
             if (pts_source_str == "packet") {
-                pts_source = PTS_SOURCE_PACKET_PTS;
+                res.pts_source = PTS_SOURCE_PACKET_PTS;
             } else if (pts_source_str == "message") {
-                pts_source = PTS_SOURCE_MESSAGE_HEADER;
+                res.pts_source = PTS_SOURCE_MESSAGE_HEADER;
             } else if (pts_source_str == "local") {
-                pts_source = PTS_SOURCE_LOCAL_TIME;
+                res.pts_source = PTS_SOURCE_LOCAL_TIME;
             } else {
                 log("Invalid value for "+topic+".pts_source: " + pts_source_str+"; using local time");
-                pts_source = PTS_SOURCE_LOCAL_TIME;
+                res.pts_source = PTS_SOURCE_LOCAL_TIME;
             }
-            res->get_map().emplace("pts_source", sio::int_message::create(pts_source));
-            res->get_map().emplace("create_node", sio::bool_message::create(this->get_parameter(topic + ".create_node").as_bool()));
+            res.create_node = this->get_parameter(topic + ".create_node").as_bool();
         }
 
         // Depth visualization extras
@@ -709,171 +676,219 @@ namespace phntm {
                 this->declare_parameter(topic + ".encoder_bit_rate", this->get_parameter("encoder_default_bit_rate").as_int()); // 5 * 8 * 1024
             } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
 
-            res->get_map().emplace("colormap", sio::int_message::create(this->get_parameter(topic + ".colormap").as_int()));
-            res->get_map().emplace("max_sensor_value", sio::double_message::create(this->get_parameter(topic + ".max_sensor_value").as_double()));
-            res->get_map().emplace("encoder_hw_device", sio::string_message::create(this->get_parameter(topic + ".encoder_hw_device").as_string()));
-            res->get_map().emplace("encoder_thread_count", sio::int_message::create(this->get_parameter(topic + ".encoder_thread_count").as_int()));
-            res->get_map().emplace("encoder_gop_size", sio::int_message::create(this->get_parameter(topic + ".encoder_gop_size").as_int()));
-            res->get_map().emplace("encoder_bit_rate", sio::int_message::create(this->get_parameter(topic + ".encoder_bit_rate").as_int()));
-        }
-
-        // NN Detections 2D & 3D
-        if (msg_type == "vision_msgs/msg/Detection2DArray" || msg_type == "vision_msgs/msg/Detection3DArray") { 
-            try {
-                this->declare_parameter(topic + ".input_width", 416);
-            } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
-            try {
-                this->declare_parameter(topic + ".input_height", 416);
-            } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
-            try {
-                this->declare_parameter(topic + ".label_map", std::vector<std::string>());  // array of nn class labels
-            } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
-             try {
-                this->declare_parameter(topic + ".color_map", std::vector<std::string>());  // array of nn class labels
-            } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
-                
-            res->get_map().emplace("input_width", sio::int_message::create(this->get_parameter(topic + ".input_width").as_int()));
-            res->get_map().emplace("input_height", sio::int_message::create(this->get_parameter(topic + ".input_height").as_int()));
-            auto labels = sio::array_message::create();
-            auto labels_arr = this->get_parameter(topic + ".label_map").as_string_array();
-            for (auto l : labels_arr)
-                labels->get_vector().push_back(sio::string_message::create(l));
-            res->get_map().emplace("label_map", labels);
-            auto colors = sio::array_message::create();
-            auto colors_arr = this->get_parameter(topic + ".color_map").as_string_array();
-            for (auto c : colors_arr)
-                colors->get_vector().push_back(sio::string_message::create(c));
-            res->get_map().emplace("color_map", colors);
-        }
-
-        // NN Detections 3D
-        if (msg_type == "vision_msgs/msg/Detection3DArray") { 
-            try {
-                this->declare_parameter(topic + ".model_map", std::vector<std::string>());  // array of nn class models
-            } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
-            // try {
-            //     this->declare_parameter(topic + ".use_model_materials", true);
-            // } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
-
-            auto models = sio::array_message::create();
-            auto models_arr = this->get_parameter(topic + ".model_map").as_string_array();
-            for (auto l : models_arr)
-                models->get_vector().push_back(sio::string_message::create(l));
-            res->get_map().emplace("model_map", models);
-            // res->get_map().emplace("use_model_materials", sio::bool_message::create(this->get_parameter(topic + ".use_model_materials").as_bool()));
-        }
-
-        // Camera Info
-        else if (msg_type == "sensor_msgs/msg/CameraInfo") {
-            try {
-                this->declare_parameter(topic + ".frustum_color", "cyan");
-            } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
-            try {
-                this->declare_parameter(topic + ".frustum_near", 0.01f);
-            } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
-            try {
-                this->declare_parameter(topic + ".frustum_far", 1.0f);
-            } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
-            try {
-                this->declare_parameter(topic + ".force_frame_id", "");
-            } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
-
-            res->get_map().emplace("frustum_color", sio::string_message::create(this->get_parameter(topic + ".frustum_color").as_string()));
-            res->get_map().emplace("frustum_near", sio::double_message::create(this->get_parameter(topic + ".frustum_near").as_double()));
-            res->get_map().emplace("frustum_far", sio::double_message::create(this->get_parameter(topic + ".frustum_far").as_double()));
-            auto force_frame_id = this->get_parameter(topic + ".force_frame_id").as_string();
-            if (!force_frame_id.empty())
-                res->get_map().emplace("force_frame_id", sio::string_message::create(force_frame_id));
-        }
-                
-        // Battery
-        else if (msg_type == "sensor_msgs/msg/BatteryState") {
-            try {
-                this->declare_parameter(topic + ".min_voltage", 0.0f);
-            } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
-            try {
-                this->declare_parameter(topic + ".max_voltage", 12.0f);
-            } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
-
-            res->get_map().emplace("min_voltage", sio::double_message::create(this->get_parameter(topic + ".min_voltage").as_double()));
-            res->get_map().emplace("max_voltage", sio::double_message::create(this->get_parameter(topic + ".max_voltage").as_double()));
-        }
-
-        // IMU
-        else if (msg_type == "sensor_msgs/msg/Imu") {
-            try {
-                this->declare_parameter(topic + ".min_acceleration", -11.0f); // in m/sv
-            } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
-            try {
-                this->declare_parameter(topic + ".max_acceleration", 11.0f); // in m/s²
-            } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
-
-            res->get_map().emplace("min_acceleration", sio::double_message::create(this->get_parameter(topic + ".min_acceleration").as_double()));
-            res->get_map().emplace("max_acceleration", sio::double_message::create(this->get_parameter(topic + ".max_acceleration").as_double()));
-        }
-
-        // All other custom topic params
-        
-        std::map< std::string, rclcpp::Parameter> all_topic_params;
-        this->get_parameters(topic, all_topic_params);
-        for (const auto& p : all_topic_params) {
-            if (res->get_map().find(p.first) == res->get_map().end() && !isQoSParam(p.first)) {
-                auto key = p.first;
-                auto param = p.second;
-                std::cout << CYAN << "Passing custom conf '" << key << "' for " << topic << ": " << key << "=" << param << CLR << std::endl;
-                switch (param.get_type()) {
-                    case rclcpp::ParameterType::PARAMETER_BOOL:
-                        res->get_map().emplace(key, sio::bool_message::create(param.as_bool()));
-                        break;
-                    case rclcpp::ParameterType::PARAMETER_INTEGER:
-                        res->get_map().emplace(key, sio::int_message::create(param.as_int()));
-                        break;
-                    case rclcpp::ParameterType::PARAMETER_DOUBLE:
-                        res->get_map().emplace(key, sio::double_message::create(param.as_double()));
-                        break;
-                    case rclcpp::ParameterType::PARAMETER_STRING:
-                        res->get_map().emplace(key, sio::string_message::create(param.as_string()));
-                        break;
-                    case rclcpp::ParameterType::PARAMETER_BOOL_ARRAY: {
-                        auto vals = param.as_bool_array();
-                        auto arr = sio::array_message::create();
-                        for (auto v : vals) {
-                            arr->get_vector().push_back(sio::bool_message::create(v));
-                        }
-                        res->get_map().emplace(key, arr);
-                        } break;
-                    case rclcpp::ParameterType::PARAMETER_INTEGER_ARRAY: {
-                        auto vals = param.as_integer_array();
-                        auto arr = sio::array_message::create();
-                        for (auto v : vals) {
-                            arr->get_vector().push_back(sio::int_message::create(v));
-                        }
-                        res->get_map().emplace(key, arr);
-                        } break;
-                    case rclcpp::ParameterType::PARAMETER_DOUBLE_ARRAY: {
-                        auto vals = param.as_double_array();
-                        auto arr = sio::array_message::create();
-                        for (auto v : vals) {
-                            arr->get_vector().push_back(sio::double_message::create(v));
-                        }
-                        res->get_map().emplace(key, arr);
-                        } break;
-                    case rclcpp::ParameterType::PARAMETER_STRING_ARRAY: {
-                        auto vals = param.as_string_array();
-                        auto arr = sio::array_message::create();
-                        for (auto v : vals) {
-                            arr->get_vector().push_back(sio::string_message::create(v));
-                        }
-                        res->get_map().emplace(key, arr);
-                        } break;
-                    default:
-                        std::cout << "Conf " << key << " type invalid; ignoring" << std::endl;
-                        break;
-                }
-            }
+            res.colormap = this->get_parameter(topic + ".colormap").as_int();
+            res.max_sensor_value = this->get_parameter(topic + ".max_sensor_value").as_double();
+            res.encoder_hw_device = this->get_parameter(topic + ".encoder_hw_device").as_string();
+            res.encoder_thread_count = this->get_parameter(topic + ".encoder_thread_count").as_int();
+            res.encoder_gop_size = this->get_parameter(topic + ".encoder_gop_size").as_int();
+            res.encoder_bit_rate = this->get_parameter(topic + ".encoder_bit_rate").as_int();
         }
         
         return res;
     }
+
+        // Low FPS warning
+        // try {
+        //     this->declare_parameter(topic + ".low_fps", this->get_parameter("low_fps_default").as_int()); // if 0, no fps warning is shown
+        // } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        // res->get_map().emplace("low_fps", sio::int_message::create(this->get_parameter(topic + ".low_fps").as_int()));
+
+        // NN Detections 2D & 3D
+        // if (msg_type == "vision_msgs/msg/Detection2DArray" || msg_type == "vision_msgs/msg/Detection3DArray") { 
+        //     try {
+        //         this->declare_parameter(topic + ".input_width", 416);
+        //     } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        //     try {
+        //         this->declare_parameter(topic + ".input_height", 416);
+        //     } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        //     try {
+        //         this->declare_parameter(topic + ".label_map", std::vector<std::string>());  // array of nn class labels
+        //     } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        //      try {
+        //         this->declare_parameter(topic + ".color_map", std::vector<std::string>());  // array of nn class labels
+        //     } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+                
+        //     res->get_map().emplace("input_width", sio::int_message::create(this->get_parameter(topic + ".input_width").as_int()));
+        //     res->get_map().emplace("input_height", sio::int_message::create(this->get_parameter(topic + ".input_height").as_int()));
+        //     auto labels = sio::array_message::create();
+        //     auto labels_arr = this->get_parameter(topic + ".label_map").as_string_array();
+        //     for (auto l : labels_arr)
+        //         labels->get_vector().push_back(sio::string_message::create(l));
+        //     res->get_map().emplace("label_map", labels);
+        //     auto colors = sio::array_message::create();
+        //     auto colors_arr = this->get_parameter(topic + ".color_map").as_string_array();
+        //     for (auto c : colors_arr)
+        //         colors->get_vector().push_back(sio::string_message::create(c));
+        //     res->get_map().emplace("color_map", colors);
+        // }
+
+        // NN Detections 3D
+        // if (msg_type == "vision_msgs/msg/Detection3DArray") { 
+        //     try {
+        //         this->declare_parameter(topic + ".model_map", std::vector<std::string>());  // array of nn class models
+        //     } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        //     // try {
+        //     //     this->declare_parameter(topic + ".use_model_materials", true);
+        //     // } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+
+        //     auto models = sio::array_message::create();
+        //     auto models_arr = this->get_parameter(topic + ".model_map").as_string_array();
+        //     for (auto l : models_arr)
+        //         models->get_vector().push_back(sio::string_message::create(l));
+        //     res->get_map().emplace("model_map", models);
+        //     // res->get_map().emplace("use_model_materials", sio::bool_message::create(this->get_parameter(topic + ".use_model_materials").as_bool()));
+        // }
+
+        // Camera Info
+        // else if (msg_type == "sensor_msgs/msg/CameraInfo") {
+        //     try {
+        //         this->declare_parameter(topic + ".frustum_color", "cyan");
+        //     } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        //     try {
+        //         this->declare_parameter(topic + ".frustum_near", 0.01f);
+        //     } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        //     try {
+        //         this->declare_parameter(topic + ".frustum_far", 1.0f);
+        //     } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        //     try {
+        //         this->declare_parameter(topic + ".force_frame_id", "");
+        //     } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+
+        //     res->get_map().emplace("frustum_color", sio::string_message::create(this->get_parameter(topic + ".frustum_color").as_string()));
+        //     res->get_map().emplace("frustum_near", sio::double_message::create(this->get_parameter(topic + ".frustum_near").as_double()));
+        //     res->get_map().emplace("frustum_far", sio::double_message::create(this->get_parameter(topic + ".frustum_far").as_double()));
+        //     auto force_frame_id = this->get_parameter(topic + ".force_frame_id").as_string();
+        //     if (!force_frame_id.empty())
+        //         res->get_map().emplace("force_frame_id", sio::string_message::create(force_frame_id));
+        // }
+                
+        // Battery
+        // else if (msg_type == "sensor_msgs/msg/BatteryState") {
+        //     try {
+        //         this->declare_parameter(topic + ".min_voltage", 0.0f);
+        //     } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        //     try {
+        //         this->declare_parameter(topic + ".max_voltage", 12.0f);
+        //     } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+
+        //     res->get_map().emplace("min_voltage", sio::double_message::create(this->get_parameter(topic + ".min_voltage").as_double()));
+        //     res->get_map().emplace("max_voltage", sio::double_message::create(this->get_parameter(topic + ".max_voltage").as_double()));
+        // }
+
+        // IMU
+        // else if (msg_type == "sensor_msgs/msg/Imu") {
+        //     try {
+        //         this->declare_parameter(topic + ".min_acceleration", -11.0f); // in m/sv
+        //     } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        //     try {
+        //         this->declare_parameter(topic + ".max_acceleration", 11.0f); // in m/s²
+        //     } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+
+        //     res->get_map().emplace("min_acceleration", sio::double_message::create(this->get_parameter(topic + ".min_acceleration").as_double()));
+        //     res->get_map().emplace("max_acceleration", sio::double_message::create(this->get_parameter(topic + ".max_acceleration").as_double()));
+        // }
+
+        // All other custom topic params
+
+    bool isQoSParam(std::string param) {
+        return std::find(QOS_TOPIC_CONFIG_PARAMS.begin(), QOS_TOPIC_CONFIG_PARAMS.end(), param) != QOS_TOPIC_CONFIG_PARAMS.end();
+    }
+
+    bool isBlacklistedUIParam(std::string param) {
+        return std::find(UI_BLACKLIST_TOPIC_CONFIG_PARAMS.begin(), UI_BLACKLIST_TOPIC_CONFIG_PARAMS.end(), param) != UI_BLACKLIST_TOPIC_CONFIG_PARAMS.end();
+    }
+
+    std::vector<std::string> PhntmBridge::getAllConfigPrefixes() {
+        std::vector<std::string> res;
+
+        std::map< std::string, rclcpp::Parameter> all_params;
+        this->get_parameters("", all_params);
+
+        for (const auto& p : all_params) {
+            auto key = p.first;
+            if (key.find('/') != 0)
+                continue;
+            
+            auto dot_pos = key.find('.');
+            if (dot_pos == std::string::npos)
+                continue;
+            
+            std::string prefix = key.substr(0, dot_pos);
+            std::string param = key.substr(dot_pos + 1);
+            
+            if (std::find(res.begin(), res.end(), prefix) == res.end()) {
+                res.push_back(prefix);
+                //std::cout << CYAN << "Found prefixed conf '" << prefix << "' param " << param << CLR << std::endl;
+            }
+        }
+        return res;
+    }
+
+    sio::message::ptr PhntmBridge::loadPrefixedUIConfig(std::string prefix) {
+        auto res = sio::object_message::create();
+
+        std::map< std::string, rclcpp::Parameter> all_params;
+        this->get_parameters(prefix, all_params);
+        for (const auto& p : all_params) {
+            if (res->get_map().find(p.first) != res->get_map().end() // only add once
+                || isQoSParam(p.first) || isBlacklistedUIParam(p.first)
+            ) continue;
+
+            auto key = p.first;
+            auto param = p.second;
+           //std::cout << CYAN << "Passing custom UI conf '" << key << "' for " << prefix << ": " << key << "=" << param << CLR << std::endl;
+            switch (param.get_type()) {
+                case rclcpp::ParameterType::PARAMETER_BOOL:
+                    res->get_map().emplace(key, sio::bool_message::create(param.as_bool()));
+                    break;
+                case rclcpp::ParameterType::PARAMETER_INTEGER:
+                    res->get_map().emplace(key, sio::int_message::create(param.as_int()));
+                    break;
+                case rclcpp::ParameterType::PARAMETER_DOUBLE:
+                    res->get_map().emplace(key, sio::double_message::create(param.as_double()));
+                    break;
+                case rclcpp::ParameterType::PARAMETER_STRING:
+                    res->get_map().emplace(key, sio::string_message::create(param.as_string()));
+                    break;
+                case rclcpp::ParameterType::PARAMETER_BOOL_ARRAY: {
+                    auto vals = param.as_bool_array();
+                    auto arr = sio::array_message::create();
+                    for (auto v : vals) {
+                        arr->get_vector().push_back(sio::bool_message::create(v));
+                    }
+                    res->get_map().emplace(key, arr);
+                    } break;
+                case rclcpp::ParameterType::PARAMETER_INTEGER_ARRAY: {
+                    auto vals = param.as_integer_array();
+                    auto arr = sio::array_message::create();
+                    for (auto v : vals) {
+                        arr->get_vector().push_back(sio::int_message::create(v));
+                    }
+                    res->get_map().emplace(key, arr);
+                    } break;
+                case rclcpp::ParameterType::PARAMETER_DOUBLE_ARRAY: {
+                    auto vals = param.as_double_array();
+                    auto arr = sio::array_message::create();
+                    for (auto v : vals) {
+                        arr->get_vector().push_back(sio::double_message::create(v));
+                    }
+                    res->get_map().emplace(key, arr);
+                    } break;
+                case rclcpp::ParameterType::PARAMETER_STRING_ARRAY: {
+                    auto vals = param.as_string_array();
+                    auto arr = sio::array_message::create();
+                    for (auto v : vals) {
+                        arr->get_vector().push_back(sio::string_message::create(v));
+                    }
+                    res->get_map().emplace(key, arr);
+                    } break;
+                default:
+                    std::cout << "Conf " << key << " type invalid; ignoring" << std::endl;
+                    break;
+            }
+        }
+
+        return res;
+     }
 
 }

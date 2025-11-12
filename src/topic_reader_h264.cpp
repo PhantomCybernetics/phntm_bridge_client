@@ -34,7 +34,7 @@ namespace phntm {
     std::map<std::string, std::shared_ptr<TopicReaderH264>> TopicReaderH264::readers;
     std::mutex TopicReaderH264::readers_mutex;
 
-    std::shared_ptr<TopicReaderH264> TopicReaderH264::getForTopic(std::string topic, std::string msg_type, rclcpp::QoS qos, std::shared_ptr<rclcpp::Node> node, rclcpp::CallbackGroup::SharedPtr callback_group, sio::message::ptr topic_conf) {
+    std::shared_ptr<TopicReaderH264> TopicReaderH264::getForTopic(std::string topic, std::string msg_type, rclcpp::QoS qos, std::shared_ptr<rclcpp::Node> node, rclcpp::CallbackGroup::SharedPtr callback_group,  BridgeConfig::MediaTopicConfig topic_conf) {
         std::lock_guard<std::mutex> lock(readers_mutex);
         if (readers.find(topic) != readers.end()) {
             return readers.at(topic);
@@ -54,21 +54,10 @@ namespace phntm {
         }
     }
 
-    TopicReaderH264::TopicReaderH264(std::string topic, std::string msg_type, rclcpp::QoS qos, std::shared_ptr<rclcpp::Node> node, rclcpp::CallbackGroup::SharedPtr callback_group, sio::message::ptr topic_conf)
-        : topic(topic), msg_type(msg_type), qos(qos), node(node), callback_group(callback_group) {
+    TopicReaderH264::TopicReaderH264(std::string topic, std::string msg_type, rclcpp::QoS qos, std::shared_ptr<rclcpp::Node> node, rclcpp::CallbackGroup::SharedPtr callback_group, BridgeConfig::MediaTopicConfig topic_conf)
+        : topic(topic), msg_type(msg_type), qos(qos), node(node), callback_group(callback_group), topic_conf(topic_conf) {
         
-        this->pts_source = topic_conf->get_map().at("pts_source")->get_int();
-        this->debug_verbose = topic_conf->get_map().at("debug_verbose")->get_bool();
-        this->debug_num_frames = topic_conf->get_map().at("debug_num_frames")->get_int();
-
-        if (isImageType(msg_type)) {
-            this->colormap = topic_conf->get_map().at("colormap")->get_int();
-            this->max_sensor_value = topic_conf->get_map().at("max_sensor_value")->get_double();
-            this->encoder_hw_device = topic_conf->get_map().at("encoder_hw_device")->get_string();
-            this->encoder_thread_count = topic_conf->get_map().at("encoder_thread_count")->get_int();
-            this->encoder_gop_size = topic_conf->get_map().at("encoder_gop_size")->get_int();
-            this->encoder_bit_rate = topic_conf->get_map().at("encoder_bit_rate")->get_int();
-        }
+        this->debug_num_frames = topic_conf.debug_num_frames;
         this->create_node = node == nullptr; //make a node if none provided
     }
 
@@ -165,9 +154,9 @@ namespace phntm {
         auto is_keyframe = msg->flags == 1;
         uint ts;
         
-        if (this->pts_source == PTS_SOURCE_PACKET_PTS) {
+        if (this->topic_conf.pts_source == PTS_SOURCE_PACKET_PTS) {
             ts = msg->pts; // this must be in 1/90000 increments
-        } else if (this->pts_source == PTS_SOURCE_MESSAGE_HEADER || this->local_received_ts_passed_in_encoded_frame) {
+        } else if (this->topic_conf.pts_source == PTS_SOURCE_MESSAGE_HEADER || this->local_received_ts_passed_in_encoded_frame) {
             ts = convertToRtpTimestamp(msg->header.stamp.sec, msg->header.stamp.nanosec); // convert message timestamp to 1/90000 increments
         } else { // set pts from local time
             std::chrono::steady_clock::duration timestamp = std::chrono::steady_clock::now().time_since_epoch();
@@ -230,7 +219,7 @@ namespace phntm {
 
                 // push to output queue without locking
                 {
-                    if (this->debug_verbose || this->debug_num_frames > 0)
+                    if (this->topic_conf.debug_verbose || this->debug_num_frames > 0)
                         log(GRAY + "[" + getThreadId() + "] Pushing one of " + this->topic + " to output queue for track #" + std::to_string(output->track_info->ssrc) + CLR);
                     // std::lock_guard<std::mutex> ouput_lock(output->queue_mutex); 
                     OutputMsg out { msg, ts, is_keyframe };
@@ -268,7 +257,7 @@ namespace phntm {
             log(this->topic + " Received Image frame w enc=" + msg->encoding+"; sending to encoder");
         }
 
-        if (this->pts_source ==  PTS_SOURCE_LOCAL_TIME) { // overwrite msg header stamp with local
+        if (this->topic_conf.pts_source ==  PTS_SOURCE_LOCAL_TIME) { // overwrite msg header stamp with local
             std::chrono::steady_clock::duration timestamp = std::chrono::steady_clock::now().time_since_epoch();
             auto seconds = std::chrono::duration_cast<std::chrono::seconds>(timestamp);
             auto nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(timestamp - seconds);
@@ -286,15 +275,15 @@ namespace phntm {
         if (this->encoder.get() == nullptr) {
 
             RCLCPP_INFO(this->node->get_logger(), "Making encoder %dx%d for %s {%s} with hw_device=%s",
-                        msg->width, msg->height, this->topic.c_str(), this->msg_type.c_str(), encoder_hw_device.c_str());
+                        msg->width, msg->height, this->topic.c_str(), this->msg_type.c_str(), this->topic_conf.encoder_hw_device.c_str());
             try {
                 this->encoder = std::make_shared<FFmpegEncoder>(msg->width, msg->height, msg->encoding,
-                                                msg->header.frame_id, this->topic, this->colormap, this->max_sensor_value,
+                                                msg->header.frame_id, this->topic, this->topic_conf.colormap, this->topic_conf.max_sensor_value,
                                                 this->node,
-                                                this->encoder_hw_device,
-                                                this->encoder_thread_count,
-                                                this->encoder_gop_size,
-                                                this->encoder_bit_rate,
+                                                this->topic_conf.encoder_hw_device,
+                                                this->topic_conf.encoder_thread_count,
+                                                this->topic_conf.encoder_gop_size,
+                                                this->topic_conf.encoder_bit_rate,
                                                 std::bind(&TopicReaderH264::onEncodedFrame, this, std::placeholders::_1));
             } catch (const std::runtime_error & ex) {
                 this->encoder.reset();
@@ -372,7 +361,7 @@ namespace phntm {
                 // output->track_info->rtpConfig->startTimestamp = (uint32_t) pts_client;
                 // output->start_ts_set = true;
                 // }
-                if (this->debug_verbose || debug_log) {
+                if (this->topic_conf.debug_verbose || debug_log) {
                     log(GRAY + "[" + getThreadId() + "] Track #" + std::to_string(output->track_info->ssrc) + " initial ts set to " + std::to_string(pts_client)
                         + " msg.sec=" + std::to_string(out_frame_msg.msg->header.stamp.sec) + " msg.nanosec=" + std::to_string(out_frame_msg.msg->header.stamp.nanosec) + CLR);
                 }
@@ -393,7 +382,7 @@ namespace phntm {
                 // this->latest_payload_size = msg->data.size();
                 // this->latest_payload.resize(this->latest_payload_size);
                 // std::memcpy(this->latest_payload.data(), msg->data.data(), this->latest_payload_size);
-                if (this->debug_verbose || debug_log)
+                if (this->topic_conf.debug_verbose || debug_log)
                     log("[" + getThreadId() + "] Track #" + std::to_string(output->track_info->ssrc) + " sending " + (out_frame_msg.is_keyframe ? CYAN + "KEYFRAME" + CLR : "frame") + " w pts_client=" + std::to_string(pts_client) + " orig " + std::to_string(out_frame_msg.ts)+" msg.sec=" + std::to_string(out_frame_msg.msg->header.stamp.sec) + " msg.nanosec=" + std::to_string(out_frame_msg.msg->header.stamp.nanosec));
 
                 output->track_info->rtpConfig->timestamp = pts_client;

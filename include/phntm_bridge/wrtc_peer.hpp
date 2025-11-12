@@ -65,7 +65,7 @@ namespace phntm {
 
         private:
             static std::map<std::string, std::shared_ptr<WRTCPeer>> connected_peers;
-            static void addUIConfigToMessage(sio::object_message::ptr msg, std::shared_ptr<BridgeConfig> config);
+            void addUIConfigToMessage(sio::object_message::ptr msg, std::shared_ptr<BridgeConfig> config);
 
             bool awaiting_peer_reply;
 

@@ -14,14 +14,14 @@ Comes with Docker Container control for the host machine, CPU and Wi-Fi monitori
 - Reliable ROS2 Service calls via Socket.io
 - ROS2 runtime Parameneters read/write API
 - Extra ROS2 packages can be easily included for custom message and service type support
-- Robot's Wi-Fi signal monitoring, scan & roaming (via Agent, requires wpa_supplicant on host machine)
+- Robot's Wi-Fi signal monitoring, scan & roaming (via Agent, requires wpa_supplicant on the host machine)
 - File retreival from any running Docker container (such as URDF meshes, via Agent) 
 - System load and Docker stats monitoring (via Agent)
 - Connects P2P or via a TURN server when P2P link is not possible
 - Multiple peers can connect to the same machine at a very low extra CPU cost
 - ~5-10ms RTT on local network, 50ms+ RTT remote operation via a TURN server
-- Works with Rosbag and sims such as Gazebo or Webots
-- Tested with ROS2 Humble, Iron and Jazzy
+- Works with Rosbag and Sims such as Gazebo or Webots
+- Supported with ROS2 Humble and newer
 
 ## Architecture
 ![Infrastructure map](https://raw.githubusercontent.com/PhantomCybernetics/phntm_bridge_docs/refs/heads/main/img/Architecture_Bridge.png)
@@ -51,7 +51,7 @@ sudo usermod -aG docker ${USER}
 # log out & back in
 ```
 
-### (Optional) Clone this repo and build the Docker image
+### (Optional) Clone this repo and build the Docker image from source
 
 You can also use our pre-built Docker images, see [ghcr.io/phantomcybernetics/phntm_bridge_client](https://github.com/PhantomCybernetics/phntm_bridge_client/pkgs/container/phntm_bridge_client) for ROS distributions and architectures.
 
@@ -62,15 +62,15 @@ cd phntm_bridge_client
 ROS_DISTRO=humble; docker build -f Dockerfile -t phntm/bridge:$ROS_DISTRO --build-arg ROS_DISTRO=$ROS_DISTRO .
 ```
 
-### Register a new Robot on the Cloud Bridge
-This registers a new robot on the Cloud Bridge and returns default config file you can edit further. Unique ID_ROBOT and KEY pair are generated in this step.
+### Register a new Robot on the Bridge Server
+This registers a new robot on the Bridge Server and returns default config file you can edit further. Unique ID_ROBOT and KEY pair are generated in this step.
 ```bash
 wget -O ~/phntm_bridge.yaml 'https://register.phntm.io/robot?yaml'
 ```
 
-### Examine and customize the Bridge Client config file
+### Examine and customize the config file
 Below is an example of the config file generated in the previous step, e.g. `~/phntm_bridge.yaml`. \
-Full list of configuration options can be found [here](https://docs.phntm.io/bridge/basics/bridge-config.html).
+Full list of configuration options can be found [here](https://docs.phntm.io/bridge/basics/configuration.html).
 ```yaml
 /**:
   ros__parameters:
@@ -89,7 +89,7 @@ Full list of configuration options can be found [here](https://docs.phntm.io/bri
     stop_discovery_after_sec: 10.0 # < 0 run forever
 
     ## Extra packages to install, this is either a package folder mounted into the container,
-    ## or a ROS2 package name to be installed via apt-get (for e.g. "ros-distro-some-package" use only "some-package")
+    ## or a ROS2 package name to be installed via apt-get (for e.g. "ros-humble-some-package" use only "some-package")
     extra_packages:
       - /ros2_ws/src/vision_msgs
       - some-package
@@ -117,38 +117,18 @@ Full list of configuration options can be found [here](https://docs.phntm.io/bri
 
     ui_battery_topic: /battery # battery to show in the UI, '' to disable
 
-    ui_wifi_monitor_topic: '/iw_status' # WiFi monitor topic to show in the UI (produced by the Agent)
-    ui_enable_wifi_scan: True
-    ui_enable_wifi_roam: False
+    wifi_interface: 'wlan0'
+    wifi_monitor_topic: /iw_status # WiFi monitor topic to show in the UI (produced by the Agent)
+    enable_wifi_scan: True
+    enable_wifi_roam: False
 
-    ui_docker_control: True # Docker control via Agent
     docker_monitor_topic: /docker_info # produced by the Agent
+    enable_docker_control: True # Docker control via Agent
 
     ## User input config
-    input_drivers: [ 'Twist', 'Joy' ] # enabled input drivers
+    input_drivers: [ 'TwistInputDriver', 'JoyInputDriver' ] # enabled input drivers
     input_defaults: /ros2_ws/phntm_input_config.json # path to input config file as mapped inside the container
     service_defaults: /ros2_ws/phntm_service_config.json # path to services config file as mapped inside the container
-```
-
-### Configure the Agent
-The [Bridge Agent](https://docs.phntm.io/bridge/basics/agent-config.html) is a lightweight node that performs system monitoring and various related tasks. Typically, it's run in the same
-container as the Bridge Client, but can be also installed separately and run in multiple instances in case of a distributed system (hence the separatae configuration).
-Here's an example config file, e.g. `~/phntm_agent.yaml`.
-```yaml
-/**:
-  ros__parameters:
-    host_name: 'pi5' # lower case, must be valid ros id or ''
-    refresh_period_sec: 0.5
-    docker: True # monitor containers
-    docker_topic: '/docker_info'
-    docker_control: True
-    system_info: True # monitor system stats
-    system_info_topic: '/system_info_pi5'
-    disk_volume_paths: [ '/', '/dev/shm' ] # volumes to monitor, must be accessible from the container
-    iw_interface: 'wlan0' # disabled if empty
-    iw_monitor_topic: '/iw_status' # writes output here
-    iw_control: True # enable wi-fi scanning
-    iw_roaming: False # enable wi-fi roaming
 ```
 
 ### Add service to your compose.yaml
@@ -167,7 +147,7 @@ services:
     volumes:
       - ~/phntm_bridge_client:/ros2_ws/src/phntm_bridge # (optional) live repo mapped here for easy updates
       - ~/phntm_bridge.yaml:/ros2_ws/phntm_bridge_params.yaml # bridge config goes here
-      - ~/phntm_agent.yaml:/ros2_ws/phntm_agent_params.yaml # agent config goes here
+      - ~/phntm_bridge.yaml:/ros2_ws/phntm_agent_params.yaml # agent config goes here, can be shared with the bridge client config
       - /var/run:/host_run # docker file extractor and wifi control need this
       - /tmp:/tmp # wifi control needs this
     devices:

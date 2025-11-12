@@ -61,7 +61,7 @@ namespace phntm {
         return false;
     }
 
-    bool checkPackage(std::string extra_pkg) {
+    bool checkPackage(std::string extra_pkg, bool &apt_updated) {
 
         auto ros_distro = std::getenv("ROS_DISTRO");
         std::string cmd;
@@ -116,8 +116,15 @@ namespace phntm {
             log("     Done.");
             return true;
 
-        } else { // package name
+        } else { // package name -> apt
             
+            if (!apt_updated) {
+                log("Running apt-update...");
+                if (!runCmd("/usr/bin/apt-get update"))
+                    return false;
+                apt_updated = true; //only once
+            }
+
             auto pkg_name = "ros-" + std::string(ros_distro) + "-" + replace(extra_pkg, "_", "-");
 
             log("  => package, installing " + pkg_name);
@@ -157,6 +164,7 @@ namespace phntm {
         log(MAGENTA + "Checking extra packages..." + CLR);
 
         auto packages_changed= false;
+        bool apt_updated = false;
         for (const auto& item : extra_packages) {
 
             auto extra_pkg = item.as<std::string>();
@@ -191,7 +199,7 @@ namespace phntm {
 
             log(YELLOW + "Checking package" + (force ? " (FORCE)" : "") + ": '" + extra_pkg + "'..." + CLR);
             
-            packages_changed = checkPackage(extra_pkg) || packages_changed;
+            packages_changed = checkPackage(extra_pkg, apt_updated) || packages_changed;
 
             if (!checked_before)
                 checked_packages_log["packages"].push_back(extra_pkg);
