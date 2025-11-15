@@ -858,7 +858,8 @@ namespace phntm {
         ui_config->get_map().emplace("collapse_services", collapse_services);
         ui_config->get_map().emplace("collapse_unhandled_services", sio::bool_message::create(config->collapse_unhandled_services));
 
-        //load custom ui params
+        //load all other custom ui params
+        this->node->getExtraCustomParams(ui_config);
 
         msg->get_map().emplace("ui", ui_config);
 
@@ -879,6 +880,8 @@ namespace phntm {
         msg->get_map().emplace("ice_servers", ice_servers);
         msg->get_map().emplace("ice_username", sio::string_message::create(config->ice_username));
         msg->get_map().emplace("ice_secret", sio::string_message::create(config->ice_secret));
+
+      
     }
 
 

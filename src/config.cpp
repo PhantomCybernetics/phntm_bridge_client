@@ -794,8 +794,64 @@ namespace phntm {
         return std::find(QOS_TOPIC_CONFIG_PARAMS.begin(), QOS_TOPIC_CONFIG_PARAMS.end(), param) != QOS_TOPIC_CONFIG_PARAMS.end();
     }
 
-    bool isBlacklistedUIParam(std::string param) {
+    bool isBlacklistedTopicUIParam(std::string param) {
         return std::find(UI_BLACKLIST_TOPIC_CONFIG_PARAMS.begin(), UI_BLACKLIST_TOPIC_CONFIG_PARAMS.end(), param) != UI_BLACKLIST_TOPIC_CONFIG_PARAMS.end();
+    }
+
+     bool isBlacklistedGlobalUIParam(std::string param) {
+        return std::find(UI_BLACKLIST_GLOBAL_CONFIG_PARAMS.begin(), UI_BLACKLIST_GLOBAL_CONFIG_PARAMS.end(), param) != UI_BLACKLIST_GLOBAL_CONFIG_PARAMS.end();
+    }
+
+    void addParamToMessage(std::string key, rclcpp::Parameter param, sio::object_message::ptr out_msg) {
+        switch (param.get_type()) {
+            case rclcpp::ParameterType::PARAMETER_BOOL:
+                out_msg->get_map().emplace(key, sio::bool_message::create(param.as_bool()));
+                break;
+            case rclcpp::ParameterType::PARAMETER_INTEGER:
+                out_msg->get_map().emplace(key, sio::int_message::create(param.as_int()));
+                break;
+            case rclcpp::ParameterType::PARAMETER_DOUBLE:
+                out_msg->get_map().emplace(key, sio::double_message::create(param.as_double()));
+                break;
+            case rclcpp::ParameterType::PARAMETER_STRING:
+                out_msg->get_map().emplace(key, sio::string_message::create(param.as_string()));
+                break;
+            case rclcpp::ParameterType::PARAMETER_BOOL_ARRAY: {
+                auto vals = param.as_bool_array();
+                auto arr = sio::array_message::create();
+                for (auto v : vals) {
+                    arr->get_vector().push_back(sio::bool_message::create(v));
+                }
+                out_msg->get_map().emplace(key, arr);
+                } break;
+            case rclcpp::ParameterType::PARAMETER_INTEGER_ARRAY: {
+                auto vals = param.as_integer_array();
+                auto arr = sio::array_message::create();
+                for (auto v : vals) {
+                    arr->get_vector().push_back(sio::int_message::create(v));
+                }
+                out_msg->get_map().emplace(key, arr);
+                } break;
+            case rclcpp::ParameterType::PARAMETER_DOUBLE_ARRAY: {
+                auto vals = param.as_double_array();
+                auto arr = sio::array_message::create();
+                for (auto v : vals) {
+                    arr->get_vector().push_back(sio::double_message::create(v));
+                }
+                out_msg->get_map().emplace(key, arr);
+                } break;
+            case rclcpp::ParameterType::PARAMETER_STRING_ARRAY: {
+                auto vals = param.as_string_array();
+                auto arr = sio::array_message::create();
+                for (auto v : vals) {
+                    arr->get_vector().push_back(sio::string_message::create(v));
+                }
+                out_msg->get_map().emplace(key, arr);
+                } break;
+            default:
+                std::cout << "Conf " << key << " type invalid; ignoring" << std::endl;
+                break;
+        }
     }
 
     std::vector<std::string> PhntmBridge::getAllConfigPrefixes() {
@@ -831,64 +887,44 @@ namespace phntm {
         this->get_parameters(prefix, all_params);
         for (const auto& p : all_params) {
             if (res->get_map().find(p.first) != res->get_map().end() // only add once
-                || isQoSParam(p.first) || isBlacklistedUIParam(p.first)
+                || isQoSParam(p.first) || isBlacklistedTopicUIParam(p.first)
             ) continue;
 
             auto key = p.first;
-            auto param = p.second;
-           //std::cout << CYAN << "Passing custom UI conf '" << key << "' for " << prefix << ": " << key << "=" << param << CLR << std::endl;
-            switch (param.get_type()) {
-                case rclcpp::ParameterType::PARAMETER_BOOL:
-                    res->get_map().emplace(key, sio::bool_message::create(param.as_bool()));
-                    break;
-                case rclcpp::ParameterType::PARAMETER_INTEGER:
-                    res->get_map().emplace(key, sio::int_message::create(param.as_int()));
-                    break;
-                case rclcpp::ParameterType::PARAMETER_DOUBLE:
-                    res->get_map().emplace(key, sio::double_message::create(param.as_double()));
-                    break;
-                case rclcpp::ParameterType::PARAMETER_STRING:
-                    res->get_map().emplace(key, sio::string_message::create(param.as_string()));
-                    break;
-                case rclcpp::ParameterType::PARAMETER_BOOL_ARRAY: {
-                    auto vals = param.as_bool_array();
-                    auto arr = sio::array_message::create();
-                    for (auto v : vals) {
-                        arr->get_vector().push_back(sio::bool_message::create(v));
-                    }
-                    res->get_map().emplace(key, arr);
-                    } break;
-                case rclcpp::ParameterType::PARAMETER_INTEGER_ARRAY: {
-                    auto vals = param.as_integer_array();
-                    auto arr = sio::array_message::create();
-                    for (auto v : vals) {
-                        arr->get_vector().push_back(sio::int_message::create(v));
-                    }
-                    res->get_map().emplace(key, arr);
-                    } break;
-                case rclcpp::ParameterType::PARAMETER_DOUBLE_ARRAY: {
-                    auto vals = param.as_double_array();
-                    auto arr = sio::array_message::create();
-                    for (auto v : vals) {
-                        arr->get_vector().push_back(sio::double_message::create(v));
-                    }
-                    res->get_map().emplace(key, arr);
-                    } break;
-                case rclcpp::ParameterType::PARAMETER_STRING_ARRAY: {
-                    auto vals = param.as_string_array();
-                    auto arr = sio::array_message::create();
-                    for (auto v : vals) {
-                        arr->get_vector().push_back(sio::string_message::create(v));
-                    }
-                    res->get_map().emplace(key, arr);
-                    } break;
-                default:
-                    std::cout << "Conf " << key << " type invalid; ignoring" << std::endl;
-                    break;
-            }
+            //std::cout << CYAN << "Passing custom UI conf '" << key << "' for " << prefix << ": " << key << "=" << param << CLR << std::endl;
+            
+            addParamToMessage(key, p.second, res);
         }
 
         return res;
      }
+
+    void PhntmBridge::getExtraCustomParams(sio::object_message::ptr out_msg) {
+        
+        std::map< std::string, rclcpp::Parameter> all_params;
+        this->get_parameters("", all_params);
+
+        for (const auto& p : all_params) {
+            auto key = p.first;
+            if (key.find('/') == 0)
+                continue; // skip prefixed
+
+             if (key.find('_') == 0)
+                continue; // skip underscored
+
+            if(isBlacklistedGlobalUIParam(key))
+                continue;
+            
+            if (out_msg->get_map().find(key) != out_msg->get_map().end())
+                continue; // already in json
+            
+            std::cout << CYAN << "Adding custom UI conf param: " << key << std::endl;
+
+            addParamToMessage(key, p.second, out_msg);
+        }
+
+    }
+
+    
 
 }

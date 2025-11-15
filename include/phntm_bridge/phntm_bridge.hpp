@@ -34,6 +34,7 @@ namespace phntm {
 
       std::vector<std::string> getAllConfigPrefixes(); // finds topic/service prefixes in the config
       sio::message::ptr loadPrefixedUIConfig(std::string prefix); // prefix is topic or service
+      void getExtraCustomParams(sio::object_message::ptr out_msg);
       void setupLocalServices();
       void callGenericService(std::string service_name, std::string service_type, double timeout_sec, sio::event const& ev);
       void readGitRepoHead(std::string repo_path);
