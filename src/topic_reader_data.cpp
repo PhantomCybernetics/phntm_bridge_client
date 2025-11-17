@@ -223,7 +223,11 @@ namespace phntm {
         if (this->sub != nullptr)
             return;
         try {
-            this->sub = this->bridge_node->create_generic_subscription(this->topic, this->msg_type, this->qos, std::bind(&TopicReaderData::onData, this, std::placeholders::_1));
+            this->sub = this->bridge_node->create_generic_subscription(
+                this->topic,
+                this->msg_type,
+                this->qos,
+                std::bind(&TopicReaderData::onData, this, std::placeholders::_1));
             log(GREEN + "[" + this->topic + "] Created subscriber" + CLR);
         } catch(const std::runtime_error & ex) {
             this->sub = nullptr;
