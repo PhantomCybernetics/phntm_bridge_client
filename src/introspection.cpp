@@ -356,43 +356,71 @@ namespace phntm {
         // services 
         for (auto &n : this->discovered_nodes) {
 
+            auto node_name = n.first;
+
             // fresh services
             std::map<std::string, std::vector<std::string>> observed_node_services;
             try {
-                observed_node_services = this->node->get_service_names_and_types_by_node(n.first, n.second.ns);
+                observed_node_services = this->node->get_service_names_and_types_by_node(node_name, n.second.ns);
             } catch (const std::runtime_error & ex) {
-                log(RED + L + "Failed getting services of " + n.first + ", skipping..." + CLR);
+                log(RED + L + "Failed getting services of " + node_name + ", skipping..." + CLR);
                 continue;
             }
 
             for (auto s : observed_node_services) {
 
-                // fing agent nodes with file extraction service enabled (before blacklisting)
-                if (s.second[0] == "phntm_interfaces/srv/FileRequest") {
-                    if (this->discovered_file_extractors.find(n.first) == this->discovered_file_extractors.end()) {
+                auto service_type = s.second[0];
+
+                // find agent nodes with file extraction service enabled (before blacklisting)
+                if (service_type == "phntm_interfaces/srv/FileRequest") {
+                    if (this->discovered_file_extractors.find(node_name) == this->discovered_file_extractors.end()) {
                         auto client = node->create_client<phntm_interfaces::srv::FileRequest>(s.first);
-                        this->discovered_file_extractors.emplace(n.first, client); //id node => srv id
-                        log(L + "Discovered " + GREEN + "file extractor" + CLR + " node " + n.first + ": " + GREEN + s.first + CLR);
+                        this->discovered_file_extractors.emplace(node_name, client); //id node => srv id
+                        log(L + "Discovered " + GREEN + "file extractor" + CLR + " node " + node_name + ": " + GREEN + s.first + CLR);
                     }
                 }
+
+                bool blacklisted = false;
+                if (service_type == "rcl_interfaces/srv/ListParameters" ||
+                    service_type == "rcl_interfaces/srv/DescribeParameters" ||
+                    service_type == "rcl_interfaces/srv/GetParameters" ||
+                    service_type == "rcl_interfaces/srv/GetParameterTypes" ||
+                    service_type == "rcl_interfaces/srv/SetParameters" ||
+                    service_type == "rcl_interfaces/srv/SetParametersAtomically"
+                ) {
+                    if (!this->config->enable_node_parameters_read) {
+                        blacklisted = true; // no read => ignore all param services
+                    } else if (!this->config->enable_node_parameters_write && (service_type == "rcl_interfaces/srv/SetParameters" || service_type == "rcl_interfaces/srv/SetParametersAtomically")) {
+                        blacklisted = true;
+                    } else {
+                        for (size_t i = 0; i < this->config->blacklist_parameter_services.size(); i++) {
+                            if (startsWith(node_name, config->blacklist_parameter_services[i])) {
+                                blacklisted = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (blacklisted)
+                    continue;
 
                 if (std::find(this->config->blacklist_services.begin(), this->config->blacklist_services.end(), s.first) != this->config->blacklist_services.end()) {
                     continue; // service blacklisted
                 }
-                if (std::find(this->config->blacklist_services.begin(), this->config->blacklist_services.end(), s.second[0]) != this->config->blacklist_services.end()) {
+                if (std::find(this->config->blacklist_services.begin(), this->config->blacklist_services.end(), service_type) != this->config->blacklist_services.end()) {
                     continue; // service type blacklisted
                 }
 
                 if (n.second.services.find(s.first) == n.second.services.end()) { // new service
-                    n.second.services.emplace(s.first, s.second[0]);
+                    n.second.services.emplace(s.first, service_type);
                     services_changed = true;
-                    idls_changed = this->collectIDLs(s.second[0]) || idls_changed;
-                    log(L + "Discovered srv " + n.first + ": " + GREEN + s.first + CLR + GRAY + " {" + s.second[0] + "}" + CLR);
-                } else if (n.second.services.at(s.first) != s.second[0]) {
-                    n.second.services[s.first] = s.second[0];
+                    idls_changed = this->collectIDLs(service_type) || idls_changed;
+                    log(L + "Discovered srv " + node_name + ": " + GREEN + s.first + CLR + GRAY + " {" + service_type + "}" + CLR);
+                } else if (n.second.services.at(s.first) != service_type) {
+                    n.second.services[s.first] = service_type;
                     services_changed = true;
-                    idls_changed = this->collectIDLs(s.second[0]) || idls_changed;
-                    log(L + "Message type changed for srv " + n.first + ": " + GREEN + s.first + CLR + GRAY + " {" + s.second[0] + "}" + CLR);
+                    idls_changed = this->collectIDLs(service_type) || idls_changed;
+                    log(L + "Message type changed for srv " + node_name + ": " + GREEN + s.first + CLR + GRAY + " {" + service_type + "}" + CLR);
                 }
             }
         }

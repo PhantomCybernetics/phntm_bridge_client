@@ -21,7 +21,9 @@ namespace phntm {
             std::vector<std::string> ice_servers, ice_servers_custom;
             std::string ice_username, ice_secret;
 
-            std::vector<std::string> blacklist_topics, blacklist_services, blacklist_msg_types;
+            std::vector<std::string> blacklist_topics, blacklist_services, blacklist_msg_types, blacklist_parameter_services;
+            bool enable_node_parameters_read;
+            bool enable_node_parameters_write;
 
             double log_message_every_sec;
             double discovery_period_sec, stop_discovery_after_sec;

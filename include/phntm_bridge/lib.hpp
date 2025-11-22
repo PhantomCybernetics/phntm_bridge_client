@@ -8,6 +8,7 @@ namespace phntm {
     std::string generateId(const size_t length);
     std::string trim(const std::string s, const char *trim_chars = " \t\n\r\f\v");
     std::string replace (std::string str, const std::string& search, const std::string& replace);
+    bool startsWith(const std::string& str, const std::string& prefix);
     std::string join(const std::vector<std::string>& vec, const std::string separator = ", ");
     std::string strToLower(std::string s);
     std::vector<std::string> split(const std::string& s, char delimiter);

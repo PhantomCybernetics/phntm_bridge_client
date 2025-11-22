@@ -74,6 +74,10 @@ namespace phntm {
         return result;
     }
 
+    bool startsWith(const std::string& str, const std::string& prefix) {
+        return str.compare(0, prefix.size(), prefix) == 0;
+    }
+
     std::string join(const std::vector<std::string>& vec, const std::string separator) {
         if (vec.empty()) {
             return "";

@@ -6,6 +6,7 @@
 
 #include "sio_message.h"
 
+#include "phntm_bridge/lib.hpp"
 #include "phntm_bridge/phntm_bridge.hpp"
 #include "phntm_bridge/sio.hpp"
 #include "phntm_bridge/introspection.hpp"

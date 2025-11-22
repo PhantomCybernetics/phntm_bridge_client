@@ -316,6 +316,20 @@ namespace phntm {
                 log("\t" + config->blacklist_msg_types[i]);
             }
         }
+
+        // params editing
+        try {
+            this->declare_parameter("enable_node_parameters_read", true);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        try {
+            this->declare_parameter("enable_node_parameters_write", false);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        try {
+            this->declare_parameter("blacklist_parameter_services", std::vector<std::string>());
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        config->enable_node_parameters_read = this->get_parameter("enable_node_parameters_read").as_bool();
+        config->enable_node_parameters_write = this->get_parameter("enable_node_parameters_write").as_bool();
+        config->blacklist_parameter_services = this->get_parameter("blacklist_parameter_services").as_string_array();
         
         // logging
         try {
