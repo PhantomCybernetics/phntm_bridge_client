@@ -101,8 +101,6 @@ jobs:
         push: true
         tags: ${{ steps.image.outputs.image }}
         labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha,scope=${{ matrix.arch }}-${{ matrix.ros_distro }}
-        cache-to: type=gha,mode=max,scope=${{ matrix.arch }}-${{ matrix.ros_distro }}
         platforms: ${{ matrix.platform }}
         provenance: false # Disable provenance to avoid unknown/unknown
         sbom: false       # Disable sbom to avoid unknown/unknown
