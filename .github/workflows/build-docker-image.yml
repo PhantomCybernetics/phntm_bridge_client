@@ -63,6 +63,15 @@ jobs:
             runner: ubuntu-24.04-arm
             platform: linux/arm64
 
+          - arch: amd64
+            ros_distro: humble
+            runner: ubuntu-latest
+            platform: linux/amd64
+          - arch: arm64
+            ros_distro: humble
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
