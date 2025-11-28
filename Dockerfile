@@ -80,6 +80,7 @@ set -e \n \
 \n \
 # setup ros environment \n \
 source "/opt/ros/'$ROS_DISTRO'/setup.bash" \n \
+source "/root/.bashrc" \n \
 test -f "/ros2_ws/install/setup.bash" && source "/ros2_ws/install/setup.bash" \n \
 \n \
 exec "$@"' > /ros_entrypoint.sh
