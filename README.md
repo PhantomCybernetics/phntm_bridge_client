@@ -171,8 +171,11 @@ Please note that Firefox is not fully supported at this time, [reasons are expla
 # Remove previous version
 docker stop phntm-bridge && docker rm phntm-bridge && docker image rm phntm/bridge:humble
 
-# Update & rebiuld the docker image
-cd ~/phntm_bridge
+# if using an image
+docker pull docker compose pull phntm_bridge
+
+# or update & rebuild from source
+cd ~/phntm_bridge_client
 git pull
 ROS_DISTRO=humble; docker build -f Dockerfile -t phntm/bridge:$ROS_DISTRO --build-arg ROS_DISTRO=$ROS_DISTRO .
 

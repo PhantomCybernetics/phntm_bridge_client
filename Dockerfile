@@ -23,6 +23,7 @@ RUN apt install -y libtinyxml2-dev
 RUN apt install -y gpiod libgpiod-dev
 RUN apt install -y uuid-dev
 RUN apt install -y libcurl4-openssl-dev
+RUN apt install -y ros-$ROS_DISTRO-rmw-cyclonedds-cpp
 
 WORKDIR /root
 RUN git clone https://github.com/chriskohlhoff/asio.git
@@ -80,7 +81,9 @@ set -e \n \
 \n \
 # setup ros environment \n \
 source "/opt/ros/'$ROS_DISTRO'/setup.bash" \n \
-source "/root/.bashrc" \n \
+export PYTHON_VERSION_VENV=$(python3 -c '"'"'import sys; print(".".join(map(str, sys.version_info[:2])))'"'"') \n \
+export PATH="/root/ros2_py_venv/bin:$PATH" \n \
+export PYTHONPATH="/root/ros2_py_venv/lib/python${PYTHON_VERSION_VENV}/site-packages:${PYTHONPATH:-}" \n \
 test -f "/ros2_ws/install/setup.bash" && source "/ros2_ws/install/setup.bash" \n \
 \n \
 exec "$@"' > /ros_entrypoint.sh
@@ -119,6 +122,7 @@ RUN mkdir -p /root/ros2_py_venv
 RUN python3 -m venv /root/ros2_py_venv
 
 # activate python venv on ~/.bashrc source
+# this must be both here (for the dev mode launch) and in the entrypoint (compose command launch)
 RUN echo 'export PYTHON_VERSION_VENV=$(python3 -c '"'"'import sys; print(".".join(map(str, sys.version_info[:2])))'"'"')' >> /root/.bashrc
 RUN echo 'export PATH="/root/ros2_py_venv/bin:$PATH"' >> /root/.bashrc
 RUN echo 'export PYTHONPATH="/root/ros2_py_venv/lib/python${PYTHON_VERSION_VENV}/site-packages:${PYTHONPATH:-}"' >> /root/.bashrc
