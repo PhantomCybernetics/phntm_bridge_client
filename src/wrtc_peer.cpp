@@ -230,7 +230,7 @@ namespace phntm {
         this->config = config;
         this->node = node;
         this->is_connected = true; // false after disconnect is received
-        this->next_channel_id = 0;
+        this->next_channel_id = 0; // 1st channel is 1
         this->peer_needs_restart = false;
 
         this->createPeerConnection();
@@ -550,6 +550,15 @@ namespace phntm {
 
 
     uint16_t WRTCPeer::openDataChannelForTopic(std::string topic, std::string msg_type, bool is_reliable, bool write) {
+
+        if (write) { // check againt existing discovered topics and types
+            auto existing_msg_type = Introspection::getTopic(topic);
+            if (!existing_msg_type.empty() && existing_msg_type != msg_type) {
+                log(RED + this->toString() + "Refusing to open write topic '"+topic+"' with type " + msg_type + " (existing type mismatch)" + CLR);
+                return 0; // 0 means error
+            }
+        }
+
         rtc::Reliability reliability;
         reliability.unordered = !is_reliable;
         reliability.maxRetransmits = is_reliable ? 10 : 0;
@@ -557,7 +566,7 @@ namespace phntm {
         rtc::DataChannelInit dc_init;
         dc_init.reliability = reliability;
         dc_init.negotiated = true; // dcs negotiated by the bridge, not webrtc
-        dc_init.id = this->nextChannelId();
+        dc_init.id = this->nextChannelId(); // 1st is 1
         dc_init.protocol = msg_type;
 
         log(GRAY + this->toString() + "Opening new " +(write?"write":"read") + (is_reliable ? " RELIABLE":"") + " DC for " + topic + " {" + msg_type + "} #" + std::to_string(this->next_channel_id) + CLR);
@@ -592,7 +601,7 @@ namespace phntm {
                             log(GRAY + this->toString() + "got heartbeat PING" + CLR);
                         }
                         rtc::binary& bin = std::get<rtc::binary>(message);
-                        dc->send(bin);
+                        dc->send(bin); // send back as pong
                     }
                     return;
                 }
@@ -687,10 +696,12 @@ namespace phntm {
             id_dc = dc->id().value();
         } else {
             id_dc = this->openDataChannelForTopic(topic, msg_type, is_reliable, true);
-            dc = this->inbound_data_channels.at(topic);
-            this->negotiation_needed = true;        
+            if (id_dc != 0) { // 0 means err
+                dc = this->inbound_data_channels.at(topic);
+                this->negotiation_needed = true;        
+            }
         }
-        if (topic != HEARTBEAT_CHANNEL_ID) {
+        if (id_dc != 0 && topic != HEARTBEAT_CHANNEL_ID) {
             auto topic_writer = TopicWriterData::getForTopic(topic, msg_type, this->node, qos);
             topic_writer->addInput(dc); // only adds once
         }
