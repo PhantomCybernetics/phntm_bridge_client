@@ -79,14 +79,14 @@ int main(int argc, char ** argv)
 
   auto config = std::make_shared<BridgeConfig>();
 
-  config->ros_distro = std::getenv("ROS_DISTRO");
+  auto ros_distro = std::getenv("ROS_DISTRO");
+  config->ros_distro = ros_distro == NULL || strlen(ros_distro) == 0 ? "unknown" : ros_distro;
   log("ROS distro is: " + YELLOW + config->ros_distro + CLR);
   readGitRepoHead("/ros2_ws/src/phntm_bridge", config);
   log("Git commit: " + YELLOW + config->git_head_sha + CLR + " Tag: "+ YELLOW + (config->latest_git_tag.empty() ? "-" : config->latest_git_tag) + CLR);
 
-  config->rmw_implementation = std::getenv("RMW_IMPLEMENTATION");
-  if (config->rmw_implementation == "")
-    config->rmw_implementation = "default";
+  auto rmw_implementation =  std::getenv("RMW_IMPLEMENTATION");
+  config->rmw_implementation = rmw_implementation == NULL || strlen(rmw_implementation) == 0 ? "default" : rmw_implementation;
   log("RMW implementation is: " + YELLOW + config->rmw_implementation + CLR);
 
   rclcpp::NodeOptions node_options;

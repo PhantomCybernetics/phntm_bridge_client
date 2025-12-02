@@ -64,6 +64,9 @@ namespace phntm {
     bool checkPackage(std::string extra_pkg, bool &apt_updated) {
 
         auto ros_distro = std::getenv("ROS_DISTRO");
+        if (ros_distro == NULL || strlen(ros_distro) == 0) {
+            return false;
+        }
         std::string cmd;
 
         if (extra_pkg[0] == '/') { // dir

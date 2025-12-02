@@ -134,8 +134,8 @@ Full list of configuration options can be found [here](https://docs.phntm.io/bri
 ### Add service to your compose.yaml
 
 > [!IMPORTANT]
-> We recommend using Cyclone DDS with your ROS2 setup and this Bridge as it offers a more predictable behavior.
-> The default Fast DDS sometimes fails to receive messages for topics that were unsubscribed and subscrubed to again.
+> We recommend using Cyclone DDS with this Bridge as it offers a more predictable behavior,
+> the default Fast DDS sometimes fails to receive messages for topics that were unsubscribed and subscrubed to again.
 > Cyclone DDS is installed with our Docker image, and selected with the ``RMW_IMPLEMENTATION`` environmental variable.
 > All parts of your ROS2 system [should be using the same ROS version and the same RMW implementation](https://docs.ros.org/en/rolling/Concepts/Intermediate/About-Different-Middleware-Vendors.html).
 
@@ -148,13 +148,13 @@ services:
     hostname: phntm-bridge.local
     restart: unless-stopped # restarts after first run
     privileged: true # bridge needs this
-    # cpuset: '0,1,2' # consider dedicating a few CPU cores for maximal responsiveness
+    # cpuset: '0,1,2' # consider dedicating a few CPU cores
     network_mode: host # webrtc needs this
     ipc: host # bridge needs this to see other local containers
     # environment:
-    #   RMW_IMPLEMENTATION: rmw_cyclonedds_cpp # recommended, see the note above!
+    #  - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp # recommended, see the note above!
     volumes:
-      - ~/phntm_bridge_client:/ros2_ws/src/phntm_bridge # (optional) live repo mapped here for easy updates
+      # - ~/phntm_bridge_client:/ros2_ws/src/phntm_bridge # (optional) live repo mapped here for easy updates
       - ~/phntm_bridge.yaml:/ros2_ws/phntm_bridge_params.yaml # bridge config goes here
       - ~/phntm_bridge.yaml:/ros2_ws/phntm_agent_params.yaml # agent config goes here, can be shared with the bridge client config
       - /var/run:/host_run # docker file extractor and wifi control need this
@@ -162,7 +162,7 @@ services:
     devices:
       - /dev:/dev # LED control needs this
     command:
-      ros2 launch phntm_bridge client_agent_launch.py # this launches Bridge Client and Agent together
+      ros2 launch phntm_bridge client_agent_launch.py # launches Bridge Client and Agent together
 ```
 
 ### Launch
