@@ -13,7 +13,7 @@ namespace phntm {
         public:
             std::string id_robot, auth_key, robot_name, maintainer_email;
             std::string about_dialog, about_dialog_header; // shown in the ui pop-up dialog
-            std::string ros_distro, git_head_sha, latest_git_tag;
+            std::string ros_distro, git_head_sha, latest_git_tag, rmw_implementation;
             
             std::vector<std::string> extra_packages;
 

@@ -15,6 +15,7 @@
 #include <rclcpp/node.hpp>
 #include <rclcpp/node_options.hpp>
 #include <string>
+#include <rcl/rcl.h>
 
 namespace phntm {
 
@@ -82,6 +83,11 @@ int main(int argc, char ** argv)
   log("ROS distro is: " + YELLOW + config->ros_distro + CLR);
   readGitRepoHead("/ros2_ws/src/phntm_bridge", config);
   log("Git commit: " + YELLOW + config->git_head_sha + CLR + " Tag: "+ YELLOW + (config->latest_git_tag.empty() ? "-" : config->latest_git_tag) + CLR);
+
+  config->rmw_implementation = std::getenv("RMW_IMPLEMENTATION");
+  if (config->rmw_implementation == "")
+    config->rmw_implementation = "default";
+  log("RMW implementation is: " + YELLOW + config->rmw_implementation + CLR);
 
   rclcpp::NodeOptions node_options;
   node_options.automatically_declare_parameters_from_overrides(true);

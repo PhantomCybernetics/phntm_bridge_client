@@ -135,9 +135,9 @@ Full list of configuration options can be found [here](https://docs.phntm.io/bri
 
 > [!IMPORTANT]
 > We recommend using Cyclone DDS with your ROS2 setup and this Bridge as it offers a more predictable behavior.
-> The default Fast DDS sometimes fails to receive data from topics that were unsubscribed and subscrubed to again.
+> The default Fast DDS sometimes fails to receive messages for topics that were unsubscribed and subscrubed to again.
 > Cyclone DDS is installed with our Docker image, and selected with the ``RMW_IMPLEMENTATION`` environmental variable.
-> All parts of your ROS2 system should be using the same ROS version and the same RMW implementation!
+> All parts of your ROS2 system [should be using the same ROS version and the same RMW implementation](https://docs.ros.org/en/rolling/Concepts/Intermediate/About-Different-Middleware-Vendors.html).
 
 Add phntm_bridge service to your `~/compose.yaml` file with both `~/phntm_bridge.yaml` and `~/phntm_agent.yaml` mounted in the container as shown below:
 ```yaml
@@ -152,7 +152,7 @@ services:
     network_mode: host # webrtc needs this
     ipc: host # bridge needs this to see other local containers
     # environment:
-    #   RMW_IMPLEMENTATION: rmw_cyclonedds_cpp # recommended, see the note above
+    #   RMW_IMPLEMENTATION: rmw_cyclonedds_cpp # recommended, see the note above!
     volumes:
       - ~/phntm_bridge_client:/ros2_ws/src/phntm_bridge # (optional) live repo mapped here for easy updates
       - ~/phntm_bridge.yaml:/ros2_ws/phntm_bridge_params.yaml # bridge config goes here
