@@ -542,6 +542,15 @@ namespace phntm {
         config->peer_limit = this->get_parameter("peer_limit").as_int();
         log("UI connected peers limit: " + std::to_string(config->peer_limit));
 
+        // ui disconnect timeout
+        rcl_interfaces::msg::ParameterDescriptor ui_background_disconnect_descriptor;
+        ui_background_disconnect_descriptor.description = "UI will disconnect after this many seconds in the background (0 = immediately)";
+        try {
+            this->declare_parameter("ui_background_disconnect_sec", 120.0, ui_background_disconnect_descriptor);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        config->ui_background_disconnect_sec = this->get_parameter("ui_background_disconnect_sec").as_double();
+        log("UI bg disconnect is: " + std::to_string(config->ui_background_disconnect_sec) + " sec");
+
         // custom JS includes
         rcl_interfaces::msg::ParameterDescriptor custom_includes_js_descriptor;
         custom_includes_js_descriptor.description = "Custom JS includes";

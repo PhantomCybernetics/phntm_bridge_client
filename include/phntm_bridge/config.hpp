@@ -55,6 +55,7 @@ namespace phntm {
 
             std::vector<std::string> ui_custom_includes_js, ui_custom_includes_css;
             uint peer_limit;
+            float ui_background_disconnect_sec;
 
             struct MediaTopicConfig {
                 size_t debug_num_frames;

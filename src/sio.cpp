@@ -87,12 +87,13 @@ namespace phntm {
         }
         // custom ui css includes
         if (instance->config->ui_custom_includes_css.size()) {
-             auto custom_includes_css = sio::array_message::create();
+            auto custom_includes_css = sio::array_message::create();
             for (auto & one : instance->config->ui_custom_includes_css) {
                 custom_includes_css->get_vector().push_back(sio::string_message::create(one));
             }
             instance->auth_data->get_map()["ui_custom_includes_css"] = custom_includes_css;
         }
+        instance->auth_data->get_map()["ui_background_disconnect_sec"] = sio::double_message::create(instance->config->ui_background_disconnect_sec);
 
         instance->handled_events.emplace("ice-servers", std::bind(&BridgeSocket::onIceServers, instance, std::placeholders::_1));
         instance->handled_events.emplace("peer", std::bind(&BridgeSocket::onPeerConnected, instance, std::placeholders::_1));

@@ -112,6 +112,7 @@ namespace phntm {
         "start_type_description_service",
         "stop_discovery_after_sec",
         "system_info_topic",
+        "ui_background_disconnect_sec",
         "ui_custom_includes_css",
         "ui_custom_includes_js",
         "use_cloud_ice_config",
