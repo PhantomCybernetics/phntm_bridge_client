@@ -181,7 +181,7 @@ Please note that Firefox is not fully supported at this time, [reasons are expla
 docker stop phntm-bridge && docker rm phntm-bridge && docker image rm phntm/bridge:humble
 
 # if using an image
-docker pull docker compose pull phntm_bridge
+docker compose pull phntm_bridge
 
 # or update & rebuild from source
 cd ~/phntm_bridge_client
