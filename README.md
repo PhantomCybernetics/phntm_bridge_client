@@ -152,6 +152,7 @@ services:
     ipc: host # bridge needs this to see other local containers
     # environment:
     #  - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp # recommended, see the note above!
+    #  - ROS_DOMAIN_ID=22 # if used, specify ROS domain ID here
     volumes:
       # - ~/phntm_bridge_client:/ros2_ws/src/phntm_bridge # (optional) live repo mapped here for easy updates
       - ~/phntm_bridge.yaml:/ros2_ws/phntm_bridge_params.yaml # bridge config goes here
