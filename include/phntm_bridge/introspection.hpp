@@ -88,6 +88,7 @@ namespace phntm {
             std::map<std::string, std::string> discovered_idls; // type => def
             
             void checkSubscriberQos(std::string id_subscriber, DiscoveredNode *subscriber_node);
+            std::string getInterfaceIDLPath(std::string interface_name);
     };
 
 }

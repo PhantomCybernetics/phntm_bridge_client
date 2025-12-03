@@ -222,7 +222,7 @@ namespace phntm {
       // wait for a response (timeout in ns)
       ret = rcl_wait(&wait_set, timeout_ns);
       if (ret == RCL_RET_TIMEOUT)
-        return this->returnServiceError("Service call timed out.", ev);
+        return this->returnServiceError(fmt::format("Service call timed out after {}s", timeout_sec), ev);
       else if (ret != RCL_RET_OK)
         return this->returnServiceError(fmt::format("Error during wait: {}", rcl_get_error_string().str), ev);
       

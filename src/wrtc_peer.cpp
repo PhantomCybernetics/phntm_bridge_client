@@ -99,7 +99,7 @@ namespace phntm {
         if (msg->get_map().find("read") != msg->get_map().end())  {
             auto arr = msg->get_map().at("read");
             if (arr->get_flag() != sio::message::flag_array) {
-                log("Write subs provided is not an array", true);
+                RCLCPP_ERROR(node->get_logger(), "%s Read subs provided is not an array", peer->toString().c_str());
             } else {
                 for (auto t : arr->get_vector()){
                     peer->addReqReadSubscription(t->get_string());
@@ -110,18 +110,16 @@ namespace phntm {
         if (msg->get_map().find("write") != msg->get_map().end())  {
             auto arr = msg->get_map().at("write");
             if (arr->get_flag() != sio::message::flag_array) {
-                log("Write subs provided is not an array", true);
+                RCLCPP_ERROR(node->get_logger(), "%s Write subs provided is not an array", peer->toString().c_str());
             } else {
                 for (auto tt : arr->get_vector()){
-                    if (tt->get_flag() != sio::message::flag_array) {
-                        log("Write sub provided is not an array of [topic, msg_type]", true);
-                    } else if (tt->get_vector().size() != 2) {
-                        log("Write sub provided is not 2 items long", true);
+                    if (tt->get_flag() != sio::message::flag_array || tt->get_vector().size() != 2) {
+                        RCLCPP_ERROR(node->get_logger(), "%s Write sub provided is not an array of [topic, msg_type]", peer->toString().c_str());
                     } else {
                         peer->addReqWriteSubscription(tt->get_vector()[0]->get_string(), tt->get_vector()[1]->get_string());
                     }
                 }
-            }   
+            }
         }
 
         auto ack = sio::object_message::create();
@@ -133,16 +131,15 @@ namespace phntm {
         if (msg->get_map().find("state") != msg->get_map().end()) {
             auto peer_state = msg->get_map().at("state")->get_string();
             if (peer_state == "n/a" || peer_state == "failed") {
-                log(RED+this->toString() + "Got peer WRTC fail, state: " + peer_state + "; restarting" + CLR);
+                RCLCPP_ERROR(this->node->get_logger(), "%s Got peer WRTC fail, state: %s; restarting", this->toString().c_str(), peer_state.c_str());
                 // this->removePeerConnection(); //force reconnect
                 this->peer_needs_restart = true;
                 this->processSubscriptions();
             } else {
                 log(this->toString() + "Got peer WRTC state: " + peer_state);
             }
-            
         } else {
-            log(this->toString() + "Got unknown WRTC state from the peer", true);
+            RCLCPP_ERROR(this->node->get_logger(), "%s Got unknown WRTC state from the peer", this->toString().c_str());
         }
     }
 
@@ -150,7 +147,7 @@ namespace phntm {
         if (std::find(this->req_read_subs.begin(), this->req_read_subs.end(), topic) != this->req_read_subs.end())
             return false;
         if (this->config->webrtc_debug)
-            log(this->toString() + "Adding read subscription to: " + GREEN + topic + CLR);
+            RCLCPP_INFO(this->node->get_logger(), "%s Adding read subscription to: %s", this->toString().c_str(), topic.c_str());
         this->req_read_subs.push_back(topic);
         return true;
     }
@@ -160,7 +157,7 @@ namespace phntm {
         if (pos == this->req_read_subs.end())
             return false;
         if (this->config->webrtc_debug)
-            log(this->toString() + "Removing read subscription to: " + topic);
+            RCLCPP_INFO(this->node->get_logger(), "%s Removing read subscription to: %s", this->toString().c_str(), topic.c_str());
         this->req_read_subs.erase(pos);
         return true;
     }
@@ -176,7 +173,7 @@ namespace phntm {
             }
         }
         if (this->config->webrtc_debug)
-            log(this->toString() + "Adding write subscription to: " + MAGENTA + topic + " {" + msg_type + "}" + CLR);
+            RCLCPP_INFO(this->node->get_logger(), "%s Adding write subscription to: %s", this->toString().c_str(), topic.c_str());
         std::vector<std::string> one;
         one.push_back(topic);
         one.push_back(msg_type);
@@ -188,7 +185,7 @@ namespace phntm {
         for (size_t i = 0; i <  this->req_write_subs.size(); ) {
             if (this->req_write_subs[i][0] == topic) {
                 if (this->config->webrtc_debug)
-                    log(this->toString() + "Removing write subscription to: " + topic);
+                    RCLCPP_INFO(this->node->get_logger(), "%s Removing write subscription to: %s", this->toString().c_str(), topic.c_str());
                 this->req_write_subs.erase(this->req_write_subs.begin() + i); // remove and add w new type
                 return true;
             } else {
@@ -199,7 +196,7 @@ namespace phntm {
     }
 
     void WRTCPeer::onDisconnected() {
-        RCLCPP_INFO(node->get_logger(), "%s Peer disconnected", this->toString().c_str());
+        RCLCPP_INFO(node->get_logger(), "%s Disconnected", this->toString().c_str());
         // log(BLUE + this->toString() + "Disconnected" + CLR);
         this->req_read_subs.clear(); // empty all subs
         this->req_write_subs.clear();
@@ -219,7 +216,7 @@ namespace phntm {
     }
 
     std::string WRTCPeer::toString() {
-        return "[RTC Peer #" + this->id + "] ";
+        return "[Peer #" + this->id + "] ";
     }
 
     WRTCPeer::WRTCPeer(std::shared_ptr<PhntmBridge> node, std::string id_peer, std::string id_app, std::string id_instance, std::string session, std::shared_ptr<BridgeConfig> config) {
@@ -506,9 +503,8 @@ namespace phntm {
 
             try {
                 that->processSubscriptionsSync(ack_msg_id, ack);
-
             } catch (const std::exception& ex) {
-                log(that->toString() + "Exception in subs processor: " + std::string(ex.what()), true);
+                RCLCPP_ERROR(that->node->get_logger(), "Exception in peer subs processor: %s", std::string(ex.what()).c_str());
             }
 
         });
@@ -554,7 +550,7 @@ namespace phntm {
         if (write) { // check againt existing discovered topics and types
             auto existing_msg_type = Introspection::getTopic(topic);
             if (!existing_msg_type.empty() && existing_msg_type != msg_type) {
-                log(RED + this->toString() + "Refusing to open write topic '"+topic+"' with type " + msg_type + " (existing type mismatch)" + CLR);
+                RCLCPP_ERROR(this->node->get_logger(), "%s Refusing to open write topic '%s' with type %s (existing type mismatch)", this->toString().c_str(), topic.c_str(), msg_type.c_str());
                 return 0; // 0 means error
             }
         }

@@ -440,6 +440,8 @@ namespace phntm {
             timeout_sec = ev.get_message()->get_map().at("timeout_sec")->get_double();
         }
 
+        RCLCPP_INFO(this->node->get_logger(), "%s Calling service %s", peer->toString().c_str(), service_name.c_str());
+
         // async thread
         std::thread newThread([this, ev, service_name, service_type, timeout_sec]() {
             DataLED::once();
