@@ -74,8 +74,8 @@ Full list of configuration options can be found [here](https://docs.phntm.io/bri
 ```yaml
 /**:
   ros__parameters:
-    id_robot: %ID_ROBOT%
-    key: %SECRET_KEY%
+    id_robot: '%ID_ROBOT%'
+    key: '%SECRET_KEY%'
     name: 'Unnamed Robot'
     maintainer_email: 'robot.master@example.com' # e-mail for service announcements
 
@@ -103,14 +103,13 @@ Full list of configuration options can be found [here](https://docs.phntm.io/bri
     /rosout: # TODO add to default config
       reliability: RELIABLE
       durability: TRANSIENT_LOCAL
+      history_depth: 20
     /robot_description:
       reliability: RELIABLE
       durability: TRANSIENT_LOCAL
-      lifespan_sec: -1.0
     /tf_static:
       reliability: RELIABLE
       durability: TRANSIENT_LOCAL
-      lifespan_sec: -1.0
     /battery:
       min_voltage: 19.2 # set empty voltage
       max_voltage: 25.2 # set set full voltage
