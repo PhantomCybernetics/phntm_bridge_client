@@ -2,6 +2,7 @@
 
 #include <opencv2/opencv.hpp>
 #include "sensor_msgs/msg/image.hpp"
+#include "sensor_msgs/msg/compressed_image.hpp"
 #include "phntm_bridge/lib.hpp"
 
 extern "C" {
@@ -24,34 +25,43 @@ namespace phntm {
     public:
         using PacketCallback = std::function<void(std::shared_ptr<ffmpeg_image_transport_msgs::msg::FFMPEGPacket> frame)>;
 
-        FFmpegEncoder(int width, int height, const std::string src_encoding, std::string frame_id,
-                      std::string topic, int depth_colormap, double depth_max_sensor_value,
-                      std::shared_ptr<rclcpp::Node> node,
+        FFmpegEncoder(std::shared_ptr<sensor_msgs::msg::Image> first_msg,
+                      std::string topic, std::shared_ptr<rclcpp::Node> node,
+                      int depth_colormap, double depth_max_sensor_value,                      
                       std::string& hw_device, int thread_count, int gop_size, int bit_rate,
-                      PacketCallback callback = nullptr);
+                      PacketCallback callback);
+        FFmpegEncoder(std::shared_ptr<sensor_msgs::msg::CompressedImage> first_msg,
+                      std::string topic, std::shared_ptr<rclcpp::Node> node,
+                      std::string& hw_device, int thread_count, int gop_size, int bit_rate,
+                      PacketCallback callback);
+        void initEncoder(AVPixelFormat src_opencv_format, std::string& hw_device, int thread_count, int gop_size, int bit_rate);
+        void loadRawFrame(std::shared_ptr<sensor_msgs::msg::Image> msg, cv::Mat* out_frame);
+        void loadCompressedFrame(std::shared_ptr<sensor_msgs::msg::CompressedImage> msg, cv::Mat* out_frame);
         ~FFmpegEncoder();
         
         void encodeFrame(const std::shared_ptr<sensor_msgs::msg::Image> msg);
-        bool checkCompatibility(const int width, const int height, const std::string & src_encoding) {
-            return width == this->width && height == this->height
-                  && strToLower(src_encoding) == this->src_encoding;
-        };
+        void encodeFrame(const std::shared_ptr<sensor_msgs::msg::CompressedImage> msg);
+        bool needsReset() { return this->needs_reset; };
 
     private:
-        int width, height;
+        unsigned int width, height;
         const int fps = 30;
-        std::string src_encoding;
+        std::string format; // initial encoding or format
+        std::string compressed_pixfmt;
         int64_t pts_counter = 0;
+        bool needs_reset = false;
     
         std::string frame_id, topic;
+        std::shared_ptr<rclcpp::Node> node;
 
         int depth_colormap; // used to colorize mono images
         double depth_max_sensor_value; // used to normalize raw sensor data
-        std::shared_ptr<rclcpp::Node> node;
-
+    
         PacketCallback packet_callback;
 
         bool running = false;
+        bool scaler_running = false;
+        bool encoder_running = false;
 
         std::thread scaler_thread;
         std::thread encoder_thread;
@@ -72,14 +82,17 @@ namespace phntm {
         void sendFrameToEncoder(AVFrame* frame,  std_msgs::msg::Header header);
         void scalerWorker();
         void encoderWorker();
-        void flush();
+        void flushEncoder();
 
         struct EncoderRequest {
             AVFrame* frame;
             std_msgs::msg::Header header;
         };
 
-        std::queue<std::shared_ptr<sensor_msgs::msg::Image>> scaler_queue;
+        bool use_compressed_images;
+        std::queue<std::shared_ptr<sensor_msgs::msg::Image>> scaler_queue_image;
+        std::queue<std::shared_ptr<sensor_msgs::msg::CompressedImage>> scaler_queue_compressed_image;
+
         std::condition_variable scaler_cv;
         std::mutex scaler_mutex;
 

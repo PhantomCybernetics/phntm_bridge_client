@@ -593,16 +593,17 @@ namespace phntm {
     rclcpp::QoS PhntmBridge::loadTopicQoSConfig(std::string topic, size_t default_depth, std::string default_reliability, std::string default_durability, float default_lifespan_sec) {
     
         try {
-            this->declare_parameter(topic + ".history_depth", static_cast<int>(default_depth)); // 0 = system default, 1 = reliable, 2 = best effort (default)
+            this->declare_parameter(topic + ".history_depth", static_cast<int>(default_depth));
         } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         auto depth = this->get_parameter(topic + ".history_depth").as_int();
-        rclcpp::QoS qos(depth); // keep last 1
+        rclcpp::QoS qos(depth);
+        qos.history(rclcpp::HistoryPolicy::KeepLast);
 
         try {
-            this->declare_parameter(topic + ".reliability", default_reliability); // 0 = system default, 1 = reliable, 2 = best effort (default)
+            this->declare_parameter(topic + ".reliability", default_reliability);
         } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         try {
-            this->declare_parameter(topic + ".durability", default_durability); // 0 = system default, 1 = transient local, 2 = volatile (default)
+            this->declare_parameter(topic + ".durability", default_durability);
         } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
 
         auto reliability_str = trim(strToLower(this->get_parameter(topic + ".reliability").as_string()));

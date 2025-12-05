@@ -252,10 +252,11 @@ namespace phntm {
             return;
 
         auto debug_log = this->debug_num_frames > 0;
-
         if (debug_log) {
-            log(this->topic + " Received Image frame w enc=" + msg->encoding+"; sending to encoder");
+            log(this->topic + " Received Image frame w enc='" + msg->encoding+"'; sending to encoder");
         }
+
+        msg->encoding = strToLower(trim(msg->encoding));
 
         if (this->topic_conf.pts_source ==  PTS_SOURCE_LOCAL_TIME) { // overwrite msg header stamp with local
             std::chrono::steady_clock::duration timestamp = std::chrono::steady_clock::now().time_since_epoch();
@@ -265,21 +266,19 @@ namespace phntm {
             msg->header.stamp.nanosec = static_cast<std::uint32_t>(nanoseconds.count());
         }
 
-        if (this->encoder.get() != nullptr && !this->encoder->checkCompatibility(msg->width, msg->height, msg->encoding)) {
-            RCLCPP_INFO(this->node->get_logger(), "Removing old encoder for %s {%s}, format change detected",
-                        this->topic.c_str(), this->msg_type.c_str());
+        if (this->encoder.get() != nullptr && this->encoder->needsReset()) {
+            RCLCPP_WARN(this->node->get_logger(), "Removing old encoder for %s, format change detected", this->topic.c_str());
             this->encoder.reset(); // re-create encoder below
         }
 
         // make encoder
         if (this->encoder.get() == nullptr) {
 
-            RCLCPP_INFO(this->node->get_logger(), "Making encoder %dx%d for %s {%s} with hw_device=%s",
-                        msg->width, msg->height, this->topic.c_str(), this->msg_type.c_str(), this->topic_conf.encoder_hw_device.c_str());
+            RCLCPP_INFO(this->node->get_logger(), "Making encoder %dx%d for %s {%s} encoding='%s' with hw_device=%s",
+                        msg->width, msg->height, this->topic.c_str(), this->msg_type.c_str(), msg->encoding.c_str(), this->topic_conf.encoder_hw_device.c_str());
             try {
-                this->encoder = std::make_shared<FFmpegEncoder>(msg->width, msg->height, msg->encoding,
-                                                msg->header.frame_id, this->topic, this->topic_conf.colormap, this->topic_conf.max_sensor_value,
-                                                this->node,
+                this->encoder = std::make_shared<FFmpegEncoder>(msg, this->topic, this->node,
+                                                this->topic_conf.colormap, this->topic_conf.max_sensor_value,
                                                 this->topic_conf.encoder_hw_device,
                                                 this->topic_conf.encoder_thread_count,
                                                 this->topic_conf.encoder_gop_size,
@@ -304,12 +303,74 @@ namespace phntm {
             this->encoder->encodeFrame(msg); // sw-scales and sends to encoder on a separate thread
         } catch (const std::runtime_error & ex) {
             RCLCPP_ERROR(this->node->get_logger(), "Error encoding frame: %s", ex.what());
+            this->encoder_error = true;
+            this->debug_num_frames = 0;
         }
     }
 
     // on subscriber thread
     void TopicReaderH264::onCompressedFrame(const std::shared_ptr<sensor_msgs::msg::CompressedImage> msg) {
-        log("Got CompressedImage for " + this->topic + "; format=" + msg->format);
+
+        auto size = msg->data.size();
+        // log("Got Image " + std::to_string(size)+ "B for " + this->topic + "; encoding=" + im->encoding);
+
+        if (!this->subscriber_running || size == 0 || this->encoder_error)
+            return;
+
+        auto debug_log = this->debug_num_frames > 0;
+        if (debug_log) {
+            log(this->topic + " Received CompressedImage frame w format='" + msg->format+"'; sending to encoder");
+        }
+
+        msg->format = strToLower(trim(msg->format));
+
+        if (this->topic_conf.pts_source ==  PTS_SOURCE_LOCAL_TIME) { // overwrite msg header stamp with local
+            std::chrono::steady_clock::duration timestamp = std::chrono::steady_clock::now().time_since_epoch();
+            auto seconds = std::chrono::duration_cast<std::chrono::seconds>(timestamp);
+            auto nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(timestamp - seconds);
+            msg->header.stamp.sec = static_cast<std::int32_t>(seconds.count());
+            msg->header.stamp.nanosec = static_cast<std::uint32_t>(nanoseconds.count());
+        }
+
+        if (this->encoder.get() != nullptr && this->encoder->needsReset()) {
+            RCLCPP_WARN(this->node->get_logger(), "Removing old encoder for %s, format change detected", this->topic.c_str());
+            this->encoder.reset(); // re-create encoder below
+        }
+
+         // make encoder
+        if (this->encoder.get() == nullptr) {
+
+            RCLCPP_INFO(this->node->get_logger(), "Making encoder for %s {%s} format='%s' with hw_device=%s",
+                        this->topic.c_str(), this->msg_type.c_str(), msg->format.c_str(), this->topic_conf.encoder_hw_device.c_str());
+            try {
+                this->encoder = std::make_shared<FFmpegEncoder>(msg, this->topic, this->node,
+                                                this->topic_conf.encoder_hw_device,
+                                                this->topic_conf.encoder_thread_count,
+                                                this->topic_conf.encoder_gop_size,
+                                                this->topic_conf.encoder_bit_rate,
+                                                std::bind(&TopicReaderH264::onEncodedFrame, this, std::placeholders::_1));
+            } catch (const std::runtime_error & ex) {
+                this->encoder.reset();
+                this->encoder_error = true;
+                this->debug_num_frames = 0;
+                RCLCPP_ERROR(this->node->get_logger(), "%s", ex.what());
+                return;
+            }
+        }
+
+        if (this->encoder.get() == nullptr) {
+            this->debug_num_frames = 0;
+            RCLCPP_ERROR(this->node->get_logger(), "Encoder not ready for %s", this->topic.c_str());
+            return;
+        }
+
+        try {
+            this->encoder->encodeFrame(msg); // sw-scales and sends to encoder on a separate thread
+        } catch (const std::runtime_error & ex) {
+            RCLCPP_ERROR(this->node->get_logger(), "Error encoding frame: %s", ex.what());
+            this->encoder_error = true;
+            this->debug_num_frames = 0;
+        }
     }
 
     // void TopicReaderH264::onH264Encoded(std::shared_ptr<>) {
