@@ -171,9 +171,7 @@ docker compose up phntm_bridge # launches Bridge Client & Agent in one container
 ```
 
 ### Open the Web UI
-Navigate to `https://bridge.phntm.io/%YOUR_ID_ROBOT%` in a web browser. The exact link can be found at the top of the generated Bridge config file (e.g. your `~/phntm_bridge.yaml`). If you provided maintainer's e-mail in the config, it will be also e-mailed to you for your reference after the first Bridge Client launch. \
- \
-Please note that Firefox is not fully supported at this time, [reasons are explained here](https://github.com/PhantomCybernetics/bridge_ui/issues/1).
+Navigate to `https://bridge.phntm.io/%YOUR_ID_ROBOT%` in a web browser. The exact link can be found at the top of the generated Bridge config file (e.g. your `~/phntm_bridge.yaml`). If you provided maintainer's e-mail in the config, it will be also e-mailed to you for your reference after the first Bridge Client launch.
 
 ## Upgrading
 ```bash
