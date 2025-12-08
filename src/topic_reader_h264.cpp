@@ -64,7 +64,7 @@ namespace phntm {
     bool TopicReaderH264::addOutput(std::shared_ptr<MediaTrackInfo> track_info, std::shared_ptr<WRTCPeer> peer) {
         this->start(); // make sure sub exists and worker is running
         {
-            std::lock_guard<std::mutex> lock(this->outputs_mutex);
+            std::lock_guard<std::mutex> outputs_lock(this->outputs_mutex);
             auto pos = std::find_if(
                 this->outputs.begin(),
                 this->outputs.end(),
@@ -192,11 +192,11 @@ namespace phntm {
         
         auto msg_sent = false;
         {
-            std::unique_lock<std::mutex> outputs_lock(this->outputs_mutex);
+            std::lock_guard<std::mutex> outputs_lock(this->outputs_mutex);
             for (auto output : this->outputs) {
 
-                if (output->num_sent == 0 && !is_keyframe) {
-                    continue;
+                if (!output->active || (output->num_sent == 0 && !is_keyframe)) {
+                    continue;   
                 }
 
                 if (!output->track_info->init_complete) {
@@ -215,7 +215,7 @@ namespace phntm {
                     continue;
                 }
                 
-                outputs_lock.unlock();
+                //outputs_lock.unlock();
 
                 // push to output queue without locking
                 {
@@ -228,7 +228,7 @@ namespace phntm {
                     msg_sent = true; // flash LED
                 }
 
-                outputs_lock.lock();
+                //outputs_lock.lock();
             }
         }
 
@@ -585,7 +585,7 @@ namespace phntm {
     }
 
     bool TopicReaderH264::removeOutput(std::shared_ptr<MediaTrackInfo> track_info) {
-        std::lock_guard<std::mutex> lock(this->outputs_mutex);
+        std::lock_guard<std::mutex> outputs_lock(this->outputs_mutex);
         if (this->outputs.size() == 0) {
             return true;
         }
@@ -672,7 +672,7 @@ namespace phntm {
 
         {
             log(GRAY + "[" + this->topic + "] Stopping outputs" + CLR);
-            std::lock_guard<std::mutex> lock(this->outputs_mutex);
+            std::lock_guard<std::mutex> outputs_lock(this->outputs_mutex);
             for (auto & o : this->outputs) {
                 o->active = false; //kill worker
                 o->in_queue_cv.notify_one();

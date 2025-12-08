@@ -48,7 +48,7 @@ namespace phntm {
     }
 
     bool TopicReaderData::addOutput(std::shared_ptr<rtc::DataChannel> dc, std::shared_ptr<rtc::PeerConnection> pc) {
-        std::lock_guard<std::mutex> lock(this->outputs_mutex);
+        std::lock_guard<std::mutex> outputs_lock(this->outputs_mutex);
         auto pos = std::find_if(
             this->outputs.begin(),
             this->outputs.end(),
@@ -90,7 +90,7 @@ namespace phntm {
     }
 
     bool TopicReaderData::removeOutput(std::shared_ptr<rtc::DataChannel> dc) {
-        std::lock_guard<std::mutex> lock(this->outputs_mutex);
+        std::lock_guard<std::mutex> outputs_lock(this->outputs_mutex);
         auto pos = std::find_if(
             this->outputs.begin(),
             this->outputs.end(),
@@ -126,7 +126,7 @@ namespace phntm {
         }
 
         auto msg_sent = false;
-        std::lock_guard<std::mutex> lock(this->outputs_mutex);
+        std::lock_guard<std::mutex> outputs_lock(this->outputs_mutex);
         for (auto output : this->outputs) {
             if (!output->dc->isOpen()) {
                 if (!output->logged_closed) {
