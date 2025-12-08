@@ -1,7 +1,7 @@
 # Phantom Bridge Client
 
 Fast WebRTC + Socket.io ROS2 Bridge for real-time data and video streaming, teleoperation, HRI, and remote robot monitoring.
-Comes with Docker Container control for the host machine, CPU and Wi-Fi monitoring, and customizable [Web Interface](https://docs.phntm.io/bridge/ui/overview.html). \
+Comes with Docker Container control for the host machine, CPU and Wi-Fi monitoring, and customizable [Web Interface](https://docs.phntm.io/bridge/ui/overview). \
 \
 [See full documentation here](https://docs.phntm.io/bridge)
 
@@ -70,7 +70,7 @@ wget -O ~/phntm_bridge.yaml 'https://register.phntm.io/robot?yaml'
 
 ### Examine and customize the config file
 Below is an example of the config file generated in the previous step, e.g. `~/phntm_bridge.yaml`. \
-Full list of configuration options can be found [here](https://docs.phntm.io/bridge/basics/configuration.html).
+Full list of configuration options can be found [here](https://docs.phntm.io/bridge/basics/configuration).
 ```yaml
 /**:
   ros__parameters:
@@ -192,6 +192,6 @@ docker compose up phntm_bridge
 
 ## See also
 - [Documentation](https://docs.phntm.io/bridge) Full Phantom Bridge documentation
-- [Bridge UI](https://docs.phntm.io/bridge/ui/overview.html) Overview of the customizable web UI
-- [Configure User Input](https://docs.phntm.io/bridge/ui/user-input-and-teleoperation.html) Use keyboard, touch interface or gamepad to control your robot locally or remotely
+- [Bridge UI](https://docs.phntm.io/bridge/ui/overview) Overview of the customizable web UI
+- [Configure User Input](https://docs.phntm.io/bridge/ui/user-input-and-teleoperation) Use keyboard, touch interface or gamepad to control your robot locally or remotely
 - [Picam ROS2](https://github.com/PhantomCybernetics/picam_ros2) Standalone ROS2 node that converts hardware-encoded H.264 frames into ROS messages
