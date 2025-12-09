@@ -152,7 +152,7 @@ services:
     devices:
       - /dev:/dev # LED control needs this
     # logging:
-    #   driver: local # (optional) persistent logs, read via docker logs
+    #   driver: local # (optional) persistent logs, read with `docker logs`
     command:
       ros2 launch phntm_bridge client_agent_launch.py # launches Bridge Client and Agent together
 ```
