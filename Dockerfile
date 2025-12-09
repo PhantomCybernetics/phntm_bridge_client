@@ -154,7 +154,6 @@ RUN . /opt/ros/$ROS_DISTRO/setup.sh && \
 
 # pimp up prompt with hostame and color
 RUN echo "PS1='\${debian_chroot:+(\$debian_chroot)}\\[\\033[01;35m\\]\\u@\\h\\[\\033[00m\\] \\[\\033[01;34m\\]\\w\\[\\033[00m\\] '"  >> /root/.bashrc
-RUN echo 'export RCUTILS_COLORIZED_OUTPUT=1' >> /root/.bashrc
 RUN echo '# } PhntmBridge' >> /root/.bashrc
 
 WORKDIR $ROS_WS

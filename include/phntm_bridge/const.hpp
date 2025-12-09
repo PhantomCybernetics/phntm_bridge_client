@@ -6,16 +6,27 @@
 
 namespace phntm {
     
-    const std::string GRAY = "\033[1;30m";
-    const std::string RED = "\033[31m";
-    const std::string GREEN = "\033[92m";
-    const std::string LIME = "\033[32m";
-    const std::string BLUE = "\033[94m";
-    const std::string YELLOW = "\033[33m";
-    const std::string MAGENTA = "\033[35m";
-    const std::string CYAN = "\033[96m";
-    const std::string WHITE = "\033[37m2";
-    const std::string CLR = "\033[0m";
+    const std::string _GRAY = "\033[1;30m";
+    const std::string _RED = "\033[31m";
+    const std::string _GREEN = "\033[92m";
+    const std::string _LIME = "\033[32m";
+    const std::string _BLUE = "\033[94m";
+    const std::string _YELLOW = "\033[33m";
+    const std::string _MAGENTA = "\033[35m";
+    const std::string _CYAN = "\033[96m";
+    const std::string _WHITE = "\033[37m2";
+    const std::string _CLR = "\033[0m";
+
+    extern std::string GRAY;
+    extern std::string RED;
+    extern std::string GREEN;
+    extern std::string LIME;
+    extern std::string BLUE;
+    extern std::string YELLOW;
+    extern std::string MAGENTA;
+    extern std::string CYAN;
+    extern std::string WHITE;
+    extern std::string CLR;
 
     const std::string IMAGE_MSG_TYPE = "sensor_msgs/msg/Image";
     const std::string COMPRESSED_IMAGE_MSG_TYPE = "sensor_msgs/msg/CompressedImage";

@@ -83,6 +83,7 @@ set(SIOCLIENT_SRC
 # )
 
 add_executable(phntm_bridge
+              src/const.cpp
               src/lib.cpp
               src/git.cpp
               src/sio.cpp

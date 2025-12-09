@@ -1,5 +1,6 @@
 #include "phntm_bridge/phntm_bridge.hpp"
 #include "phntm_bridge/config.hpp"
+#include "phntm_bridge/const.hpp"
 #include "phntm_bridge/sio.hpp"
 #include "phntm_bridge/git.hpp"
 #include "phntm_bridge/introspection.hpp"
@@ -8,6 +9,7 @@
 #include "phntm_bridge/wrtc_peer.hpp"
 #include "phntm_bridge/file_extractor.hpp"
 
+#include <cstdlib>
 #include <iostream>
 #include <ostream>
 #include <rclcpp/executors.hpp>
