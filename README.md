@@ -28,14 +28,6 @@ Comes with Docker Container control for the host machine, CPU and Wi-Fi monitori
 
 ## Install
 
-> [!WARNING]
-> This is a work in progress, and some radical changes are still taking place.
-> Please wait until the first official release before installing this package,
-> as the cloud infrastructure may be down or undergoing maintenance at any time.
-> Some breaking changes may still occur, requiring a full re-install. 
-> The best way to get notified about a stable release is to use the Watch feature here on GitHub,
-> or by following [@phntm.io](https://bsky.app/profile/phntm.io) on BlueSky.
-
 ### Make sure your root SSL Certificates are up to date
 
 ```bash
@@ -161,6 +153,8 @@ services:
       - /tmp:/tmp # wifi control needs this
     devices:
       - /dev:/dev # LED control needs this
+    # logging:
+    #   driver: local # (optional) persistent logs, read via docker logs
     command:
       ros2 launch phntm_bridge client_agent_launch.py # launches Bridge Client and Agent together
 ```
