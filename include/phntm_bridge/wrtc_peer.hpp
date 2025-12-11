@@ -73,7 +73,8 @@ namespace phntm {
             std::string id_app;
             std::string id_instance;
             std::string session;
-            bool is_connected;
+            bool is_connected = false;
+            bool disconnect_processed = false;
             uint64_t connected_rtp_time_base = 0;
             std::shared_ptr<PhntmBridge> node;
 

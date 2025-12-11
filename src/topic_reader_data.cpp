@@ -72,23 +72,6 @@ namespace phntm {
         return true;
     }
 
-    void TopicReaderData::onPCSignalingStateChange(std::shared_ptr<rtc::PeerConnection> pc) {
-        if (pc->signalingState() != rtc::PeerConnection::SignalingState::Stable)
-            return;
-            
-        for (auto & tr : TopicReaderData::readers) {
-            for (auto & output : tr.second->outputs) {
-                if (output->pc.get() == pc.get()) {
-                    if (!output->init_complete) {
-                        output->init_complete = true;
-                        log(GRAY + "Init complete for DC #" + std::to_string(output->dc->id().value()) + CLR);
-                    }
-                    break;
-                }
-            }
-        }
-    }
-
     bool TopicReaderData::removeOutput(std::shared_ptr<rtc::DataChannel> dc) {
         std::lock_guard<std::mutex> outputs_lock(this->outputs_mutex);
         auto pos = std::find_if(
@@ -110,6 +93,23 @@ namespace phntm {
             return true; // good to destoy
         }
         return false;
+    }
+
+    void TopicReaderData::onPCSignalingStateChange(std::shared_ptr<rtc::PeerConnection> pc) {
+        if (pc->signalingState() != rtc::PeerConnection::SignalingState::Stable)
+            return;
+            
+        for (auto & tr : TopicReaderData::readers) {
+            for (auto & output : tr.second->outputs) {
+                if (output->pc.get() == pc.get()) {
+                    if (!output->init_complete) {
+                        output->init_complete = true;
+                        log(GRAY + "Init complete for DC #" + std::to_string(output->dc->id().value()) + CLR);
+                    }
+                    break;
+                }
+            }
+        }
     }
 
     void TopicReaderData::onData(std::shared_ptr<rclcpp::SerializedMessage> data) {

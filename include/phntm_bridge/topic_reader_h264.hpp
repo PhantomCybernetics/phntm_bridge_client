@@ -10,6 +10,7 @@
 #include <memory>
 #include <vector>
 #include <queue>
+#include <chrono>
 
 #include "phntm_bridge/config.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -155,7 +156,8 @@ namespace phntm {
             int debug_num_frames = 0; // set number of frames to be analyzed (nal units debug)
             bool logged_receiving = false;
             bool logged_error = false;
-            
+            std::chrono::time_point<std::chrono::steady_clock> last_received_frame;
+
             //int colormap; // used to colorize mono images
             //double max_sensor_value; // used to normalize raw sensor data
 

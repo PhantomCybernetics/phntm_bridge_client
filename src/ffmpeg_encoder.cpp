@@ -260,20 +260,22 @@ namespace phntm {
         this->codec_ctx->time_base = {1, this->fps}; // t
         this->codec_ctx->framerate = {this->fps, 1};
         this->codec_ctx->pix_fmt = this->hw_device_type == AV_HWDEVICE_TYPE_VAAPI ? AV_PIX_FMT_VAAPI : AV_PIX_FMT_NV12; // this is input to the codec (output of sws_scale)
-        this->codec_ctx->gop_size = gop_size; // 60
+        this->codec_ctx->gop_size = gop_size; // 30
         this->codec_ctx->max_b_frames = 0;
         this->codec_ctx->thread_count = thread_count;
         this->codec_ctx->bit_rate = bit_rate; // 512 * 1024 * 8; // 0.5 MB/s
         
         this->codec_ctx->flags &= ~AV_CODEC_FLAG_GLOBAL_HEADER;
         this->codec_ctx->flags |= AV_CODEC_FLAG_LOW_DELAY;     // For real-time
-        // this->codec_ctx->flags2 |= AV_CODEC_FLAG2_FAST;        // Faster encoding
+        // this->codec_ctx->flags |= AV_CODEC_FLAG_GRAY;
+        this->codec_ctx->flags2 |= AV_CODEC_FLAG2_FAST;        // Faster encoding
         
         // Set encoder options
-        av_opt_set(this->codec_ctx->priv_data, "preset", "fast", 0);
+        //av_opt_set(this->codec_ctx->priv_data, "preset", "fast", 0);
         if (this->hw_device_type == AV_HWDEVICE_TYPE_NONE)
             av_opt_set(this->codec_ctx->priv_data, "tune", "zerolatency", 0);
-        av_opt_set(this->codec_ctx->priv_data, "profile", "high", 0);
+        //av_opt_set(this->codec_ctx->priv_data, "profile", "high", 0);
+        av_opt_set(this->codec_ctx->priv_data, "preset", "fast", 0);
                 
         // Initialize color conversion context
         this->sws_ctx = sws_getContext(this->width, this->height,
@@ -392,8 +394,8 @@ namespace phntm {
         {
             std::lock_guard<std::mutex> queue_lock(this->scaler_mutex);
             this->scaler_queue_image.push(msg);
-            this->scaler_cv.notify_one();
         }
+        this->scaler_cv.notify_one();
     }
 
      void FFmpegEncoder::encodeFrame(const std::shared_ptr<sensor_msgs::msg::CompressedImage> msg) {
@@ -408,8 +410,8 @@ namespace phntm {
         {
             std::lock_guard<std::mutex> queue_lock(this->scaler_mutex);
             this->scaler_queue_compressed_image.push(msg);
-            this->scaler_cv.notify_one();
         }
+        this->scaler_cv.notify_one();
     }
 
     void FFmpegEncoder::sendFrameToEncoder(AVFrame* input_frame, std_msgs::msg::Header header) {
@@ -557,6 +559,7 @@ namespace phntm {
                 while (!this->encoder_queue.empty()) {
                     req = this->encoder_queue.front();
                     this->encoder_queue.pop();
+                    break;
                 }
 
                 queue_lock.unlock();

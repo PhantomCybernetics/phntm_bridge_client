@@ -334,10 +334,14 @@ namespace phntm {
 
         std::lock_guard<std::mutex> lock(this->processing_subscriptions_mutex); // wait until previus proceessing completes (one peer at the time)
 
-        log(BLUE + this->toString() + "Processing peer subs begins" + (ack_msg_id > -1 ? " [msg #" + std::to_string(ack_msg_id) + "]" : "") + " >>" + CLR);
-
         bool is_reconnect = this->is_connected && BridgeSocket::isConnected() && (this->peer_needs_restart || this->pc == nullptr || this->pc->state() == rtc::PeerConnection::State::Failed || this->pc->iceState() == rtc::PeerConnection::IceState::Closed);
+
+        if (!this->is_connected && !is_reconnect && this->disconnect_processed)
+            return;
+
         this->negotiation_needed = is_reconnect; // reset
+
+        log(BLUE + this->toString() + "Processing peer subs begins" + (ack_msg_id > -1 ? " [msg #" + std::to_string(ack_msg_id) + "]" : "") + " >>" + CLR);
 
         if (this->config->webrtc_debug) {
             std::vector<std::string> req_writes;
@@ -462,7 +466,7 @@ namespace phntm {
 
         // disconnect - cleanup and end here
         if (!this->is_connected && !is_reconnect) { 
-
+            this->disconnect_processed = true;
             log(GRAY + this->toString() + "Disconnected, closing PC" + CLR);
             this->removePeerConnection();
 
@@ -519,7 +523,13 @@ namespace phntm {
         auto msg = reply.at(0);
 
         if (msg->get_map().find("err") != msg->get_map().end()) {
-            log("Client returned error for peer:update: " + msg->get_map().at("err")->get_string(), true);
+            auto err = msg->get_map().at("err");
+            if (err->get_flag() == err->flag_string)
+                log("Client returned error for peer:update: " + err->get_string(), true);
+            else {
+                log("Client returned error for peer:update: ", true);
+                log(BridgeSocket::printMessage(err));
+            }
             this->awaiting_peer_reply = false;
             return;
         }
@@ -528,12 +538,17 @@ namespace phntm {
     }
 
     void WRTCPeer::onSDPAnswer(sio::message::ptr const& msg) {
+        if (!this->is_connected) {
+            this->awaiting_peer_reply = false;
+            return;
+        }
+
         if (this->pc->signalingState() != rtc::PeerConnection::SignalingState::HaveLocalOffer) {
             log(this->toString() + "Not setting SDP answer; signalingState=" + toString(this->pc->signalingState()));
             this->awaiting_peer_reply = false; // unlocks mutex
             return;
         }
-        
+
         auto sdp = msg->get_map().at("sdp")->get_string();
         if (this->config->webrtc_debug) {
             log(CYAN + this->toString() + "Got peer answer" + (this->config->log_sdp ? ":\n" + sdp : "") + CLR);

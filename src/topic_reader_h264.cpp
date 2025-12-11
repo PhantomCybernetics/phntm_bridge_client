@@ -86,6 +86,39 @@ namespace phntm {
         return true;
     }
 
+    bool TopicReaderH264::removeOutput(std::shared_ptr<MediaTrackInfo> track_info) {
+        std::lock_guard<std::mutex> outputs_lock(this->outputs_mutex);
+        if (this->outputs.size() == 0) {
+            return true;
+        }
+        auto pos = std::find_if(
+            this->outputs.begin(),
+            this->outputs.end(),
+            [&](const std::shared_ptr<Output> output) {
+                return output->track_info->track.get() == track_info->track.get();
+            }
+        );
+        if (pos != this->outputs.end()) {
+            auto o = *pos;
+            o->active = false;
+            o->in_queue_cv.notify_one();
+            // {
+            //     std::lock_guard<std::mutex> output_lock (o->output_to_send_mutex);
+            //     while (!o->output_to_send.empty()) {
+            //         o->output_to_send.pop();
+            //     }
+            // }
+            this->outputs.erase(pos);    
+        } else {
+            log("Track not found in " + this->topic + " reader");
+        }
+        if (this->outputs.size() == 0) {
+            
+            return true; // good to destoy
+        }
+        return false;
+    }
+
     void TopicReaderH264::onPCSignalingStateChange(std::shared_ptr<WRTCPeer> peer) {
         if (peer->getPC()->signalingState() != rtc::PeerConnection::SignalingState::Stable)
             return;
@@ -247,6 +280,12 @@ namespace phntm {
     void TopicReaderH264::onImageFrame(const std::shared_ptr<sensor_msgs::msg::Image> msg) {
         auto size = msg->data.size();
         // log("Got Image " + std::to_string(size)+ "B for " + this->topic + "; encoding=" + im->encoding);
+
+        // auto now = std::chrono::steady_clock::now();
+        // auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(now - this->last_received_frame);
+        // long long ms = diff.count();
+        // this->last_received_frame = now;
+        // log(this->topic + " delta " + std::to_string(ms));
 
         if (!this->subscriber_running || size == 0 || this->encoder_error)
             return;
@@ -582,38 +621,6 @@ namespace phntm {
         }
 
         log(BLUE + "[" + getThreadId() + "] Subscriber spinning finished for "+ topic + CLR);
-    }
-
-    bool TopicReaderH264::removeOutput(std::shared_ptr<MediaTrackInfo> track_info) {
-        std::lock_guard<std::mutex> outputs_lock(this->outputs_mutex);
-        if (this->outputs.size() == 0) {
-            return true;
-        }
-        auto pos = std::find_if(
-            this->outputs.begin(),
-            this->outputs.end(),
-            [&](const std::shared_ptr<Output> output) {
-                return output->track_info->track.get() == track_info->track.get();
-            }
-        );
-        if (pos != this->outputs.end()) {
-            auto o = *pos;
-            o->active = false;
-            o->in_queue_cv.notify_one();
-            // {
-            //     std::lock_guard<std::mutex> output_lock (o->output_to_send_mutex);
-            //     while (!o->output_to_send.empty()) {
-            //         o->output_to_send.pop();
-            //     }
-            // }
-            this->outputs.erase(pos);    
-        } else {
-            log("Track not found in " + this->topic + " reader");
-        }
-        if (this->outputs.size() == 0) {
-            return true; // good to destoy
-        }
-        return false;
     }
 
     void TopicReaderH264::destroy(std::string topic) {

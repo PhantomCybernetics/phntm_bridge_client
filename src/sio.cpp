@@ -121,9 +121,10 @@ namespace phntm {
             log("Socket.io not connected, ignoring \"" + name + "\"");
             return;
         }
-        if (instance->config->sio_verbose) {
+        if (instance->config->sio_verbose)
             log("SIO emitting '" + name + "':\n" + printMessage(msglist.at(0)));
-        }
+        else 
+            log("SIO emitting '" + name + "'");
         instance->client.socket()->emit(name, msglist, ack);
     }
 
@@ -175,6 +176,8 @@ namespace phntm {
         if (this->config->sio_verbose) {
             log(msgDebugHeader(ev) + "Got cloud ICE server config:");
             log(printMessage(ev.get_message()));
+        } else {
+            log(msgDebugHeader(ev) + "Got cloud ICE server config");
         }
 
         this->config->ice_servers.clear();
@@ -204,6 +207,8 @@ namespace phntm {
         if (this->config->sio_verbose) {
             log(msgDebugHeader(ev) + "Peer connection request: ");
             log(printMessage(ev.get_message()));
+        } else {
+            log(msgDebugHeader(ev) + "Peer connection request");
         }
         
         auto id_peer = WRTCPeer::getId(ev.get_message());
@@ -224,6 +229,8 @@ namespace phntm {
         if (this->config->sio_verbose) {
             log(msgDebugHeader(ev) + "Peer WRTC info: ");
             log(printMessage(ev.get_message()));
+        } else {
+            log(msgDebugHeader(ev) + "Peer WRTC info");   
         }
         auto peer = WRTCPeer::getConnectedPeer(ev);
 
@@ -240,6 +247,8 @@ namespace phntm {
         if (this->config->sio_verbose) {
             log(msgDebugHeader(ev) + "Peer disconnect request: ");
             log(printMessage(ev.get_message()));
+        } else {
+            log(msgDebugHeader(ev) + "Peer disconnect request");
         }
         auto peer = WRTCPeer::getConnectedPeer(ev);
 
@@ -255,6 +264,8 @@ namespace phntm {
         if (this->config->sio_verbose) {
             log(msgDebugHeader(ev) + "Introspection request: ");
             log(printMessage(ev.get_message()));
+        } else {
+            log(msgDebugHeader(ev) + "Introspection request");
         }
         auto peer = WRTCPeer::getConnectedPeer(ev);
         if (peer == nullptr) return;
@@ -276,6 +287,8 @@ namespace phntm {
         if (this->config->sio_verbose) {
             log(msgDebugHeader(ev) + "Subscribe read request: ");
             log(printMessage(ev.get_message()));
+        } else {
+            log(msgDebugHeader(ev) + "Subscribe read request");
         }
         
         auto peer = WRTCPeer::getConnectedPeer(ev);
@@ -302,6 +315,8 @@ namespace phntm {
         if (this->config->sio_verbose) {
             log(msgDebugHeader(ev) + "Unsubscribe read request: ");
             log(printMessage(ev.get_message()));
+        } else {
+            log(msgDebugHeader(ev) + "Unsubscribe read request");
         }
 
         auto peer = WRTCPeer::getConnectedPeer(ev);
@@ -328,6 +343,8 @@ namespace phntm {
         if (this->config->sio_verbose) {
             log(msgDebugHeader(ev) + "Subscribe write request: ");
             log(printMessage(ev.get_message()));
+        } else {
+            log(msgDebugHeader(ev) + "Subscribe write request");
         }
 
         auto peer = WRTCPeer::getConnectedPeer(ev);
@@ -356,6 +373,8 @@ namespace phntm {
         if (this->config->sio_verbose) {
             log(msgDebugHeader(ev) + "Unsubscribe write request: ");
             log(printMessage(ev.get_message()));
+        } else {
+            log(msgDebugHeader(ev) + "Unsubscribe write request");
         }
 
         auto peer = WRTCPeer::getConnectedPeer(ev);
@@ -382,6 +401,8 @@ namespace phntm {
         if (this->config->sio_verbose) {
             log(msgDebugHeader(ev) + "Got SDP Answer:");
             log(printMessage(ev.get_message()));
+        } else {
+            log(msgDebugHeader(ev) + "Got SDP Answer");
         }
 
         auto peer = WRTCPeer::getConnectedPeer(ev);
@@ -421,6 +442,8 @@ namespace phntm {
         if (this->config->sio_verbose) {
             log(msgDebugHeader(ev) + "Service call request: ");
             log(printMessage(ev.get_message()));
+        } else {
+            log(msgDebugHeader(ev) + "Service call request");
         }
         
         auto peer = WRTCPeer::getConnectedPeer(ev);
@@ -456,6 +479,8 @@ namespace phntm {
         if (this->config->sio_verbose) {
             log(msgDebugHeader(ev) + "File upload request: ");
             log(printMessage(ev.get_message()));
+        } else {
+            log(msgDebugHeader(ev) + "File upload request");
         }
         
         auto search_path = ev.get_message()->get_flag() == ev.get_message()->flag_string ? ev.get_message()->get_string() : "";
