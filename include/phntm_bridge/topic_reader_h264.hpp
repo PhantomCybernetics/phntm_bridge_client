@@ -129,7 +129,7 @@ namespace phntm {
             void onEncodedFrame(const std::shared_ptr<ffmpeg_image_transport_msgs::msg::FFMPEGPacket> msg);
             void onImageFrame(const std::shared_ptr<sensor_msgs::msg::Image> msg);
             void onCompressedFrame(const std::shared_ptr<sensor_msgs::msg::CompressedImage> msg);
-            
+
             // only one of these used at the time
             std::shared_ptr<rclcpp::Subscription<ffmpeg_image_transport_msgs::msg::FFMPEGPacket>> sub_enc;
             std::shared_ptr<rclcpp::Subscription<sensor_msgs::msg::Image>> sub_img;
@@ -156,6 +156,8 @@ namespace phntm {
             int debug_num_frames = 0; // set number of frames to be analyzed (nal units debug)
             bool logged_receiving = false;
             bool logged_error = false;
+
+            void printFrameTimeDelta();
             std::chrono::time_point<std::chrono::steady_clock> last_received_frame;
 
             //int colormap; // used to colorize mono images

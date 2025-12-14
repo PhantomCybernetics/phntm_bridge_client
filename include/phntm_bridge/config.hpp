@@ -68,6 +68,7 @@ namespace phntm {
                 int encoder_thread_count;
                 uint encoder_gop_size;
                 uint encoder_bit_rate;
+                bool print_time_deltas;
             };
     };
 

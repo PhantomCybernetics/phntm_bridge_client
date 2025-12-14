@@ -20,6 +20,7 @@
 #include <opencv2/core/hal/interface.h>
 #include <rclcpp/executors/single_threaded_executor.hpp>
 #include <rclcpp/executors/multi_threaded_executor.hpp>
+#include <rclcpp/executors/static_single_threaded_executor.hpp>
 #include <rclcpp/logging.hpp>
 #include <stdexcept>
 #include <string>
@@ -178,6 +179,14 @@ namespace phntm {
         );
     }
 
+    void TopicReaderH264::printFrameTimeDelta() {
+        auto now = std::chrono::steady_clock::now();
+        auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(now - this->last_received_frame);
+        long long ms = diff.count();
+        this->last_received_frame = now;
+        log(this->topic + " dt [ms] = " + std::to_string(ms));
+    }
+
     // on subscriber thread
     void TopicReaderH264::onEncodedFrame(const std::shared_ptr<ffmpeg_image_transport_msgs::msg::FFMPEGPacket> msg) {
         // std::lock_guard<std::mutex> lock(this->subscriber_mutex); // this will prevent ros from calling all subs on the same thread
@@ -205,6 +214,9 @@ namespace phntm {
             log(MAGENTA + "[" + getThreadId() + "] Receiving " + std::to_string(msg->width) + "x" + std::to_string(msg->height)+ " " + msg->encoding + " frames from " + this->topic + " " + std::to_string(msg->data.size()) + " B" + CLR);
             this->logged_receiving = true;
         }
+
+        if (this->topic_conf.print_time_deltas)
+            this->printFrameTimeDelta();
 
         if (this->debug_num_frames > 0) {
             auto nal_units = splitNalUnits(msg->data.data(), msg->data.size());
@@ -279,21 +291,18 @@ namespace phntm {
     // on subscriber thread
     void TopicReaderH264::onImageFrame(const std::shared_ptr<sensor_msgs::msg::Image> msg) {
         auto size = msg->data.size();
-        // log("Got Image " + std::to_string(size)+ "B for " + this->topic + "; encoding=" + im->encoding);
-
-        // auto now = std::chrono::steady_clock::now();
-        // auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(now - this->last_received_frame);
-        // long long ms = diff.count();
-        // this->last_received_frame = now;
-        // log(this->topic + " delta " + std::to_string(ms));
-
-        if (!this->subscriber_running || size == 0 || this->encoder_error)
+        
+        if (!this->subscriber_running || size == 0 || this->encoder_error) {
             return;
+        }
 
         auto debug_log = this->debug_num_frames > 0;
         if (debug_log) {
-            log(this->topic + " Received Image frame w enc='" + msg->encoding+"'; sending to encoder");
+            log(this->topic + " Received Image frame " + std::to_string(msg->width) + "x" + std::to_string(msg->height) + " w enc='" + msg->encoding+"'; sending to encoder");
         }
+
+        if (this->topic_conf.print_time_deltas)
+            this->printFrameTimeDelta();
 
         msg->encoding = strToLower(trim(msg->encoding));
 
@@ -327,7 +336,7 @@ namespace phntm {
                 this->encoder.reset();
                 this->encoder_error = true;
                 this->debug_num_frames = 0;
-                RCLCPP_ERROR(this->node->get_logger(), "%s", ex.what());
+                RCLCPP_ERROR(this->node->get_logger(), "Exception making %s encoder: %s", this->topic.c_str(), ex.what());
                 return;
             }
         }
@@ -360,6 +369,9 @@ namespace phntm {
         if (debug_log) {
             log(this->topic + " Received CompressedImage frame w format='" + msg->format+"'; sending to encoder");
         }
+
+        if (this->topic_conf.print_time_deltas)
+            this->printFrameTimeDelta();
 
         msg->format = strToLower(trim(msg->format));
 
@@ -614,10 +626,14 @@ namespace phntm {
         auto topic = this->topic;
         log(GRAY + "[" + getThreadId() + "] Subscriuber spinning for " + topic + CLR);
 
-        while (rclcpp::ok() && this->subscriber_running) {
-            std::lock_guard<std::mutex> lock(this->start_stop_mutex);
-            if (this->executor.get() != nullptr)
-                this->executor->spin_once(std::chrono::milliseconds(1));
+        try {
+            while (this->subscriber_running) {
+                std::lock_guard<std::mutex> lock(this->start_stop_mutex);
+                if (rclcpp::ok() && this->executor.get() != nullptr)
+                    this->executor->spin_once(std::chrono::milliseconds(1));
+            }
+        } catch (...) {
+            log(RED + "[" + getThreadId() + "] Exception while spinning subscriber for " + topic + CLR);
         }
 
         log(BLUE + "[" + getThreadId() + "] Subscriber spinning finished for "+ topic + CLR);

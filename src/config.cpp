@@ -662,6 +662,9 @@ namespace phntm {
             try {
                 this->declare_parameter(topic + ".pts_source", "LOCAL"); // LOCAL, PACKET or MESSAGE
             } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+            try {
+                this->declare_parameter(topic + ".print_time_deltas", false);
+            } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
             
             res.debug_num_frames = this->get_parameter(topic + ".debug_num_frames").as_int();
             res.debug_verbose = this->get_parameter(topic + ".debug_verbose").as_bool();
@@ -677,6 +680,7 @@ namespace phntm {
                 res.pts_source = PTS_SOURCE_LOCAL_TIME;
             }
             res.create_node = this->get_parameter(topic + ".create_node").as_bool();
+            res.print_time_deltas = this->get_parameter(topic + ".print_time_deltas").as_bool();
         }
 
         // Depth visualization extras
