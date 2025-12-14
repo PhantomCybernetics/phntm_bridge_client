@@ -20,7 +20,6 @@
 #include <opencv2/core/hal/interface.h>
 #include <rclcpp/executors/single_threaded_executor.hpp>
 #include <rclcpp/executors/multi_threaded_executor.hpp>
-#include <rclcpp/executors/static_single_threaded_executor.hpp>
 #include <rclcpp/logging.hpp>
 #include <stdexcept>
 #include <string>
