@@ -24,7 +24,7 @@ Comes with Docker Container control for the host machine, CPU and Wi-Fi monitori
 - Supported with ROS2 Humble and newer
 
 ## Architecture
-![Infrastructure map](https://raw.githubusercontent.com/PhantomCybernetics/phntm_bridge_docs/refs/heads/main/img/Architecture_Bridge.png)
+![Infrastructure map](https://raw.githubusercontent.com/PhantomCybernetics/phntm_bridge_docs/refs/heads/main/img/Architecture_Client.svg)
 
 ## Install
 
