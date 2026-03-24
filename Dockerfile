@@ -132,7 +132,6 @@ RUN echo 'export PYTHONPATH="/root/ros2_py_venv/lib/python${PYTHON_VERSION_VENV}
 RUN . /root/ros2_py_venv/bin/activate && \
     pip install iwlib && \
     pip install empy catkin_pkg numpy lark && \
-    pip uninstall -y setuptools && \
     deactivate
 
 # video enc
