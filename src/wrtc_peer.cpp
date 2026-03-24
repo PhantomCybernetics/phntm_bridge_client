@@ -40,6 +40,10 @@ namespace phntm {
         return id_peer;
     }
 
+    std::string WRTCPeer::getId() {
+        return this->id;
+    }
+
     bool WRTCPeer::isConnected(std::string id_peer) {
         return connected_peers.find(id_peer) != connected_peers.end();
     }

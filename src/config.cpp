@@ -472,7 +472,11 @@ namespace phntm {
         try {
             this->declare_parameter("service_calls_verbose", false);
         } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
-        config->service_calls_verbose = this->get_parameter("service_calls_verbose").as_bool();    
+        config->service_calls_verbose = this->get_parameter("service_calls_verbose").as_bool(); 
+        try {
+            this->declare_parameter("service_calls_mapping_verbose", false);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }   
+        config->service_call_mapping_verbose = this->get_parameter("service_calls_mapping_verbose").as_bool();    
 
         try {
             this->declare_parameter("webrtc_debug", true);

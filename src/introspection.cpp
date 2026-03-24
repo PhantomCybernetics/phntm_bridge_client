@@ -1,4 +1,5 @@
 #include "phntm_bridge/introspection.hpp"
+#include "phntm_bridge/lib.hpp"
 #include "phntm_bridge/sio.hpp"
 #include "phntm_bridge/wrtc_peer.hpp"
 #include "sio_message.h"
@@ -370,18 +371,31 @@ namespace phntm {
 
             for (auto s : observed_node_services) {
 
+                auto service_id = s.first;
                 auto service_type = s.second[0];
+                //auto is_action = false;
+
+                if (auto pos = service_id.find("/_action/"); pos != std::string::npos) {
+                    //is_action = true;
+                    service_id.erase(pos);  // removes needle and everything after it
+                    // replace Action suffixes, IDL contains all definitions in one .IDL file
+                    if (service_type == "action_msgs/srv/CancelGoal")
+                        continue; //ignore these in introspecion, we already have the action + type
+                    service_type = replace(service_type, "_GetResult", "");
+                    service_type = replace(service_type, "_SendGoal", "");
+                    service_type = replace(service_type, "_FeedbackMessage", "");
+                }
 
                 // find agent nodes with file extraction service enabled (before blacklisting)
                 if (service_type == "phntm_interfaces/srv/FileRequest") {
                     if (this->discovered_file_extractors.find(node_name) == this->discovered_file_extractors.end()) {
-                        auto client = node->create_client<phntm_interfaces::srv::FileRequest>(s.first);
+                        auto client = node->create_client<phntm_interfaces::srv::FileRequest>(service_id);
                         this->discovered_file_extractors.emplace(node_name, client); //id node => srv id
-                        RCLCPP_INFO(this->node->get_logger(), "%s Discovered file extractor node %s %s", L.c_str(), node_name.c_str(), s.first.c_str());
+                        RCLCPP_INFO(this->node->get_logger(), "%s Discovered file extractor node %s %s", L.c_str(), node_name.c_str(), service_id.c_str());
                     }
                 }
 
-                bool blacklisted = false;
+                bool service_blacklisted = false;
                 if (service_type == "rcl_interfaces/srv/ListParameters" ||
                     service_type == "rcl_interfaces/srv/DescribeParameters" ||
                     service_type == "rcl_interfaces/srv/GetParameters" ||
@@ -390,38 +404,36 @@ namespace phntm {
                     service_type == "rcl_interfaces/srv/SetParametersAtomically"
                 ) {
                     if (!this->config->enable_node_parameters_read) {
-                        blacklisted = true; // no read => ignore all param services
+                        service_blacklisted = true; // no read => ignore all param services
                     } else if (!this->config->enable_node_parameters_write && (service_type == "rcl_interfaces/srv/SetParameters" || service_type == "rcl_interfaces/srv/SetParametersAtomically")) {
-                        blacklisted = true;
+                        service_blacklisted = true;
                     } else {
                         for (size_t i = 0; i < this->config->blacklist_parameter_services.size(); i++) {
                             if (startsWith(node_name, config->blacklist_parameter_services[i])) {
-                                blacklisted = true;
+                                service_blacklisted = true;
                                 break;
                             }
                         }
                     }
                 }
-                if (blacklisted)
+                if (!service_blacklisted && std::find(this->config->blacklist_services.begin(), this->config->blacklist_services.end(), service_id) != this->config->blacklist_services.end())
+                    service_blacklisted = true;
+                if (!service_blacklisted && std::find(this->config->blacklist_services.begin(), this->config->blacklist_services.end(), service_type) != this->config->blacklist_services.end())
+                    service_blacklisted = true;
+
+                if (service_blacklisted)
                     continue;
 
-                if (std::find(this->config->blacklist_services.begin(), this->config->blacklist_services.end(), s.first) != this->config->blacklist_services.end()) {
-                    continue; // service blacklisted
-                }
-                if (std::find(this->config->blacklist_services.begin(), this->config->blacklist_services.end(), service_type) != this->config->blacklist_services.end()) {
-                    continue; // service type blacklisted
-                }
-
-                if (n.second.services.find(s.first) == n.second.services.end()) { // new service
-                    n.second.services.emplace(s.first, service_type);
+                if (n.second.services.find(service_id) == n.second.services.end()) { // new service
+                    n.second.services.emplace(service_id, service_type);
                     services_changed = true;
+                    RCLCPP_INFO(this->node->get_logger(), "%s Discovered srv %s: %s {%s}", L.c_str(), node_name.c_str(), service_id.c_str(), service_type.c_str());
                     idls_changed = this->collectIDLs(service_type) || idls_changed;
-                    RCLCPP_INFO(this->node->get_logger(), "%s Discovered srv %s: %s {%s}", L.c_str(), node_name.c_str(), s.first.c_str(), service_type.c_str());
-                } else if (n.second.services.at(s.first) != service_type) {
-                    n.second.services[s.first] = service_type;
+                } else if (n.second.services.at(service_id) != service_type) {
+                    n.second.services[service_id] = service_type;
                     services_changed = true;
+                    RCLCPP_WARN(this->node->get_logger(), "%s Message type changed for srv %s: %s {%s}", L.c_str(), node_name.c_str(), service_id.c_str(), service_type.c_str());
                     idls_changed = this->collectIDLs(service_type) || idls_changed;
-                    RCLCPP_WARN(this->node->get_logger(), "%s Message type changed for srv %s: %s {%s}", L.c_str(), node_name.c_str(), s.first.c_str(), service_type.c_str());
                 }
             }
         }
@@ -512,14 +524,16 @@ namespace phntm {
             return "";
         }
 
-        std::filesystem::path interface_path = std::filesystem::path(prefix_path) / "share" / interface_name;
+        auto fname = interface_name;
+
+        std::filesystem::path interface_path = std::filesystem::path(prefix_path) / "share" / fname;
 
         if (rsplit(parts[parts.size()-1], '.', 1).size() == 1) {
             interface_path += ".idl";
         }
 
         if (!std::filesystem::exists(interface_path)) {
-            RCLCPP_WARN(this->node->get_logger(), "%s[IDL] Could not find the interface '%s'", Introspection::L.c_str(), interface_path.string().c_str());
+            RCLCPP_WARN(this->node->get_logger(), "%s[IDL] Could not find the interface {%s} in %s", Introspection::L.c_str(), interface_name.c_str(), interface_path.string().c_str());
             return "";
         }
         
@@ -536,8 +550,8 @@ namespace phntm {
 
         auto idl_path = this->getInterfaceIDLPath(msg_type);
         if (idl_path.empty()) {
-            RCLCPP_WARN(this->node->get_logger(), "%s[IDL] Path not found for '%s'", Introspection::L.c_str(), msg_type.c_str());
-            return false;
+            // RCLCPP_WARN(this->node->get_logger(), "%s[IDL] Path not found for '%s'", Introspection::L.c_str(), msg_type.c_str());
+            return false; // path not found
         }
 
         std::ifstream file(idl_path);

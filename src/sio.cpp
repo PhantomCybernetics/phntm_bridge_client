@@ -448,27 +448,47 @@ namespace phntm {
         
         auto peer = WRTCPeer::getConnectedPeer(ev);
         if (peer == nullptr) return;
+        auto id_peer = peer->getId();
 
         auto service_name = ev.get_message()->get_map().at("service")->get_string();
         if (service_name.empty()) {
             return this->returnError("Service id not provided", ev);
         }
+
+        bool is_action_cancel = false;
+        if (endsWith(service_name, "/_action/cancel_goal")) {
+            is_action_cancel = true;
+            service_name = replace(service_name, "/_action/cancel_goal", "");
+        }
+
         auto service_type = Introspection::getService(service_name);
         if (service_type.empty()) {
             return this->returnError("Service '" + service_name + "' not discovered", ev);
         }
+
+        bool is_action = is_action_cancel || service_type.find("/action/") != std::string::npos;
 
         double timeout_sec = 0.0;
         if (ev.get_message()->get_map().find("timeout_sec") != ev.get_message()->get_map().end()) {
             timeout_sec = ev.get_message()->get_map().at("timeout_sec")->get_double();
         }
 
-        RCLCPP_INFO(this->node->get_logger(), "%s Calling service %s", peer->toString().c_str(), service_name.c_str());
+        if (!is_action)
+            RCLCPP_INFO(this->node->get_logger(), "%s Calling service %s", peer->toString().c_str(), service_name.c_str());
+        else if (is_action_cancel)
+            RCLCPP_INFO(this->node->get_logger(), "%s Cancelling action goal %s", peer->toString().c_str(), service_name.c_str());
+        else
+            RCLCPP_INFO(this->node->get_logger(), "%s Calling action %s", peer->toString().c_str(), service_name.c_str());
 
         // async thread
-        std::thread newThread([this, ev, service_name, service_type, timeout_sec]() {
+        std::thread newThread([this, ev, service_name, service_type, is_action, is_action_cancel, timeout_sec, id_peer]() {
             DataLED::once();
-            this->node->callGenericService(service_name, service_type, timeout_sec, ev);
+            if (!is_action)
+                this->node->callGenericService(service_name, service_type, timeout_sec, ev);
+            else if (is_action_cancel)
+                this->node->cancelGenericActionGoal(service_name, ev, id_peer);
+            else
+                this->node->callGenericAction(service_name, service_type, timeout_sec, ev, id_peer);
         });
         newThread.detach();
     }

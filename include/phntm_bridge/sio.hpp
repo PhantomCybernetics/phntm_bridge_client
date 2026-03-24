@@ -19,7 +19,7 @@ namespace phntm {
             static void init(std::shared_ptr<PhntmBridge> node, std::shared_ptr<BridgeConfig> config);
             static bool connect();
             static void shutdown();
-            static void emit(std::string const& name, sio::message::list const& msglist, std::function<void (sio::message::list const&)> const& ack);
+            static void emit(std::string const& name, sio::message::list const& msglist, std::function<void (sio::message::list const&)> const& ack = nullptr);
             static void ack(int msg_id, sio::message::list const& msglist);
             static bool isConnected() { return BridgeSocket::instance != nullptr && BridgeSocket::instance->connected; };
             static bool isShuttingDown() { return BridgeSocket::instance != nullptr && BridgeSocket::instance->shutting_down; };

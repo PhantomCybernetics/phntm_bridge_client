@@ -5,6 +5,7 @@
 #include <uuid/uuid.h>
 #include <thread>
 #include <random>
+#include <iomanip>
 
 namespace phntm {
 
@@ -26,6 +27,27 @@ namespace phntm {
         return res.substr(0, length);
     }
 
+    std::string toString(const uint8_t* uuid)
+    {
+        std::ostringstream ss;
+        for (size_t i = 0; i < 16; ++i) {
+            ss << std::hex << std::setw(2) << std::setfill('0')
+            << static_cast<int>(uuid[i]);
+
+            if (i == 3 || i == 5 || i == 7 || i == 9)
+                ss << "-";
+        }
+        return ss.str();
+    }
+
+    bool uuidsEqual(const uint8_t* uuid0, const uint8_t* uuid1) {
+        for (size_t i = 0; i < 16; ++i) {
+            if (uuid0[i] != uuid1[i])
+                return false;
+        }
+        return true;
+    }
+    
     std::string trim(const std::string str, const char *trim_chars) {
         size_t start = str.find_first_not_of(trim_chars);
         if (start == std::string::npos) return ""; // all whitespace
@@ -178,5 +200,10 @@ namespace phntm {
         return dist(gen);
 
         // std::cout << "Random 32-bit integer: " << random_value << std::endl;
+    }
+
+    bool endsWith(const std::string& str, const std::string& suffix) {
+        return str.size() >= suffix.size() &&
+           str.compare(str.size() - suffix.size(), suffix.size(), suffix) == 0;
     }
 }

@@ -31,6 +31,7 @@ find_library(OPENSSL_CRYPTO_LIBRARY crypto)
 find_package(CURL REQUIRED)
 find_package(LibDataChannel REQUIRED)
 find_package(OpenCV REQUIRED)
+find_package(rcl_action REQUIRED)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GPIOD REQUIRED libgpiodcxx)
@@ -89,6 +90,7 @@ add_executable(phntm_bridge
               src/sio.cpp
               src/introspection.cpp
               src/generic_services.cpp
+              src/generic_actions.cpp
               src/local_services.cpp
               src/phntm_bridge.cpp
               src/topic_reader_data.cpp
@@ -125,15 +127,9 @@ target_include_directories(phntm_bridge PUBLIC
 )
 target_compile_features(phntm_bridge PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
 
-#ament_target_dependencies(phntm_bridge
-#                          ament_index_cpp
-#                          rclcpp
-#                          std_msgs
-#                          sensor_msgs
-#                          std_srvs
-#                          ffmpeg_image_transport_msgs
-#                          phntm_interfaces
-#                          )
+ament_target_dependencies(phntm_bridge
+                          rcl_action
+                          )
 
 link_directories(${FFMPEG_LIBRARY_DIRS})
 

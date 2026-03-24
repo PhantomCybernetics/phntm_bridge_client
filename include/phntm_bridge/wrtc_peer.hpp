@@ -21,6 +21,7 @@ namespace phntm {
             WRTCPeer(std::shared_ptr<PhntmBridge> node, std::string id_peer, std::string id_app, std::string id_instance, std::string session, std::shared_ptr<BridgeConfig> config);
             ~WRTCPeer();
             static std::string getId(sio::object_message::ptr data);
+            std::string getId();
             static bool isConnected(std::string id_peer);
             static std::shared_ptr<WRTCPeer> getConnectedPeer(sio::event const & ev);
             static void onPeerConnected(std::shared_ptr<PhntmBridge> node, std::string id_peer, sio::event &ev, std::shared_ptr<BridgeConfig> config);

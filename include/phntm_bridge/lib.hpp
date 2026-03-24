@@ -2,6 +2,7 @@
 
 #include <string>
 #include <json/json.h>
+#include <unique_identifier_msgs/msg/uuid.h>
 
 namespace phntm {
 
@@ -24,6 +25,9 @@ namespace phntm {
     uint64_t convertToRtpTimestamp(int32_t sec, uint32_t nanosec);
     uint64_t getCurrentRtpTimestamp();
     uint32_t getRandomUInt();
+    bool endsWith(const std::string& str, const std::string& suffix);
+    std::string toString(const uint8_t* uuid);
+    bool uuidsEqual(const uint8_t* uuid0, const uint8_t* uuid1);
 
     struct CustomWidgetDef {
         std::string class_name;

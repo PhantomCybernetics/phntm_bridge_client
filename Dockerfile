@@ -24,6 +24,7 @@ RUN apt install -y gpiod libgpiod-dev
 RUN apt install -y uuid-dev
 RUN apt install -y libcurl4-openssl-dev
 RUN apt install -y ros-$ROS_DISTRO-rmw-cyclonedds-cpp
+RUN apt install -y ros-$ROS_DISTRO-rclcpp-action
 
 WORKDIR /root
 RUN git clone https://github.com/chriskohlhoff/asio.git
@@ -131,6 +132,7 @@ RUN echo 'export PYTHONPATH="/root/ros2_py_venv/lib/python${PYTHON_VERSION_VENV}
 RUN . /root/ros2_py_venv/bin/activate && \
     pip install iwlib && \
     pip install empy catkin_pkg numpy lark && \
+    pip uninstall -y setuptools && \
     deactivate
 
 # video enc
