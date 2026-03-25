@@ -2,16 +2,13 @@
 #include "phntm_bridge/sio.hpp"
 
 #include "rcl/client.h"
-#include "rosidl_typesupport_cpp/service_type_support.hpp"
 #include "rosidl_typesupport_introspection_cpp/field_types.hpp"
 #include "rosidl_typesupport_introspection_cpp/message_introspection.hpp"
-#include "rosidl_typesupport_introspection_cpp/service_type_support_decl.hpp"
 #include "sio_message.h"
 #include <cstddef>
 #include <cstdint>
 #include <dlfcn.h>
 #include <fmt/core.h>
-#include <iostream>
 #include <mutex>
 #include <rcl/context.h>
 #include <rclcpp/context.hpp>

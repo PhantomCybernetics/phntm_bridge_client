@@ -16,6 +16,7 @@ find_package(ament_cmake REQUIRED)
 find_package(ament_index_cpp REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(action_msgs REQUIRED)
 find_package(phntm_interfaces REQUIRED)
 find_package(ffmpeg_image_transport_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
@@ -71,6 +72,7 @@ include_directories(/usr/include/jsoncpp/)
 include_directories(${GPIOD_INCLUDE_DIRS})
 include_directories(${OpenCV_INCLUDE_DIRS})
 include_directories(${FFMPEG_INCLUDE_DIRS})
+include_directories(${rcl_action_INCLUDE_DIRS})
 
 set(SIOCLIENT_SRC
   "sioclient/sio_client.cpp"
@@ -107,7 +109,6 @@ add_executable(phntm_bridge
               )
 # target_compile_definitions(phntm_bridge PUBLIC -DSIO_TLS)
 
-
 target_include_directories(phntm_bridge PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
@@ -127,9 +128,7 @@ target_include_directories(phntm_bridge PUBLIC
 )
 target_compile_features(phntm_bridge PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
 
-ament_target_dependencies(phntm_bridge
-                          rcl_action
-                          )
+#ament_target_dependencies(phntm_bridge rcl_action)
 
 link_directories(${FFMPEG_LIBRARY_DIRS})
 
@@ -149,9 +148,11 @@ target_link_libraries(phntm_bridge
   ${sensor_msgs_TARGETS}
   ${std_msgs_TARGETS}
   ${std_srvs_TARGETS}
+  ${action_msgs_TARGETS}
   ament_index_cpp::ament_index_cpp
   rclcpp::rclcpp
   sensor_msgs::sensor_msgs_library
+  rcl_action::rcl_action
   ${FMT_LIBRARY}
   ${JSONCPP_LIBRARY}
   ${OPENSSL_LIBRARY}

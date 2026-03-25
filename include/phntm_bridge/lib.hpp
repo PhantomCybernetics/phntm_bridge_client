@@ -2,7 +2,6 @@
 
 #include <string>
 #include <json/json.h>
-#include <unique_identifier_msgs/msg/uuid.h>
 
 namespace phntm {
 
