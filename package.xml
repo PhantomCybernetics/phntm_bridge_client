@@ -16,6 +16,7 @@
   <depend>std_srvs</depend>
   <depend>phntm_interfaces</depend>
   <depend>ffmpeg_image_transport_msgs</depend>
+  <depend>rosidl_typesupport_introspection_cpp</depend>
   <depend>unique_identifier_msgs</depend>
   <depend>action_msgs</depend>
   <depend>ament_index_cpp</depend>
