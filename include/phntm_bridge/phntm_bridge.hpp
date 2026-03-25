@@ -15,11 +15,9 @@
 
 #include <rcl_action/action_client.h>
 
-// #include <future>
-// #include "std_msgs/msg/string.hpp"
-// #include <memory>
 #include "std_srvs/srv/trigger.hpp"
 #include "sio_socket.h"
+#include "rosidl_typesupport_introspection_cpp/message_introspection.hpp"
 
 namespace phntm {
 
