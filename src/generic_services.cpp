@@ -117,7 +117,7 @@ namespace phntm {
       request_data = sio::null_message::create();
     }
 
-    auto req_err = SocketToROSMessage(request_data, request_msg, client->request_members, this->config->service_call_mapping_verbose);
+    auto req_err = SocketToROSMessage(request_data, request_msg, client->request_members, this->config->service_calls_mapping_verbose);
     if (!req_err.empty())
       return this->returnServiceError(fmt::format("Error mapping request data: {}", req_err.c_str()), ev);
 
@@ -195,13 +195,13 @@ namespace phntm {
     
     // map response to socket message
     auto ack = sio::object_message::create(); // always obj
-    auto res_err = ROSToSocketMessage(response_msg, client->response_members, ack, this->config->service_call_mapping_verbose);
+    auto res_err = ROSToSocketMessage(response_msg, client->response_members, ack, this->config->service_calls_mapping_verbose);
     if (!res_err.empty())
       return this->returnServiceError(fmt::format("Error mapping result data: {}", res_err.c_str()), ev);
     
     // send the reply
     // if (this->config->service_calls_verbose)
-    log(BLUE + "Sending " + service_name + " reply..." + CLR);
+    log(BLUE + "Sending " + service_name + " reply (msg id="+std::to_string(ev.get_msgId())+")..." + CLR);
     BridgeSocket::ack(ev.get_msgId(), {ack});
   }
 
@@ -577,6 +577,9 @@ namespace phntm {
         }
         if (verbose)
           log(std::to_string(*v) + CLR);
+        if (std::isinf(*v)) { // can't send infinity in json!
+          *v = *v > 0 ? std::numeric_limits<float>::max() : -std::numeric_limits<float>::max();
+        }
         res = sio::double_message::create(*v);
         break;
       }
@@ -591,6 +594,9 @@ namespace phntm {
         }
         if (verbose)
           log(std::to_string(*v) + CLR);
+        if (std::isinf(*v)) { // can't send infinity in json!
+          *v = *v > 0 ? std::numeric_limits<double>::max() : -std::numeric_limits<double>::max();
+        }
         res = sio::double_message::create(*v);
         break;
       }

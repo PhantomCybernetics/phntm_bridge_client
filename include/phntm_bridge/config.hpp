@@ -43,7 +43,7 @@ namespace phntm {
             float default_service_timeout_sec;
 
             std::vector<std::string> input_drivers;
-            bool service_calls_verbose, service_call_mapping_verbose;
+            bool service_calls_verbose, service_calls_mapping_verbose;
 
             Json::Value input_defaults, service_defaults;
 

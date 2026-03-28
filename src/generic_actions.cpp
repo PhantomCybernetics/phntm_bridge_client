@@ -127,7 +127,7 @@ namespace phntm {
         // if (!goal_status_ts) return;
 
         client->verbose = this->config->service_calls_verbose;
-        client->mapping_verbose = this->config->service_call_mapping_verbose;
+        client->mapping_verbose = this->config->service_calls_mapping_verbose;
 
         client->guard_condition = rcl_get_zero_initialized_guard_condition();
 
@@ -197,7 +197,7 @@ namespace phntm {
 
       if (key == "goal") {
 
-        auto req_err = PhntmBridge::SocketToROSMessage(request_data, value_ptr, client->goal_members, this->config->service_call_mapping_verbose);
+        auto req_err = PhntmBridge::SocketToROSMessage(request_data, value_ptr, client->goal_members, this->config->service_calls_mapping_verbose);
         if (!req_err.empty())
           return this->returnServiceError(fmt::format("Error mapping request data: {}", req_err.c_str()), ev);
 
