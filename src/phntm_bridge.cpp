@@ -111,7 +111,7 @@ int main(int argc, char ** argv)
   FileExtractor::init(base_node);
 
   WRTCPeer::initLogging(config);
-
+  
   while (!g_interrupt_requested.load() && rclcpp::ok()) {
     executor.spin_once(std::chrono::nanoseconds(100));
   }

@@ -29,8 +29,8 @@ namespace phntm {
             double discovery_period_sec, stop_discovery_after_sec;
             bool introspection_verbose;
 
-            std::string bridge_server_address, sio_path, uploader_address;
-            int file_upload_port, sio_port;
+            std::string bridge_server_address, sio_path;
+            int sio_port;
             bool sio_ssl_verify, sio_debug, sio_verbose;
             double sio_connection_retry_sec;
             
@@ -51,11 +51,12 @@ namespace phntm {
             bool enable_ice_udp_mux, enable_ice_tcp, disable_fingerprint_verification;
             bool log_heartbeat, log_sdp;
 
-            std::string file_chunks_topic;
-
             std::vector<std::string> ui_custom_includes_js, ui_custom_includes_css;
             uint peer_limit;
             float ui_background_disconnect_sec;
+
+            int file_uploader_port;
+            std::string file_uploader_address, file_extraction_request_topic, file_extraction_result_topic;
 
             struct MediaTopicConfig {
                 size_t debug_num_frames;

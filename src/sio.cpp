@@ -511,7 +511,7 @@ namespace phntm {
         // async thread
         auto ack_msg_id = ev.get_msgId();
         std::thread newThread([this, ack_msg_id, search_path]() {
-            FileExtractor::findAndUploadFile(this->node, search_path, ack_msg_id);
+            FileExtractor::onRequest(this->node, search_path, ack_msg_id);
         });
         newThread.detach();
     }

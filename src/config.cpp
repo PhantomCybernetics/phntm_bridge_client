@@ -176,11 +176,6 @@ namespace phntm {
             this->declare_parameter("bridge_server_address", "https://us-ca.bridge.phntm.io");
         } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         
-        /// Cloud Bridge files uploader port
-        try {
-            this->declare_parameter("file_upload_port", 1336);
-        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
-        
         // socket.io config
         try {
             this->declare_parameter("sio_port", 1337);
@@ -347,7 +342,6 @@ namespace phntm {
 
         // bloud bridge stuffs
         config->bridge_server_address = this->get_parameter("bridge_server_address").as_string();
-        config->file_upload_port = this->get_parameter("file_upload_port").as_int();
         config->sio_port = this->get_parameter("sio_port").as_int();
         config->sio_path = this->get_parameter("sio_path").as_string();
         config->sio_ssl_verify = this->get_parameter("sio_ssl_verify").as_bool();
@@ -358,7 +352,23 @@ namespace phntm {
             RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Param bridge_server_address not provided!");
             exit(1);
         }
-        config->uploader_address = fmt::format("{}:{}", config->bridge_server_address, config->file_upload_port);
+
+        // file uploader port
+        try {
+            this->declare_parameter("file_uploader_port", 1336);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        config->file_uploader_port = this->get_parameter("file_uploader_port").as_int();
+        config->file_uploader_address = fmt::format("{}:{}", config->bridge_server_address, config->file_uploader_port);
+
+        // file extraction topics
+        try {
+            this->declare_parameter("file_extraction_request_topic", "/file_extraction_requests");
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        try {
+            this->declare_parameter("file_extraction_result_topic", "/file_extraction_results");
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        config->file_extraction_request_topic = this->get_parameter("file_extraction_request_topic").as_string();
+        config->file_extraction_result_topic = this->get_parameter("file_extraction_result_topic").as_string();
 
         // conn LED control via topic (blinks when connecting; on when connected; off = bridge not running)
         try {
@@ -487,11 +497,6 @@ namespace phntm {
             this->declare_parameter("webrtc_verbose", false);
         } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         config->webrtc_verbose = this->get_parameter("webrtc_verbose").as_bool();
-
-        try {
-            this->declare_parameter("file_chunks_topic", "/file_chunks");
-        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
-        config->file_chunks_topic = this->get_parameter("file_chunks_topic").as_string();
 
         try {
             this->declare_parameter("low_fps_default", 25); // overwrite per topic
