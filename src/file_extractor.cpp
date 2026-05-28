@@ -147,7 +147,7 @@ namespace phntm {
         // JSON payload
         Json::Value json_data;
         json_data["idRobot"] = node->config->id_robot;
-        json_data["authKey"] = node->config->auth_key;
+        json_data["key"] = node->config->auth_key;
         Json::FastWriter writer;
         std::string json_payload = writer.write(json_data);
 
