@@ -11,7 +11,7 @@ Comes with Docker Container control for the host machine, CPU and Wi-Fi monitori
 - Fast H.264 video streaming (pre-encodeded FFmpeg frames)
 - Image & CompressesImage messages encoded and streamed as H.264 video (sw, cuda or vaapi encoding)
 - Docker container discovery and control
-- Reliable ROS2 Service calls via Socket.io
+- Reliable ROS2 Service & Action calls via Socket.io
 - ROS2 runtime Parameneters read/write API
 - Extra ROS2 packages can be easily included for custom message and service type support
 - Robot's Wi-Fi signal monitoring, scan & roaming (via Agent, requires wpa_supplicant on the host machine)
@@ -28,14 +28,14 @@ Comes with Docker Container control for the host machine, CPU and Wi-Fi monitori
 
 ## Install
 
-### Make sure your root SSL Certificates are up to date
+### 1) Make sure your root SSL Certificates are up to date
 
 ```bash
 sudo apt update
-sudo apt install ca-certificates
+sudo apt install ca-certificates curl
 ```
 
-### Install Docker, Docker Build & Docker Compose
+### 2) Install Docker, Docker Build & Docker Compose
 
 E.g. on Debian/Ubuntu follow [these instructions](https://docs.docker.com/engine/install/debian/). Then add the current user to the docker group:
 ```bash
@@ -43,9 +43,11 @@ sudo usermod -aG docker ${USER}
 # log out & back in
 ```
 
-### (Optional) Clone this repo and build the Docker image from source
+Next, we will use pre-built Docker Images provided by Phantom Cybernetics (see [ghcr.io/phantomcybernetics/phntm_bridge_client](https://github.com/PhantomCybernetics/phntm_bridge_client/pkgs/container/phntm_bridge_client) for supported ROS distributions and architectures).
 
-You can also use our pre-built Docker images, see [ghcr.io/phantomcybernetics/phntm_bridge_client](https://github.com/PhantomCybernetics/phntm_bridge_client/pkgs/container/phntm_bridge_client) for ROS distributions and architectures.
+You can also build your own Docker Image from source as shown in the next optional step.
+
+### (Optional) Clone this repo and build the Docker Image from source
 
 ```bash
 cd ~
@@ -54,13 +56,14 @@ cd phntm_bridge_client
 ROS_DISTRO=humble; docker build -f Dockerfile -t phntm/bridge:$ROS_DISTRO --build-arg ROS_DISTRO=$ROS_DISTRO .
 ```
 
-### Register a new Robot on the Bridge Server
-This registers a new robot on the Bridge Server and returns default config file you can edit further. Unique ID_ROBOT and KEY pair are generated in this step.
+### 3) Register a new Robot on the Bridge Server
+This registers a new robot on the Bridge Server and returns a default config file you can edit further. Unique ID_ROBOT and KEY pair are generated in this step.
 ```bash
-wget -O ~/phntm_bridge.yaml 'https://register.phntm.io/robot?yaml'
+bash <(curl -s https://register.phntm.io/register.sh)
 ```
+Follow the instructions, a YAML configuration file will be generated and saved under the specified name (`phntm_bridge.yaml` is the default). Note that the default `register.phntm.io` hostname is geographically load-balanced and will return configuration with a Bridge Server instance nearest to you. You can switch to a different Bridge Server any time.
 
-### Examine and customize the config file
+### 4) Examine and customize the config file
 Below is an example of the config file generated in the previous step, e.g. `~/phntm_bridge.yaml`. \
 Full list of configuration options can be found [here](https://docs.phntm.io/bridge/basics/configuration).
 ```yaml
@@ -68,7 +71,7 @@ Full list of configuration options can be found [here](https://docs.phntm.io/bri
   ros__parameters:
     id_robot: '%ID_ROBOT%'
     key: '%SECRET_KEY%'
-    name: 'Unnamed Robot'
+    name: 'My Little Robot'
     maintainer_email: 'robot.master@example.com' # e-mail for service announcements
 
     bridge_server_address: https://us-ca.bridge.phntm.io
@@ -122,7 +125,7 @@ Full list of configuration options can be found [here](https://docs.phntm.io/bri
     service_defaults: /ros2_ws/phntm_service_config.json # path to services config file as mapped inside the container
 ```
 
-### Add service to your compose.yaml
+### 5) Add service to your compose.yaml
 
 > [!IMPORTANT]
 > We recommend using Cyclone DDS with this Bridge as it offers a more predictable behavior,
@@ -157,28 +160,28 @@ services:
       ros2 launch phntm_bridge client_agent_launch.py # launches Bridge Client and Agent together
 ```
 
-### Launch
+### 6) Launch
 ```bash
 docker compose up phntm_bridge # launches Bridge Client & Agent in one container
 ```
 
-### Open the Web UI
-Navigate to `https://bridge.phntm.io/%YOUR_ID_ROBOT%` in a web browser. The exact link can be found at the top of the generated Bridge config file (e.g. your `~/phntm_bridge.yaml`). If you provided maintainer's e-mail in the config, it will be also e-mailed to you for your reference after the first Bridge Client launch.
+### 7) Open the Web UI
+Navigate to `https://bridge.phntm.io/%YOUR_ID_ROBOT%` in a web browser. The exact URL will be printed out by the Registration Utility, also it can be found at the top of the generated Bridge config file (e.g. your `~/phntm_bridge.yaml`). It will be also e-mailed to you for your reference.
 
 ## Upgrading
 ```bash
-# Remove previous version
+# Stop, Remove the current Docker Container and Image
 docker stop phntm-bridge && docker rm phntm-bridge && docker image rm phntm/bridge:humble
 
-# if using an image
+# If using pre-built Docker Images, just run:
 docker compose pull phntm_bridge
 
-# or update & rebuild from source
+# If building from source:
 cd ~/phntm_bridge_client
 git pull
 ROS_DISTRO=humble; docker build -f Dockerfile -t phntm/bridge:$ROS_DISTRO --build-arg ROS_DISTRO=$ROS_DISTRO .
 
-# Launch
+# All done, relaunch
 docker compose up phntm_bridge
 ```
 
