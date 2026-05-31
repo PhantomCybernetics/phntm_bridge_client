@@ -152,7 +152,8 @@ namespace phntm {
 
         //if (this->compressed_pixfmt == "rgb8" || this->compressed_pixfmt == "bgr8") {
 
-            *out_frame = cv::imdecode(msg->data, cv::IMREAD_COLOR); // AV_PIX_FMT_RGB24 or AV_PIX_FMT_BGR24
+            std::vector<unsigned char> compressed_data(msg->data.begin(), msg->data.end());
+            *out_frame = cv::imdecode(compressed_data, cv::IMREAD_COLOR); // AV_PIX_FMT_RGB24 or AV_PIX_FMT_BGR24
 
         // } else if (this->compressed_pixfmt == "bgr16" ||  this->compressed_pixfmt == "rgb16") {
             
