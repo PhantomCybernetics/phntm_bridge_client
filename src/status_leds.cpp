@@ -1,5 +1,6 @@
 #include "phntm_bridge/status_leds.hpp"
 #include "phntm_bridge/const.hpp"
+#include <gpiod.hpp>
 #include <rclcpp/qos.hpp>
 #include <std_msgs/msg/detail/bool__struct.hpp>
 #include <stdexcept>
@@ -7,17 +8,29 @@
 
 namespace phntm {
 
-    StatusLED::StatusLED (gpiod::line line) { 
-        this->line = line;
-        this->mode = Mode::GPIO;
+    #ifdef HAS_GPIOD_V2
+        StatusLED::StatusLED (int line_offset) { 
+            this->line_offset = line_offset;
 
-        gpiod::line_request line_request;
-        line_request.request_type = gpiod::line_request::DIRECTION_OUTPUT;
-        this->line.request(line_request);
-        this->state = State::OFF;
+            this->mode = Mode::GPIO;
+            this->state = State::OFF;
 
-        this->setState(false);
-    }
+            this->setState(false);
+        }
+    #else
+        StatusLED::StatusLED (gpiod::line line) { 
+            this->line = line;
+            this->mode = Mode::GPIO;
+
+            gpiod::line_request line_request;
+            line_request.request_type = gpiod::line_request::DIRECTION_OUTPUT;
+            this->line.request(line_request);
+            this->state = State::OFF;
+
+            this->setState(false);
+        }
+    #endif
+
 
     StatusLED::StatusLED(rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr publisher) {
         this->publisher = publisher;
@@ -95,7 +108,11 @@ namespace phntm {
 
     void StatusLED::setState(bool state) {
         if (this->mode == Mode::GPIO) {
-            this->line.set_value(state ? 1 : 0);
+            #ifdef HAS_GPIOD_V2
+                StatusLEDs::line_request->set_value(this->line_offset, state ? gpiod::line::value::ACTIVE : gpiod::line::value::INACTIVE);
+            #else
+                this->line.set_value(state ? 1 : 0);
+            #endif
         } else if (this->mode == Mode::ROS && rclcpp::ok()) {
             publisher->publish(state ? this->msg_on : this->msg_off);
         }
@@ -111,11 +128,18 @@ namespace phntm {
     void StatusLED::clear() {
         this->setState(false);
         if (this->mode == Mode::GPIO) {
-            this->line.release();
+            #ifdef HAS_GPIOD_V2
+                delete StatusLEDs::line_request;
+            #else
+                this->line.release();
+            #endif
         }
     }
 
     StatusLEDs* StatusLEDs::instance = nullptr;
+    #ifdef HAS_GPIOD_V2
+        gpiod::line_request * StatusLEDs::line_request = nullptr;    
+    #endif
 
     void StatusLEDs::init(std::shared_ptr<PhntmBridge> node, std::shared_ptr<BridgeConfig> config) {
 
@@ -133,26 +157,50 @@ namespace phntm {
             if (!chip) {
                 throw std::runtime_error("Failed to open GPIO chip " + config->conn_led_gpio_chip);
             }
-            if (config->conn_led_pin > -1) {
-                log("Connection LED uses pin " + std::to_string(config->conn_led_pin));
+            #ifdef HAS_GPIOD_V2
                 try {
-                    auto line = chip.get_line((uint) config->conn_led_pin);
-                    instance->conn = std::make_shared<StatusLED>(line);
-                    instance->leds.push_back(instance->conn);
+                    auto request_builder = chip.prepare_request();
+                    request_builder.set_consumer("phntm_bridge");
+                    gpiod::line_settings settings;
+                    settings.set_direction(gpiod::line::direction::OUTPUT);
+                    // Apply settings to the specific line and create the request
+
+                    if (config->conn_led_pin > -1)
+                        request_builder.add_line_settings(config->conn_led_pin, settings);
+                    if (config->data_led_pin > -1)
+                        request_builder.add_line_settings(config->data_led_pin, settings);
+                    auto line_request = request_builder.do_request();
+                    StatusLEDs::line_request = &line_request;
+
+                    if (config->conn_led_pin > -1)
+                        instance->conn = std::make_shared<StatusLED>(config->conn_led_pin);
+                    if (config->data_led_pin > -1)
+                        instance->data = std::make_shared<StatusLED>(config->data_led_pin);
                 } catch (const std::out_of_range& e) {
-                    throw std::runtime_error("Failed to open GPIO line " + std::to_string(config->conn_led_pin));
+                    throw std::runtime_error("Failed to open GPIO lines");
                 }
-            }
-            if (config->data_led_pin > -1) {
-                log("Data LED uses pin " + std::to_string(config->data_led_pin));
-                try {
-                    auto line = chip.get_line((uint) config->data_led_pin);
-                    instance->data = std::make_shared<StatusLED>(line);
-                    instance->leds.push_back(instance->data);
-                } catch (const std::out_of_range& e) {
-                    throw std::runtime_error("Failed to open GPIO line " + std::to_string(config->data_led_pin));
+            #else
+                if (config->conn_led_pin > -1) {
+                    log("Connection LED uses pin " + std::to_string(config->conn_led_pin));
+                    try {
+                        auto line = chip.get_line((uint) config->conn_led_pin);
+                        instance->conn = std::make_shared<StatusLED>(line);
+                        instance->leds.push_back(instance->conn);
+                    } catch (const std::out_of_range& e) {
+                        throw std::runtime_error("Failed to open GPIO line " + std::to_string(config->conn_led_pin));
+                    }
                 }
-            }
+                if (config->data_led_pin > -1) {
+                    log("Data LED uses pin " + std::to_string(config->data_led_pin));
+                    try {
+                        auto line = chip.get_line((uint) config->data_led_pin);
+                        instance->data = std::make_shared<StatusLED>(line);
+                        instance->leds.push_back(instance->data);
+                    } catch (const std::out_of_range& e) {
+                        throw std::runtime_error("Failed to open GPIO line " + std::to_string(config->data_led_pin));
+                    }
+                }
+            #endif
         } else if (!config->conn_led_topic.empty() || !config->data_led_topic.empty()) {
 
             if (!config->conn_led_topic.empty()) {

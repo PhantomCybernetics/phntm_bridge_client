@@ -2,7 +2,20 @@
 
 #include "config.hpp"
 
+// try to detect which version of gpiod is available
 #include <gpiod.hpp>
+#if defined(GPIOD_VERSION_MAJOR)
+    #if GPIOD_VERSION_MAJOR >= 2 // v2 or newer API
+        #define HAS_GPIOD_V2
+    #else
+        #define HAS_GPIOD_V1 // v1 API
+    #endif
+#elif defined(GPIOD_LINE_BULK_MAX_LINES) // v1 API (fallback for older releases)
+    #define HAS_GPIOD_V1
+#else
+    #define HAS_GPIOD_V2 // assume v2+ based on API changes
+#endif
+
 #include <thread>
 #include <chrono>
 
@@ -14,7 +27,12 @@ namespace phntm {
 
     class StatusLED {
         public:
-            StatusLED(gpiod::line line);
+            #ifdef HAS_GPIOD_V2
+                StatusLED(int line_offset);
+            #else
+                StatusLED(gpiod::line line);
+            #endif
+
             StatusLED(rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr publisher);
 
             void on();
@@ -53,7 +71,11 @@ namespace phntm {
             std::chrono::steady_clock::time_point last_on_time;
             std::chrono::steady_clock::time_point last_off_time;
 
-            gpiod::line line;
+            #ifdef HAS_GPIOD_V2
+                int line_offset;
+            #else
+                gpiod::line line;
+            #endif
 
             rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr publisher;
             std_msgs::msg::Bool msg_on;
@@ -71,6 +93,9 @@ namespace phntm {
             std::shared_ptr<StatusLED> conn;
             std::shared_ptr<StatusLED> data;
             
+            #ifdef HAS_GPIOD_V2
+                static gpiod::line_request * line_request;
+            #endif
 
         private:
             StatusLEDs() {};
