@@ -169,7 +169,7 @@ Navigate to `https://bridge.phntm.io/%YOUR_ID_ROBOT%` in a web browser. The exac
 
 ## (Optional) Build the Docker Image from Source
 
-In the above example we've used a pre-built Docker image [provided by Phantom Cybernetics](https://ghcr.io/phantomcybernetics/phntm_bridge_client), but can also build your own from source:
+In the above example we've used a pre-built Docker image [provided by Phantom Cybernetics](https://ghcr.io/phantomcybernetics/phntm_bridge_client), but you can also build your own from source:
 
 ```bash
 cd ~
