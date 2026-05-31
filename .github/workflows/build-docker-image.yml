@@ -127,10 +127,10 @@ jobs:
       if: always()   # runs even if build fails
       run: |
         if [ "${{ job.status }}" == "success" ]; then
-          echo '{"schemaVersion":1,"label":"${{ matrix.ros_distro }}","message":"${{ matrix.arch }}","color":"green"}' \
+          echo '{"schemaVersion":1,"label":"${{ matrix.ros_distro }}","message":"${{ matrix.arch }}","color":"green", "url": }' \
             > ${{ matrix.ros_distro }}-${{ matrix.arch }}.json
         else
-          echo '{"schemaVersion":1,"label":"${{ matrix.ros_distro }}","message":"${{ matrix.arch }}","color":"red"}' \
+          echo '{"schemaVersion":1,"label":"${{ matrix.ros_distro }}","message":"${{ matrix.arch }}","color":"red", "isError":true}' \
             > ${{ matrix.ros_distro }}-${{ matrix.arch }}.json
         fi
 
@@ -211,7 +211,7 @@ jobs:
   deploy-badges:
     runs-on: ubuntu-latest
     needs: build
-    if: always()
+    if: lways() && github.ref == 'refs/heads/main' # only updating badges on main
     permissions:
       contents: write   # needed to push to gh-pages branch
     steps:
