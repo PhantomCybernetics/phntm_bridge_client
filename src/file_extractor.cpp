@@ -173,27 +173,32 @@ namespace phntm {
         // perform the request
         CURLcode res = curl_easy_perform(curl);
 
-        // cleanup
-        curl_slist_free_all(headers);
-        curl_easy_cleanup(curl);
-
         if (res != CURLE_OK) {
             std::string err = fmt::format("CURL error: {}", curl_easy_strerror(res));
             RCLCPP_ERROR(node->get_logger(), "%s", err.c_str());
             response->success = false;
             response->message = err;
+            curl_slist_free_all(headers);
+            curl_easy_cleanup(curl);
             return;
         }
 
-        long response_code;
-        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+        long response_code = 0;
+        CURLcode info_res = curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+        if(info_res != CURLE_OK) {
+            log("Failed to get response code", true);
+        }
+
+        // cleanup
+        curl_slist_free_all(headers);
+        curl_easy_cleanup(curl);
 
         if (response_code == 200) { // ok
-            log("Server replied: " + response_buffer + " (" + std::to_string(response_code) + ")");
+            log("Server replied: " + response_buffer + " (code " + std::to_string(response_code) + ")");
             response->success = true;
             response->message = response_buffer;
         } else {
-            log("Server replied: " + response_buffer + " (" + std::to_string(response_code) + ")", true);
+            log("Server replied: " + response_buffer + " (code " + std::to_string(response_code) + ")", true);
             response->success = false;
             response->message = response_buffer;
         }
