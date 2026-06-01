@@ -127,7 +127,7 @@ jobs:
       if: always()   # runs even if build fails
       run: |
         if [ "${{ job.status }}" == "success" ]; then
-          echo '{"schemaVersion":1,"label":"${{ matrix.ros_distro }}","message":"${{ matrix.arch }}","color":"green", "url": }' \
+          echo '{"schemaVersion":1,"label":"${{ matrix.ros_distro }}","message":"${{ matrix.arch }}","color":"green" }' \
             > ${{ matrix.ros_distro }}-${{ matrix.arch }}.json
         else
           echo '{"schemaVersion":1,"label":"${{ matrix.ros_distro }}","message":"${{ matrix.arch }}","color":"red", "isError":true}' \
