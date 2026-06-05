@@ -237,6 +237,9 @@ namespace phntm {
                         RCLCPP_INFO(this->node->get_logger(), "%s Discovered file extractor node %s", L.c_str(), sub.node_name().c_str());
                     }
                 }
+                if (sub.node_name() == "_NODE_NAME_UNKNOWN_") { // skip special rmw subscribers
+                    continue;
+                }
                 if (this->discovered_nodes.find(sub.node_name()) == this->discovered_nodes.end()) {
                     RCLCPP_ERROR(this->node->get_logger(), "%s Subscriber node %s not found for %s", L.c_str(), sub.node_name().c_str(), topic.first.c_str());
                     continue;
