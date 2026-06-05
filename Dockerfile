@@ -7,7 +7,6 @@ FROM ros:$ROS_DISTRO
 # [x] Jazzy LTS	                24.04 Noble LTS
 # [x] Kilted (Short-term)       24.04 Noble LTS
 # [x] Lyrical LTS               26.04 Resolute LTS
-#     - libdatachannel (CMake < 3.5), wireless-tools (apt)
 # [x] Rolling (Short-term)      24.04 Noble !! LTS
 
 RUN echo "Building docker image with ROS_DISTRO=$ROS_DISTRO"
