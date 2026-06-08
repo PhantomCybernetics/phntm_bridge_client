@@ -29,7 +29,7 @@ jobs:
         include:
           - arch: amd64
             ros_distro: rolling
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
             platform: linux/amd64
           - arch: arm64
             ros_distro: rolling
@@ -38,7 +38,7 @@ jobs:
 
           - arch: amd64
             ros_distro: lyrical
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
             platform: linux/amd64
           - arch: arm64
             ros_distro: lyrical
@@ -47,7 +47,7 @@ jobs:
 
           - arch: amd64
             ros_distro: kilted
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
             platform: linux/amd64
           - arch: arm64
             ros_distro: kilted
@@ -56,7 +56,7 @@ jobs:
 
           - arch: amd64
             ros_distro: jazzy
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
             platform: linux/amd64
           - arch: arm64
             ros_distro: jazzy
@@ -65,7 +65,7 @@ jobs:
 
           - arch: amd64
             ros_distro: iron
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
             platform: linux/amd64
           - arch: arm64
             ros_distro: iron
@@ -74,7 +74,7 @@ jobs:
 
           - arch: amd64
             ros_distro: humble
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
             platform: linux/amd64
           - arch: arm64
             ros_distro: humble
@@ -143,7 +143,7 @@ jobs:
         retention-days: 1
 
   push-multi-arch-manifest:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: build
     if: always()
     permissions:
@@ -209,7 +209,7 @@ jobs:
         done
 
   deploy-badges:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: build
     if: always() && github.ref == 'refs/heads/main' # only updating badges on main
     permissions:
