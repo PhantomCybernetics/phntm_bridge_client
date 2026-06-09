@@ -101,7 +101,6 @@ Full list of configuration options can be found [here](https://docs.phntm.io/bri
     ui_battery_topic: /battery # battery to show in the UI, '' to disable
 
     wifi_interface: 'wlan0'
-    wifi_monitor_topic: /iw_status # WiFi monitor topic to show in the UI (produced by the Agent)
     enable_wifi_scan: True
     enable_wifi_roam: False
 
