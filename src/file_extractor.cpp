@@ -29,7 +29,7 @@ namespace phntm {
         FileExtractor::node = node;
         rclcpp::QoS qos(rclcpp::KeepLast(1000));
         qos.reliable();
-        qos.history(rclcpp::HistoryPolicy::KeepAll);
+        qos.history(rclcpp::HistoryPolicy::KeepLast);
 
         requests_pub = node->create_publisher<phntm_interfaces::msg::FileExtractionRequest>(node->config->file_extraction_request_topic, qos);
         results_sub = node->create_subscription<phntm_interfaces::msg::FileExtractionResult>(node->config->file_extraction_result_topic, qos, FileExtractor::onResult);
