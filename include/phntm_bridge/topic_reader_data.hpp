@@ -60,7 +60,7 @@ namespace phntm {
 
             void start();
             void stop();
-            void onData(std::shared_ptr<rclcpp::SerializedMessage> data);
+            void onData(std::shared_ptr<const rclcpp::SerializedMessage> data);
             void sendLatestData(std::shared_ptr<Output> output);
             std::shared_ptr<rclcpp::GenericSubscription> sub;
 

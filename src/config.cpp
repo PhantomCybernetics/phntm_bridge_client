@@ -5,7 +5,9 @@
 #include "sio_message.h"
 #include <fstream>
 #include <chrono>
+#include <rclcpp/duration.hpp>
 #include <rclcpp/parameter_value.hpp>
+#include <rclcpp/qos.hpp>
 #include <string>
 #include <vector>
 
@@ -605,8 +607,7 @@ namespace phntm {
             this->declare_parameter(topic + ".history_depth", static_cast<int>(default_depth));
         } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         auto depth = this->get_parameter(topic + ".history_depth").as_int();
-        rclcpp::QoS qos(depth);
-        qos.history(rclcpp::HistoryPolicy::KeepLast);
+        auto qos = rclcpp::QoS(depth);
 
         try {
             this->declare_parameter(topic + ".reliability", default_reliability);
@@ -638,18 +639,18 @@ namespace phntm {
             log("Invalid durability specified for " + topic + ": '" + durability_str + "'; using system_default", true);
             qos.durability(rclcpp::DurabilityPolicy::SystemDefault);
         }
-        
         try {
             this->declare_parameter(topic + ".lifespan_sec", default_lifespan_sec); // num sec as double, -1.0 infinity (default)
         } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         auto lifespan_sec = this->get_parameter(topic + ".lifespan_sec").as_double();
-        if (lifespan_sec < 0.0f) {
-            qos.lifespan(rclcpp::Duration::max());
+        if (lifespan_sec <= 0.0f) { // -1 is Infinity
+            // rclcpp::Duration.Max() doesn't work with Fast DDS since Jazzy, using zeroes as infinity
+            qos.lifespan(rclcpp::Duration(0, 0)); 
         } else {
             auto lifespan_total_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(lifespan_sec));
             auto lifespan_sec_part = std::chrono::duration_cast<std::chrono::seconds>(lifespan_total_ns);
             auto lifespan_ns_part = lifespan_total_ns - lifespan_sec_part;
-            qos.lifespan(lifespan_sec < 0.0 ? rclcpp::Duration::max() : rclcpp::Duration(lifespan_sec_part.count(), lifespan_ns_part.count()));
+            qos.lifespan(rclcpp::Duration(lifespan_sec_part.count(), lifespan_ns_part.count()));
         }
 
         return qos;

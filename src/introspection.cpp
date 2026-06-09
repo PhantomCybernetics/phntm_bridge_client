@@ -35,7 +35,7 @@ namespace phntm {
             auto qos = rclcpp::QoS(1);
             qos.best_effort();
             qos.durability_volatile();
-            qos.lifespan(rclcpp::Duration::max());
+            qos.lifespan(rclcpp::Duration(0, 0));
             // rclcpp::SubscriptionOptions options;
             // options.callback_group = my_callback_group;
             log(L + "Subscribing to " + this->config->docker_monitor_topic);
@@ -677,8 +677,8 @@ namespace phntm {
         qos_msg->get_map().emplace("history", sio::int_message::create(static_cast<int>(qos.history())));
         qos_msg->get_map().emplace("reliability", sio::int_message::create(static_cast<int>(qos.reliability())));
         qos_msg->get_map().emplace("durability", sio::int_message::create(static_cast<int>(qos.durability())));
-        qos_msg->get_map().emplace("lifespan", sio::int_message::create((int) (qos.lifespan() == rclcpp::Duration::max() ? -1 : qos.lifespan().nanoseconds())));
-        qos_msg->get_map().emplace("deadline", sio::int_message::create((int) (qos.deadline() == rclcpp::Duration::max() ? -1 : qos.deadline().nanoseconds())));
+        qos_msg->get_map().emplace("lifespan", sio::int_message::create((int) (qos.lifespan().seconds() == 0 && qos.lifespan().nanoseconds() == 0 ? -1 : qos.lifespan().nanoseconds())));
+        qos_msg->get_map().emplace("deadline", sio::int_message::create((int) (qos.lifespan().seconds() == 0 && qos.lifespan().nanoseconds() == 0 ? -1 : qos.deadline().nanoseconds())));
 
         return qos_msg;
     }
