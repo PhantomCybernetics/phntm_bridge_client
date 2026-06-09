@@ -169,6 +169,9 @@ RUN if [ "$ROS_DISTRO" = "rolling" ]; then \
         colcon build --symlink-install --packages-select ffmpeg_image_transport_msgs; \
     fi
 
+RUN apt-get install -y ros-$ROS_DISTRO-rmw-fastrtps-cpp
+RUN apt-get install -y ros-$ROS_DISTRO-rmw-fastrtps-dynamic-cpp
+
 # install Phntm Bridge Client
 COPY ./ $ROS_WS/src/phntm_bridge
 RUN . /opt/ros/$ROS_DISTRO/setup.sh && \
