@@ -576,6 +576,7 @@ namespace phntm {
         instance->client.set_reconnect_attempts(0);
         instance->client.clear_con_listeners();
         instance->client.sync_close();
+        BridgeSocket::instance = nullptr;
     }
 
     BridgeSocket::~BridgeSocket() {

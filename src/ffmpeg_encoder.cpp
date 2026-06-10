@@ -545,16 +545,12 @@ namespace phntm {
         while (this->running) {
 
             try {
-                auto pkt = av_packet_alloc();
-                if (!pkt) {
-                    throw std::runtime_error("["+this->toString()+"] Could not allocate packet");
-                }
-
                 std::unique_lock<std::mutex> queue_lock(this->encoder_mutex);
                 this->encoder_cv.wait(queue_lock, [this] { return !this->encoder_queue.empty() || !this->running; });
 
-                if (this->encoder_queue.empty()) 
+                if (this->encoder_queue.empty()) {
                     break;
+                }
 
                 EncoderRequest req;
                 while (!this->encoder_queue.empty()) {
@@ -574,6 +570,11 @@ namespace phntm {
                     //this->running = false;
                     //this->scaler_cv.notify_one(); // clear the scaler too
                     break;
+                }
+
+                auto pkt = av_packet_alloc();
+                if (!pkt) {
+                    throw std::runtime_error("["+this->toString()+"] Could not allocate packet");
                 }
                     
                 // Convert from OpenCV BGR to encoder's format

@@ -198,8 +198,10 @@ namespace phntm {
       if (key == "goal") {
 
         auto req_err = PhntmBridge::SocketToROSMessage(request_data, value_ptr, client->goal_members, this->config->service_calls_mapping_verbose);
-        if (!req_err.empty())
+        if (!req_err.empty()) {
+          free(goal_request_msg);
           return this->returnServiceError(fmt::format("Error mapping request data: {}", req_err.c_str()), ev);
+        }
 
       } if (key == "goal_id" && type == rosidl_typesupport_introspection_cpp::ROS_TYPE_MESSAGE) { // goal_id is obj
         const rosidl_typesupport_introspection_cpp::MessageMembers *nested_members = static_cast<const rosidl_typesupport_introspection_cpp::MessageMembers *>(client->goal_request_members->members_[i].members_->data);
@@ -220,6 +222,7 @@ namespace phntm {
     }
     if (!uuid_set) {
       log("Failed to set goal_request uuid for " + action_name + ", unexpected goal_request format!", true);
+      free(goal_request_msg);
       return;
     }
     
@@ -227,8 +230,10 @@ namespace phntm {
       auto is_available = false;
       while (!is_available) {
         ret = rcl_action_server_is_available(this->get_node_base_interface()->get_rcl_node_handle(), client->rcl_client, &is_available); 
-        if (ret != RCL_RET_OK)
+        if (ret != RCL_RET_OK) {
+          free(goal_request_msg);
           return this->returnServiceError(fmt::format("Error waiting for the server: {}", rcl_get_error_string().str), ev);
+        }
       }
     
       log(BLUE + "Calling action: " + action_name + CLR + " {" + action_type + "} msg_id=" + std::to_string(ev.get_msgId()));
@@ -236,8 +241,10 @@ namespace phntm {
       // send the request
       int64_t sequence_number;
       ret = rcl_action_send_goal_request(client->rcl_client, goal_request_msg, &sequence_number);
-      if (ret != RCL_RET_OK)
+      if (ret != RCL_RET_OK) {
+        free(goal_request_msg);
         return this->returnServiceError(fmt::format("Failed to send request: {}", rcl_get_error_string().str), ev);
+      }
 
       if (this->config->service_calls_verbose)
         log("Action goal " + action_name + " sent ok, sequence_number=" + std::to_string(sequence_number));
@@ -254,8 +261,10 @@ namespace phntm {
                             0, // number of events
                             context.get(),
                             rcl_get_default_allocator()); // Allocator
-      if (ret != RCL_RET_OK)
+      if (ret != RCL_RET_OK) {
+        free(goal_request_msg);
         return this->returnServiceError(fmt::format("Failed to initialize wait set: {}", rcl_get_error_string().str), ev);
+      }
 
       if (this->config->service_calls_verbose)
         log(GRAY+ "Starting wait_set loop for " + action_name + "..." + CLR);
@@ -267,13 +276,17 @@ namespace phntm {
           log("Error cleaning wait_set", true);
   
         ret = rcl_action_wait_set_add_action_client(&wait_set, client->rcl_client, NULL, NULL);
-        if (ret != RCL_RET_OK)
+        if (ret != RCL_RET_OK) {
+          free(goal_request_msg);
           return this->returnServiceError(fmt::format("Failed to add client to wait set: {}", rcl_get_error_string().str), ev);
+        }
 
         size_t guard_index;
         ret = rcl_wait_set_add_guard_condition(&wait_set, &client->guard_condition, &guard_index);
-        if (ret != RCL_RET_OK)
+        if (ret != RCL_RET_OK) {
+          free(goal_request_msg);
           return this->returnServiceError(fmt::format("Failed to add guard condition to wait set: {}", rcl_get_error_string().str), ev);
+        }
 
         ret = rcl_wait(&wait_set, timeout_ns);
         if (ret == RCL_RET_TIMEOUT) {
@@ -292,14 +305,17 @@ namespace phntm {
           &goal_response_ready,
           &cancel_response_ready,
           &result_response_ready);
-        if (ret != RCL_RET_OK)
+        if (ret != RCL_RET_OK) {
+          free(goal_request_msg);
           return this->returnServiceError(fmt::format("Failed checking wait set: {}", rcl_get_error_string().str), ev);
+        }
         
         size_t num_subscriptions, num_guard_conditions, num_timers, num_clients, num_services;
         ret = rcl_action_client_wait_set_get_num_entities(client->rcl_client, &num_subscriptions, &num_guard_conditions, &num_timers, &num_clients, &num_services);
-        if (ret != RCL_RET_OK)
+        if (ret != RCL_RET_OK) {
+          free(goal_request_msg);
           return this->returnServiceError(fmt::format("Failed checking wait set entity numbers: {}", rcl_get_error_string().str), ev);
-      
+        }
       } // action wait_set loop done
 
       if (this->config->service_calls_verbose) {
@@ -311,15 +327,16 @@ namespace phntm {
         log("Error cleaning wait_set");
 
       ret = rcl_wait_set_fini(&wait_set);
-      if (ret != RCL_RET_OK)
+      if (ret != RCL_RET_OK) {
+        free(goal_request_msg);
         return this->returnServiceError(fmt::format("Error clearing wait set: {}", rcl_get_error_string().str), ev);
-    
+      }
     } // call scope end
 
     free(goal_request_msg);  // And goal_response_msg if alloc'd
   }
 
-  void PhntmBridge::cancelGenericActionGoal(std::string action_name, sio::event const& ev, const std::string id_peer) {
+  void PhntmBridge::cancelGenericActionGoal(std::string action_name, sio::event const& ev, const std::string) {
     if (this->config->service_calls_verbose)
       log(BLUE + "Processing action "+ action_name +" goal cancel"+ CLR);
 
@@ -344,17 +361,18 @@ namespace phntm {
     if (src_msg->get_map().find("goal_uuid") == src_msg->get_map().end())
       return this->returnServiceError(fmt::format("Action goal_uuid not provided in cancel message"), ev);
     auto goal_uuid = src_msg->get_map()["goal_uuid"];
-    if ((!goal_uuid->flag_integer && !goal_uuid->flag_double) || !goal_uuid->flag_array || goal_uuid->get_vector().size() != 16)
+    if (goal_uuid->get_flag() != sio::message::flag_array || goal_uuid->get_vector().size() != 16) {
+      std::cout << "FLAG: " << goal_uuid->get_flag() << std::endl;;
       return this->returnServiceError(fmt::format("Action goal_uuid invalid cancel message"), ev);
+    }
 
     action_msgs__srv__CancelGoal_Request cancel_request_msg = rcl_action_get_zero_initialized_cancel_request();    
     for (size_t i = 0; i < 16; i++) {
-      if (goal_uuid->flag_integer) {
-        auto one = goal_uuid->get_vector()[i]->get_int();
-        cancel_request_msg.goal_info.goal_id.uuid[i] = static_cast<uint8_t>(one & 0xFF);
-      } else {
-        auto one = goal_uuid->get_vector()[i]->get_double();
-        cancel_request_msg.goal_info.goal_id.uuid[i] = static_cast<uint8_t>(std::round(one));
+      auto one = goal_uuid->get_vector()[i];
+      if (one->get_flag() == sio::message::flag_integer) {
+        cancel_request_msg.goal_info.goal_id.uuid[i] = static_cast<uint8_t>(one->get_int() & 0xFF);
+      } else if (one->get_flag() == sio::message::flag_double) {
+        cancel_request_msg.goal_info.goal_id.uuid[i] = static_cast<uint8_t>(std::round(one->get_double()));
       }
     }
     std::string uuid_str = toString( cancel_request_msg.goal_info.goal_id.uuid);
@@ -476,6 +494,7 @@ namespace phntm {
     }
     if (!uuid_set) {
       log("Failed to set result_request uuid for " + client->action_name + ", unexpected result_request format!", true);
+      free(result_request_msg);
       return;
     }
 
@@ -483,6 +502,7 @@ namespace phntm {
     ret = rcl_action_send_result_request(client->rcl_client, result_request_msg, &sequence_number);
     if (ret != RCL_RET_OK) {
       log(fmt::format("Error sending action result request: {}", rcl_get_error_string().str), true);
+      free(result_request_msg);
       return;
     }
 
@@ -490,11 +510,12 @@ namespace phntm {
     client->result_sequence.emplace(sequence_number, goal);
 
     // TRIGGER GUARD CONDITION
-
     ret = rcl_trigger_guard_condition(&client->guard_condition);
     if (ret != RCL_RET_OK) {
       log(fmt::format("Failed to trigger guard condition: {}", rcl_get_error_string().str));
     }
+
+    free(result_request_msg);
   }
 
   void PhntmBridge::OnAction_Result_Response(const void * client_ptr, size_t number_of_events) {
