@@ -203,11 +203,13 @@ namespace phntm {
                 continue;
             }
             for (auto pub : observed_topic_publishers) {
+                if (pub.node_name() == "_NODE_NAME_UNKNOWN_") { // skip special rmw publishers
+                    continue;
+                }
                 if (this->discovered_nodes.find(pub.node_name()) == this->discovered_nodes.end()) {
                     RCLCPP_ERROR(this->node->get_logger(), "%s Publisher node %s not found for %s", L.c_str(), pub.node_name().c_str(), topic.first.c_str());
                     continue;
                 }
-
                 auto node_tmp_publishers = &this->discovered_nodes.at(pub.node_name()).tmp_publishers;
                 if (node_tmp_publishers->find(topic.first) == node_tmp_publishers->end()) {
 
