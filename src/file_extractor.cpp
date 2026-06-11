@@ -62,13 +62,18 @@ namespace phntm {
         }
         FileExtractor::file_requests_in_progresss.emplace(search_path, req_data);
 
-        phntm_interfaces::msg::FileExtractionRequest req;
-        req.path = search_path;
-        requests_pub->publish(req);
+        phntm_interfaces::msg::FileExtractionRequest req_msg;
+        req_msg.path = search_path;
+        req_msg.id_robot = node->config->id_robot;
+        requests_pub->publish(req_msg);
     }
 
     void FileExtractor::onResult(const phntm_interfaces::msg::FileExtractionResult res) {
         
+        if (res.id_robot != FileExtractor::node->config->id_robot) {
+            return; // ignore replies with other robot ids
+        }
+
         if (FileExtractor::file_requests_in_progresss.find(res.path) == FileExtractor::file_requests_in_progresss.end()) {
             log("FileExtractor request not found for '" + res.path + "'", true);
             return;
@@ -76,7 +81,6 @@ namespace phntm {
 
         auto req = FileExtractor::file_requests_in_progresss[res.path];
         auto success = res.result == phntm_interfaces::msg::FileExtractionResult::RESULT_UPLOADED;
-        
         
         if (req.agent_replies.find(res.agent) != req.agent_replies.end()) {
             req.agent_replies[res.agent] = res.result;
@@ -106,6 +110,9 @@ namespace phntm {
             case phntm_interfaces::msg::FileExtractionResult::RESULT_ERROR:
                 log("FileExtractor got error for '" + res.path + "' from " + res.agent);
                 req.agent_messages.emplace(res.agent, "Produced errord");
+                break;
+            case phntm_interfaces::msg::FileExtractionResult::RESULT_INVALID_ROBOT:
+                log("FileExtractor got invalid robot for '" + res.path + "' from " + res.agent);
                 break;
             default:
                 log("FileExtractor result for '" + res.path + "' from " + res.agent + ", invalid state", true);

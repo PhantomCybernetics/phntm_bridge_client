@@ -142,7 +142,7 @@ RUN echo 'export PYTHONPATH="/root/ros2_py_venv/lib/python${PYTHON_VERSION_VENV}
 # Agent python deps and ROS python libs (used when building packages)
 RUN . /root/ros2_py_venv/bin/activate && \
     pip install iwlib && \
-    pip install empy numpy lark && \
+    pip install numpy lark && \
     deactivate
 
 # video enc
