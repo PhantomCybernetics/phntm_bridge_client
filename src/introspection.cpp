@@ -35,7 +35,7 @@ namespace phntm {
             auto qos = rclcpp::QoS(1);
             qos.best_effort();
             qos.durability_volatile();
-            qos.lifespan(rclcpp::Duration::max());
+            qos.lifespan(rclcpp::Duration(0, 0));
             // rclcpp::SubscriptionOptions options;
             // options.callback_group = my_callback_group;
             log(L + "Subscribing to " + this->config->docker_monitor_topic);
@@ -128,8 +128,9 @@ namespace phntm {
         for (auto it = this->discovered_nodes.begin(); it != this->discovered_nodes.end();) {
             if (nodes_and_namespaces.find(it->first) == nodes_and_namespaces.end()) {
                 RCLCPP_INFO(this->node->get_logger(), "%s Lost node %s", L.c_str(), it->first.c_str());
-                if (this->discovered_file_extractors.find(it->first) != this->discovered_file_extractors.end()) {
-                    this->discovered_file_extractors.erase(it->first);
+                auto fe_it = std::find(this->discovered_file_extractors.begin(), this->discovered_file_extractors.end(), it->first);
+                if (fe_it != this->discovered_file_extractors.end()) {
+                    this->discovered_file_extractors.erase(fe_it);
                 }
                 it = this->discovered_nodes.erase(it);
                 nodes_changed = true;
@@ -202,11 +203,13 @@ namespace phntm {
                 continue;
             }
             for (auto pub : observed_topic_publishers) {
+                if (pub.node_name() == "_NODE_NAME_UNKNOWN_") { // skip special rmw publishers
+                    continue;
+                }
                 if (this->discovered_nodes.find(pub.node_name()) == this->discovered_nodes.end()) {
                     RCLCPP_ERROR(this->node->get_logger(), "%s Publisher node %s not found for %s", L.c_str(), pub.node_name().c_str(), topic.first.c_str());
                     continue;
                 }
-
                 auto node_tmp_publishers = &this->discovered_nodes.at(pub.node_name()).tmp_publishers;
                 if (node_tmp_publishers->find(topic.first) == node_tmp_publishers->end()) {
 
@@ -229,11 +232,20 @@ namespace phntm {
                 continue;
             }
             for (auto sub : observed_topic_subscribers) {
+                // find agent nodes subscribing to file extraction request topic
+                if (topic.first == this->config->file_extraction_request_topic) {
+                    if (std::find(this->discovered_file_extractors.begin(), this->discovered_file_extractors.end(), sub.node_name()) == this->discovered_file_extractors.end()) {
+                        this->discovered_file_extractors.push_back(sub.node_name());
+                        RCLCPP_INFO(this->node->get_logger(), "%s Discovered file extractor node %s", L.c_str(), sub.node_name().c_str());
+                    }
+                }
+                if (sub.node_name() == "_NODE_NAME_UNKNOWN_") { // skip special rmw subscribers
+                    continue;
+                }
                 if (this->discovered_nodes.find(sub.node_name()) == this->discovered_nodes.end()) {
                     RCLCPP_ERROR(this->node->get_logger(), "%s Subscriber node %s not found for %s", L.c_str(), sub.node_name().c_str(), topic.first.c_str());
                     continue;
                 }
-
                 auto node_tmp_subscribers = &this->discovered_nodes.at(sub.node_name()).tmp_subscribers;
                 if (node_tmp_subscribers->find(topic.first) == node_tmp_subscribers->end()) {
                     std::vector<SubQoS> qos_list;
@@ -386,15 +398,6 @@ namespace phntm {
                     service_type = replace(service_type, "_FeedbackMessage", "");
                 }
 
-                // find agent nodes with file extraction service enabled (before blacklisting)
-                if (service_type == "phntm_interfaces/srv/FileRequest") {
-                    if (this->discovered_file_extractors.find(node_name) == this->discovered_file_extractors.end()) {
-                        auto client = node->create_client<phntm_interfaces::srv::FileRequest>(service_id);
-                        this->discovered_file_extractors.emplace(node_name, client); //id node => srv id
-                        RCLCPP_INFO(this->node->get_logger(), "%s Discovered file extractor node %s %s", L.c_str(), node_name.c_str(), service_id.c_str());
-                    }
-                }
-
                 bool service_blacklisted = false;
                 if (service_type == "rcl_interfaces/srv/ListParameters" ||
                     service_type == "rcl_interfaces/srv/DescribeParameters" ||
@@ -497,7 +500,7 @@ namespace phntm {
         }
     }
 
-    std::map<std::string, rclcpp::Client<phntm_interfaces::srv::FileRequest>::SharedPtr> Introspection::getFileExtractors() {
+    std::list<std::string> Introspection::getFileExtractors() {
         if (instance == nullptr)
             return {};
         return instance->discovered_file_extractors;
@@ -601,15 +604,22 @@ namespace phntm {
         if (this->discovered_docker_containers.find(host) == this->discovered_docker_containers.end()) { // new host reporting
             docker_containers_changed = true;
             
-            // try looking for hosts we have and match id by container names
+            // try going through hosts we have seen before and match them by previusly seen container ids
+            // if there is more than one agent instance running on a single host machine, this will act weird (thinking agent is changing host name on every update),
+            // that's okay, only one agent should run on a particular host machine
             for (size_t i = 0; i < msg.containers.size(); i++) {
                 for (auto p : this->discovered_docker_containers) {
+                    auto match_found = false;
                     for (size_t j = 0; j < p.second.containers.size(); j++) {
                         if (msg.containers[i].id == p.second.containers[j].id) { // known container id found under new host
-                            RCLCPP_INFO(this->node->get_logger(), "%s Agent host changed from %s to %s", Introspection::L.c_str(), p.first.c_str(), host.c_str());
-                            this->discovered_docker_containers.erase(p.first);
+                            match_found = true;
                             break;
                         }
+                    }
+                    if (match_found) {
+                        RCLCPP_INFO(this->node->get_logger(), "%s Agent host changed from %s to %s", Introspection::L.c_str(), p.first.c_str(), host.c_str());
+                        this->discovered_docker_containers.erase(p.first);
+                        break;
                     }
                 }
             }
@@ -669,8 +679,8 @@ namespace phntm {
         qos_msg->get_map().emplace("history", sio::int_message::create(static_cast<int>(qos.history())));
         qos_msg->get_map().emplace("reliability", sio::int_message::create(static_cast<int>(qos.reliability())));
         qos_msg->get_map().emplace("durability", sio::int_message::create(static_cast<int>(qos.durability())));
-        qos_msg->get_map().emplace("lifespan", sio::int_message::create((int) (qos.lifespan() == rclcpp::Duration::max() ? -1 : qos.lifespan().nanoseconds())));
-        qos_msg->get_map().emplace("deadline", sio::int_message::create((int) (qos.deadline() == rclcpp::Duration::max() ? -1 : qos.deadline().nanoseconds())));
+        qos_msg->get_map().emplace("lifespan", sio::int_message::create((int) (qos.lifespan().seconds() == 0 && qos.lifespan().nanoseconds() == 0 ? -1 : qos.lifespan().nanoseconds())));
+        qos_msg->get_map().emplace("deadline", sio::int_message::create((int) (qos.lifespan().seconds() == 0 && qos.lifespan().nanoseconds() == 0 ? -1 : qos.deadline().nanoseconds())));
 
         return qos_msg;
     }

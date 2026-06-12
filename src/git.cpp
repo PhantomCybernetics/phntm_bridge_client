@@ -12,7 +12,7 @@ namespace phntm {
         std::string full_command = "git -C " + repo_path + " " + command;
 
         FILE* pipe = popen(full_command.c_str(), "r");
-        if (!pipe) throw std::runtime_error("popen() failed!");
+        if (!pipe) throw std::runtime_error("popen( " + full_command + ") failed!");
         while (fgets(buffer.data(), buffer.size(), pipe) != nullptr) {
             result += buffer.data();
         }

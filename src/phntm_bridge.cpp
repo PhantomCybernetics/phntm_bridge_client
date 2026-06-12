@@ -87,19 +87,21 @@ int main(int argc, char ** argv)
   readGitRepoHead("/ros2_ws/src/phntm_bridge", config);
   log("Git commit: " + YELLOW + config->git_head_sha + CLR + " Tag: "+ YELLOW + (config->latest_git_tag.empty() ? "-" : config->latest_git_tag) + CLR);
 
-  auto rmw_implementation =  std::getenv("RMW_IMPLEMENTATION");
+  auto rmw_implementation = std::getenv("RMW_IMPLEMENTATION");
   config->rmw_implementation = rmw_implementation == NULL || strlen(rmw_implementation) == 0 ? "default" : rmw_implementation;
   log("RMW implementation is: " + YELLOW + config->rmw_implementation + CLR);
 
+  auto node_name = std::getenv("PHNTM_BRIDGE_CLIENT_NODE_NAME"); // use this to rename the main node (needed before config loads)
+  config->node_name = node_name == NULL || strlen(node_name) == 0 ? "phntm_bridge" : node_name;
+
   rclcpp::NodeOptions node_options;
+  //node_options.use_intra_process_comms(false);
   node_options.automatically_declare_parameters_from_overrides(true);
   node_options.allow_undeclared_parameters(true);
-  auto base_node = std::make_shared<PhntmBridge>("phntm_bridge", node_options, config);
+  auto base_node = std::make_shared<PhntmBridge>(config->node_name, node_options, config);
   base_node->loadConfig(config);
-  base_node->setupLocalServices();
-  // auto introspection_node = std::make_shared<rclcpp::Node>("phntm_introspection");
+  base_node->setupLocalServices();  
   executor.add_node(base_node);
-  // executor.add_node(introspection_node);
 
   StatusLEDs::init(base_node, config);
 
@@ -111,11 +113,9 @@ int main(int argc, char ** argv)
   FileExtractor::init(base_node);
 
   WRTCPeer::initLogging(config);
-
-  while (!g_interrupt_requested.load() && rclcpp::ok()) {
-    executor.spin_once(std::chrono::nanoseconds(100));
-  }
-    
+  
+  executor.spin();
+  
   log(BLUE + "Shutting down..." + CLR);
 
   FileExtractor::stop();

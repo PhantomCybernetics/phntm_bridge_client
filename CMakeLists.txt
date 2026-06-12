@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.10)
 project(phntm_bridge)
 
 # generates compile_commands.json for use with clangd (inside the build directory)

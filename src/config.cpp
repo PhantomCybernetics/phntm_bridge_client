@@ -5,7 +5,9 @@
 #include "sio_message.h"
 #include <fstream>
 #include <chrono>
+#include <rclcpp/duration.hpp>
 #include <rclcpp/parameter_value.hpp>
+#include <rclcpp/qos.hpp>
 #include <string>
 #include <vector>
 
@@ -176,11 +178,6 @@ namespace phntm {
             this->declare_parameter("bridge_server_address", "https://us-ca.bridge.phntm.io");
         } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         
-        /// Cloud Bridge files uploader port
-        try {
-            this->declare_parameter("file_upload_port", 1336);
-        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
-        
         // socket.io config
         try {
             this->declare_parameter("sio_port", 1337);
@@ -347,7 +344,6 @@ namespace phntm {
 
         // bloud bridge stuffs
         config->bridge_server_address = this->get_parameter("bridge_server_address").as_string();
-        config->file_upload_port = this->get_parameter("file_upload_port").as_int();
         config->sio_port = this->get_parameter("sio_port").as_int();
         config->sio_path = this->get_parameter("sio_path").as_string();
         config->sio_ssl_verify = this->get_parameter("sio_ssl_verify").as_bool();
@@ -358,7 +354,23 @@ namespace phntm {
             RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Param bridge_server_address not provided!");
             exit(1);
         }
-        config->uploader_address = fmt::format("{}:{}", config->bridge_server_address, config->file_upload_port);
+
+        // file uploader port
+        try {
+            this->declare_parameter("file_uploader_port", 1336);
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        config->file_uploader_port = this->get_parameter("file_uploader_port").as_int();
+        config->file_uploader_address = fmt::format("{}:{}", config->bridge_server_address, config->file_uploader_port);
+
+        // file extraction topics
+        try {
+            this->declare_parameter("file_extraction_request_topic", "/file_extraction_requests");
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        try {
+            this->declare_parameter("file_extraction_result_topic", "/file_extraction_results");
+        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
+        config->file_extraction_request_topic = this->get_parameter("file_extraction_request_topic").as_string();
+        config->file_extraction_result_topic = this->get_parameter("file_extraction_result_topic").as_string();
 
         // conn LED control via topic (blinks when connecting; on when connected; off = bridge not running)
         try {
@@ -489,11 +501,6 @@ namespace phntm {
         config->webrtc_verbose = this->get_parameter("webrtc_verbose").as_bool();
 
         try {
-            this->declare_parameter("file_chunks_topic", "/file_chunks");
-        } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
-        config->file_chunks_topic = this->get_parameter("file_chunks_topic").as_string();
-
-        try {
             this->declare_parameter("low_fps_default", 25); // overwrite per topic
         } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
 
@@ -600,8 +607,7 @@ namespace phntm {
             this->declare_parameter(topic + ".history_depth", static_cast<int>(default_depth));
         } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         auto depth = this->get_parameter(topic + ".history_depth").as_int();
-        rclcpp::QoS qos(depth);
-        qos.history(rclcpp::HistoryPolicy::KeepLast);
+        auto qos = rclcpp::QoS(depth);
 
         try {
             this->declare_parameter(topic + ".reliability", default_reliability);
@@ -633,18 +639,18 @@ namespace phntm {
             log("Invalid durability specified for " + topic + ": '" + durability_str + "'; using system_default", true);
             qos.durability(rclcpp::DurabilityPolicy::SystemDefault);
         }
-        
         try {
             this->declare_parameter(topic + ".lifespan_sec", default_lifespan_sec); // num sec as double, -1.0 infinity (default)
         } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         auto lifespan_sec = this->get_parameter(topic + ".lifespan_sec").as_double();
-        if (lifespan_sec < 0.0f) {
-            qos.lifespan(rclcpp::Duration::max());
+        if (lifespan_sec <= 0.0f) { // -1 is Infinity
+            // rclcpp::Duration.Max() doesn't work with Fast DDS since Jazzy, using zeroes as infinity
+            qos.lifespan(rclcpp::Duration(0, 0)); 
         } else {
             auto lifespan_total_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(lifespan_sec));
             auto lifespan_sec_part = std::chrono::duration_cast<std::chrono::seconds>(lifespan_total_ns);
             auto lifespan_ns_part = lifespan_total_ns - lifespan_sec_part;
-            qos.lifespan(lifespan_sec < 0.0 ? rclcpp::Duration::max() : rclcpp::Duration(lifespan_sec_part.count(), lifespan_ns_part.count()));
+            qos.lifespan(rclcpp::Duration(lifespan_sec_part.count(), lifespan_ns_part.count()));
         }
 
         return qos;

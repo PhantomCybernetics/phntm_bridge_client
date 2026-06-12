@@ -1,5 +1,13 @@
 ARG ROS_DISTRO=humble
+
 FROM ros:$ROS_DISTRO
+
+# [x] Humble LST                22.04 Jammy LST
+# [x] Iron (Short-term)         22.04 Jammy LTS
+# [x] Jazzy LTS	                24.04 Noble LTS
+# [x] Kilted (Short-term)       24.04 Noble LTS
+# [x] Lyrical LTS               26.04 Resolute LTS
+# [x] Rolling (Short-term)      24.04 Noble !! LTS
 
 RUN echo "Building docker image with ROS_DISTRO=$ROS_DISTRO"
 
@@ -20,7 +28,8 @@ RUN apt-get install -y python3-setuptools
 RUN apt install -y libwebsocketpp-dev
 RUN apt install -y libyaml-cpp-dev
 RUN apt install -y libtinyxml2-dev
-RUN apt install -y gpiod libgpiod-dev
+# gpiod uses v1 API on Jammy/Noble, v2 on Resolute
+RUN apt install -y gpiod libgpiod-dev 
 RUN apt install -y uuid-dev
 RUN apt install -y libcurl4-openssl-dev
 RUN apt install -y ros-$ROS_DISTRO-rmw-cyclonedds-cpp
@@ -114,7 +123,9 @@ RUN apt-get install -y python3-termcolor
 RUN apt-get install -y python3-pyee
 # Docker ctrl
 RUN apt-get install -y python3-docker
-RUN apt-get install -y iw wireless-tools libiw-dev
+RUN apt-get install -y iw
+#RUN apt-get install -y wireless-tools # deprecated
+RUN apt-get install -y libiw-dev
 RUN apt-get install -y wpasupplicant
 
 # create a python venv, install pip-only deps
@@ -131,7 +142,7 @@ RUN echo 'export PYTHONPATH="/root/ros2_py_venv/lib/python${PYTHON_VERSION_VENV}
 # Agent python deps and ROS python libs (used when building packages)
 RUN . /root/ros2_py_venv/bin/activate && \
     pip install iwlib && \
-    pip install empy catkin_pkg numpy lark && \
+    pip install numpy lark && \
     deactivate
 
 # video enc
@@ -140,11 +151,25 @@ RUN apt-get install -y libavdevice-dev
 
 # clone and install Phntm Agent
 RUN git clone https://github.com/PhantomCybernetics/phntm_agent.git /ros2_ws/src/phntm_agent
-RUN . /opt/ros/$ROS_DISTRO/setup.sh && \
+RUN . /root/ros2_py_venv/bin/activate && \
+    . /opt/ros/$ROS_DISTRO/setup.sh && \
     . /ros2_ws/install/setup.sh && \
     rosdep update --rosdistro $ROS_DISTRO && \
     rosdep install -i --from-path src/phntm_agent --rosdistro $ROS_DISTRO -y && \
-    colcon build --symlink-install --packages-select phntm_agent
+    colcon build --symlink-install --packages-select phntm_agent && \
+    deactivate
+
+# TMP Rolling workaround - rosdep bindings are missing for ffmpeg_image_transport_msgs
+RUN if [ "$ROS_DISTRO" = "rolling" ]; then \
+        git clone https://github.com/ros-misc-utilities/ffmpeg_image_transport_msgs.git /ros2_ws/src/ffmpeg_image_transport_msgs -b rolling; \
+        . /opt/ros/$ROS_DISTRO/setup.sh ; \
+        . /ros2_ws/install/setup.sh ; \
+        rosdep install -i --from-path src/ffmpeg_image_transport_msgs --rosdistro $ROS_DISTRO -y ; \
+        colcon build --symlink-install --packages-select ffmpeg_image_transport_msgs; \
+    fi
+
+RUN apt-get install -y ros-$ROS_DISTRO-rmw-fastrtps-cpp
+RUN apt-get install -y ros-$ROS_DISTRO-rmw-fastrtps-dynamic-cpp
 
 # install Phntm Bridge Client
 COPY ./ $ROS_WS/src/phntm_bridge

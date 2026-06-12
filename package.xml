@@ -8,7 +8,7 @@
   <license>MIT</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
-  
+
   <depend>rclcpp</depend>
   <depend>std_msgs</depend>
   <depend>sensor_msgs</depend>
@@ -19,6 +19,7 @@
   <depend>rosidl_typesupport_introspection_cpp</depend>
   <depend>unique_identifier_msgs</depend>
   <depend>action_msgs</depend>
+  <depend>rmw</depend>
   <depend>ament_index_cpp</depend>
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

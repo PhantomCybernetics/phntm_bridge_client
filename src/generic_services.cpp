@@ -118,8 +118,10 @@ namespace phntm {
     }
 
     auto req_err = SocketToROSMessage(request_data, request_msg, client->request_members, this->config->service_calls_mapping_verbose);
-    if (!req_err.empty())
+    if (!req_err.empty()) {
+      free(request_msg);
       return this->returnServiceError(fmt::format("Error mapping request data: {}", req_err.c_str()), ev);
+    }
 
     if (this->config->service_calls_verbose)
       log("Request data set ok for " + service_name);
@@ -136,8 +138,10 @@ namespace phntm {
       // send the request
       int64_t sequence_number;
       ret = rcl_send_request(client->rcl_client, request_msg, &sequence_number);
-      if (ret != RCL_RET_OK)
+      free(request_msg);
+      if (ret != RCL_RET_OK) {
         return this->returnServiceError(fmt::format("Failed to send request: {}", rcl_get_error_string().str), ev);
+      }
 
       if (this->config->service_calls_verbose)
         log("Request " + service_name + " sent ok");
@@ -186,8 +190,10 @@ namespace phntm {
 
       rmw_request_id_t request_header;
       ret = rcl_take_response(client->rcl_client, &request_header, response_msg);
-      if (ret != RCL_RET_OK)
+      if (ret != RCL_RET_OK) {
+        free(response_msg);
         return this->returnServiceError(fmt::format("Failed to take response: {}", rcl_get_error_string().str), ev);
+      }
       
       if (this->config->service_calls_verbose)
         log("Has response from " + service_name);
@@ -196,13 +202,17 @@ namespace phntm {
     // map response to socket message
     auto ack = sio::object_message::create(); // always obj
     auto res_err = ROSToSocketMessage(response_msg, client->response_members, ack, this->config->service_calls_mapping_verbose);
-    if (!res_err.empty())
+    if (!res_err.empty()) {
+      free(response_msg);
       return this->returnServiceError(fmt::format("Error mapping result data: {}", res_err.c_str()), ev);
-    
+    }
+
     // send the reply
     // if (this->config->service_calls_verbose)
     log(BLUE + "Sending " + service_name + " reply (msg id="+std::to_string(ev.get_msgId())+")..." + CLR);
     BridgeSocket::ack(ev.get_msgId(), {ack});
+
+    free(response_msg);
   }
 
   std::string PhntmBridge::SetROSMessageFieldValue(void *field, const rosidl_typesupport_introspection_cpp::MessageMember *member, sio::message::ptr value, size_t index, bool verbose, int indent) {
@@ -219,14 +229,13 @@ namespace phntm {
       case rosidl_typesupport_introspection_cpp::ROS_TYPE_BOOL: {
         if (verbose)
           log(s_indent + GREEN + ">> BOOL: ", false, false);
-        bool *v = new bool();
-        *v = value->get_flag() == sio::message::flag::flag_boolean ? value->get_bool() : false; // tolerates null
+        bool v = value->get_flag() == sio::message::flag::flag_boolean ? value->get_bool() : false; // tolerates null
         if (verbose)
-          log(std::to_string(*v) + CLR);
+          log(std::to_string(v) + CLR);
         if (member->is_array_) {
-          member->assign_function(field, index, v);
+          member->assign_function(field, index, &v);
         } else {
-          *static_cast<bool *>(field) = *v;
+          *static_cast<bool *>(field) = v;
         }
         break;
       }
@@ -234,14 +243,13 @@ namespace phntm {
       case rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT8: {
         if (verbose)
           log(s_indent + GREEN + ">> BYTE: ", false, false);
-        uint8_t *v = new uint8_t();
-        *v = static_cast<uint8_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : (value->get_flag() == sio::message::flag::flag_double ? value->get_double() : 0));
+        uint8_t v = static_cast<uint8_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : (value->get_flag() == sio::message::flag::flag_double ? value->get_double() : 0));
         if (verbose)
-          log(std::to_string(*v) + CLR);
+          log(std::to_string(v) + CLR);
         if (member->is_array_) {
-          member->assign_function(field, index, v);
+          member->assign_function(field, index, &v);
         } else {
-          *static_cast<uint8_t *>(field) = *v;
+          *static_cast<uint8_t *>(field) = v;
         }
         break;
       }
@@ -249,126 +257,117 @@ namespace phntm {
       case rosidl_typesupport_introspection_cpp::ROS_TYPE_INT8: {
         if (verbose)
           log(s_indent + GREEN + ">> ROS_TYPE_CHAR: ", false, false);
-        int8_t *v = new int8_t();
-        *v = static_cast<int8_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : (value->get_flag() == sio::message::flag::flag_double ? value->get_double() : 0));
+        int8_t v = static_cast<int8_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : (value->get_flag() == sio::message::flag::flag_double ? value->get_double() : 0));
         if (verbose)
-          log(std::to_string(*v) + CLR);
+          log(std::to_string(v) + CLR);
         if (member->is_array_) {
-          member->assign_function(field, index, v);
+          member->assign_function(field, index, &v);
         } else {
-          *static_cast<int8_t *>(field) = *v;
+          *static_cast<int8_t *>(field) = v;
         }
         break;
       }
       case rosidl_typesupport_introspection_cpp::ROS_TYPE_FLOAT32: {
         if (verbose)
           log(s_indent + GREEN + ">> ROS_TYPE_FLOAT32: ", false, false);
-        float *v = new float();
-        *v = static_cast<float>(value->get_flag() == sio::message::flag::flag_double ? value->get_double() : (value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : 0.0f));
+        float v = static_cast<float>(value->get_flag() == sio::message::flag::flag_double ? value->get_double() : (value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : 0.0f));
         if (verbose)
-          log(std::to_string(*v) + CLR);
+          log(std::to_string(v) + CLR);
         if (member->is_array_) {
-          member->assign_function(field, index, v);
+          member->assign_function(field, index, &v);
         } else {
-          *static_cast<float *>(field) = *v;
+          *static_cast<float *>(field) = v;
         }
         break;
       }
       case rosidl_typesupport_introspection_cpp::ROS_TYPE_FLOAT64: {
         if (verbose)
           log(s_indent + GREEN + ">> ROS_TYPE_FLOAT64: ", false, false);
-        double *v = new double();
-        *v = static_cast<double>(value->get_flag() == sio::message::flag::flag_double ? value->get_double() : (value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : 0.0f));
+        double v = static_cast<double>(value->get_flag() == sio::message::flag::flag_double ? value->get_double() : (value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : 0.0f));
         if (verbose)
-          log(std::to_string(*v) + CLR);
+          log(std::to_string(v) + CLR);
         if (member->is_array_) {
-          member->assign_function(field, index, v);
+          member->assign_function(field, index, &v);
         } else {
-          *static_cast<double *>(field) = *v;
+          *static_cast<double *>(field) = v;
         }
         break;
       }
       case rosidl_typesupport_introspection_cpp::ROS_TYPE_INT16: {
         if (verbose)
           log(s_indent + GREEN + ">> ROS_TYPE_INT16: ", false, false);
-        int16_t *v = new int16_t();
-        *v = static_cast<int16_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : (value->get_flag() == sio::message::flag::flag_double ? value->get_double() : 0));
+        int16_t v = static_cast<int16_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : (value->get_flag() == sio::message::flag::flag_double ? value->get_double() : 0));
         if (verbose)
-          log(std::to_string(*v) + CLR);
+          log(std::to_string(v) + CLR);
         if (member->is_array_) {
-          member->assign_function(field, index, v);
+          member->assign_function(field, index, &v);
         } else {
-          *static_cast<int16_t *>(field) = *v;
+          *static_cast<int16_t *>(field) = v;
         }
         break;
       }
       case rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT16: {
         if (verbose)
           log(s_indent + GREEN + ">> ROS_TYPE_UINT16: ", false, false);
-        uint16_t *v = new uint16_t();
-        *v = static_cast<uint16_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : (value->get_flag() == sio::message::flag::flag_double ? value->get_double() : 0));
+        uint16_t v = static_cast<uint16_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : (value->get_flag() == sio::message::flag::flag_double ? value->get_double() : 0));
         if (verbose)
-          log(std::to_string(*v) + CLR);
+          log(std::to_string(v) + CLR);
         if (member->is_array_) {
-          member->assign_function(field, index, v);
+          member->assign_function(field, index, &v);
         } else {
-          *static_cast<uint16_t *>(field) = *v;
+          *static_cast<uint16_t *>(field) = v;
         }
         break;
       }
       case rosidl_typesupport_introspection_cpp::ROS_TYPE_INT32: {
         if (verbose)
           log(s_indent + GREEN + ">> ROS_TYPE_INT32: ", false, false);
-        int32_t *v = new int32_t();
-        *v = static_cast<int32_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : (value->get_flag() == sio::message::flag::flag_double ? value->get_double() : 0));
+        int32_t v = static_cast<int32_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : (value->get_flag() == sio::message::flag::flag_double ? value->get_double() : 0));
         if (verbose)
-          log(std::to_string(*v) + CLR);
+          log(std::to_string(v) + CLR);
         if (member->is_array_) {
-          member->assign_function(field, index, v);
+          member->assign_function(field, index, &v);
         } else {
-          *static_cast<int32_t *>(field) = *v;
+          *static_cast<int32_t *>(field) = v;
         }
         break;
       }
       case rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT32: {
         if (verbose)
           log(s_indent + GREEN + ">> ROS_TYPE_UINT32: ", false, false);
-        uint32_t *v = new uint32_t();
-        *v = static_cast<uint32_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : (value->get_flag() == sio::message::flag::flag_double ? value->get_double() : 0));
+        uint32_t v = static_cast<uint32_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : (value->get_flag() == sio::message::flag::flag_double ? value->get_double() : 0));
         if (verbose)
-          log(std::to_string(*v) + CLR);
+          log(std::to_string(v) + CLR);
         if (member->is_array_) {
-          member->assign_function(field, index, v);
+          member->assign_function(field, index, &v);
         } else {
-          *static_cast<uint32_t *>(field) = *v;
+          *static_cast<uint32_t *>(field) = v;
         }
         break;
       }
       case rosidl_typesupport_introspection_cpp::ROS_TYPE_INT64: {
         if (verbose)
           log(s_indent + GREEN + ">> INT64: ", false, false);
-        int64_t *v = new int64_t();
-        *v =  static_cast<int64_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : (value->get_flag() == sio::message::flag::flag_double ? value->get_double() : 0));
+        int64_t v = static_cast<int64_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : (value->get_flag() == sio::message::flag::flag_double ? value->get_double() : 0));
         if (verbose)
-          log(std::to_string(*v) + CLR);
+          log(std::to_string(v) + CLR);
         if (member->is_array_) {
-          member->assign_function(field, index, v);
+          member->assign_function(field, index, &v);
         } else {
-          *static_cast<int64_t *>(field) = *v;
+          *static_cast<int64_t *>(field) = v;
         }
         break;
       }
       case rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT64: {
         if (verbose)
           log(s_indent + GREEN + ">> ROS_TYPE_UINT64: ", false, false);
-        uint64_t *v = new uint64_t();
-        *v = static_cast<uint64_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : (value->get_flag() == sio::message::flag::flag_double ? value->get_double() : 0));
+        uint64_t v = static_cast<uint64_t>(value->get_flag() == sio::message::flag::flag_integer ? value->get_int() : (value->get_flag() == sio::message::flag::flag_double ? value->get_double() : 0));
         if (verbose)
-          log(std::to_string(*v) + CLR);
+          log(std::to_string(v) + CLR);
         if (member->is_array_) {
-          member->assign_function(field, index, v);
+          member->assign_function(field, index, &v);
         } else {
-          *static_cast<uint64_t *>(field) = *v;
+          *static_cast<uint64_t *>(field) = v;
         }
         break;
       }
@@ -376,18 +375,17 @@ namespace phntm {
         if (verbose)
           log(s_indent + GREEN + ">> ROS_TYPE_STRING: ", false, false);
       
-        std::string *v = new std::string(); 
-        *v = value->get_flag() == sio::message::flag::flag_string ? value->get_string() : "";
+        std::string v = value->get_flag() == sio::message::flag::flag_string ? value->get_string() : "";
         
-        auto str_len = (*v).length();
+        auto str_len = v.length();
         if (verbose)
-          log("'" + *v + "' (" + std::to_string(str_len) + ")" + CLR);
+          log("'" + v + "' (" + std::to_string(str_len) + ")" + CLR);
         if (member->is_array_) {
-          member->assign_function(field, index, v);
+          member->assign_function(field, index, &v);
         } else {
           std::string* str_field = static_cast<std::string*>(field);
           str_field->reserve(str_len);
-          *str_field = *v;
+          *str_field = v;
         }
         break;
       }
@@ -395,18 +393,17 @@ namespace phntm {
         if (verbose)
           log(s_indent + GREEN + ">> ROS_TYPE_WSTRING: ", false, false);
         
-        std::u16string *v = new std::u16string();
-        *v = converter.from_bytes(value->get_flag() == sio::message::flag::flag_string ? value->get_string() : "");
+        std::u16string v = converter.from_bytes(value->get_flag() == sio::message::flag::flag_string ? value->get_string() : "");
 
-        auto str_len = (*v).length();
+        auto str_len = v.length();
         if (verbose)
-          log("'" + converter.to_bytes(*v) + "' (" + std::to_string(str_len) + ")" + CLR);
+          log("'" + converter.to_bytes(v) + "' (" + std::to_string(str_len) + ")" + CLR);
         if (member->is_array_) {
-          member->assign_function(field, index, v);
+          member->assign_function(field, index, &v);
         } else {
           std::u16string * str_field = static_cast<std::u16string*>(field);
           str_field->reserve(str_len);
-          *str_field = *v;
+          *str_field = v;
         }
         break;
       }
@@ -423,6 +420,7 @@ namespace phntm {
             nested_members->init_function(nested_field, rosidl_runtime_cpp::MessageInitialization::ALL);
             PhntmBridge::SocketToROSMessage( value, nested_field, nested_members, verbose, indent+1);
             member->assign_function(field, index, nested_field);
+            free(nested_field);
           } else {
             // field = nested_field;
             PhntmBridge::SocketToROSMessage( value, field, nested_members, verbose, indent+1);
@@ -525,190 +523,190 @@ namespace phntm {
       case rosidl_typesupport_introspection_cpp::ROS_TYPE_BOOL: {
         if (verbose)
           log(s_indent + MAGENTA + ">> ROS_TYPE_BOOL: ", false, false);
-        bool *v = new bool();
+        bool v;
         if (index > -1) {
-          member->fetch_function(field_ptr, index, v);
+          member->fetch_function(field_ptr, index, &v);
         } else {
-          *v = *static_cast<const bool *>(field_ptr);
+          v = *static_cast<const bool *>(field_ptr);
         }
         if (verbose)
-          log(std::to_string(*v) + CLR);
-        res = sio::bool_message::create(*v);
+          log(std::to_string(v) + CLR);
+        res = sio::bool_message::create(v);
         break;
       }
       case rosidl_typesupport_introspection_cpp::ROS_TYPE_BYTE:
       case rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT8: {
         if (verbose)
           log(s_indent + MAGENTA + ">> ROS_TYPE_UINT8: ", false, false);
-        uint8_t *v = new uint8_t();
+        uint8_t v;
         if (index > -1) {
-          member->fetch_function(field_ptr, index, v);
+          member->fetch_function(field_ptr, index, &v);
         } else {
-          *v = *static_cast<const uint8_t *>(field_ptr);
+          v = *static_cast<const uint8_t *>(field_ptr);
         }
         if (verbose)
-          log(std::to_string(*v) + CLR);
-        res = sio::int_message::create(*v);
+          log(std::to_string(v) + CLR);
+        res = sio::int_message::create(v);
         break;
       }
       case rosidl_typesupport_introspection_cpp::ROS_TYPE_CHAR:
       case rosidl_typesupport_introspection_cpp::ROS_TYPE_INT8: {
         if (verbose)
           log(s_indent + MAGENTA + ">> ROS_TYPE_INT8: ", false, false);
-        int8_t *v = new int8_t();
+        int8_t v;
         if (index > -1) {
-          member->fetch_function(field_ptr, index, v);
+          member->fetch_function(field_ptr, index, &v);
         } else {
-          *v = *static_cast<const int8_t *>(field_ptr);
+          v = *static_cast<const int8_t *>(field_ptr);
         }
         if (verbose)
-          log(std::to_string(*v) + CLR);
-        res = sio::int_message::create(*v);
+          log(std::to_string(v) + CLR);
+        res = sio::int_message::create(v);
         break;
       }
       case rosidl_typesupport_introspection_cpp::ROS_TYPE_FLOAT32: {
         if (verbose)
           log(s_indent + MAGENTA + ">> ROS_TYPE_FLOAT32: ", false, false);
-        float *v = new float();
+        float v;
         if (index > -1) {
-          member->fetch_function(field_ptr, index, v);
+          member->fetch_function(field_ptr, index, &v);
         } else {
-          *v = *static_cast<const float *>(field_ptr);
+          v = *static_cast<const float *>(field_ptr);
         }
         if (verbose)
-          log(std::to_string(*v) + CLR);
-        if (std::isinf(*v)) { // can't send infinity in json!
-          *v = *v > 0 ? std::numeric_limits<float>::max() : -std::numeric_limits<float>::max();
+          log(std::to_string(v) + CLR);
+        if (std::isinf(v)) { // can't send infinity in json!
+          v = v > 0 ? std::numeric_limits<float>::max() : -std::numeric_limits<float>::max();
         }
-        res = sio::double_message::create(*v);
+        res = sio::double_message::create(v);
         break;
       }
       case rosidl_typesupport_introspection_cpp::ROS_TYPE_FLOAT64: {
         if (verbose)
           log(s_indent + MAGENTA + ">> ROS_TYPE_FLOAT64: ", false, false);
-        double *v = new double();
+        double v;
         if (index > -1) {
-          member->fetch_function(field_ptr, index, v);
+          member->fetch_function(field_ptr, index, &v);
         } else {
-          *v = *static_cast<const double *>(field_ptr);
+          v = *static_cast<const double *>(field_ptr);
         }
         if (verbose)
-          log(std::to_string(*v) + CLR);
-        if (std::isinf(*v)) { // can't send infinity in json!
-          *v = *v > 0 ? std::numeric_limits<double>::max() : -std::numeric_limits<double>::max();
+          log(std::to_string(v) + CLR);
+        if (std::isinf(v)) { // can't send infinity in json!
+          v = v > 0 ? std::numeric_limits<double>::max() : -std::numeric_limits<double>::max();
         }
-        res = sio::double_message::create(*v);
+        res = sio::double_message::create(v);
         break;
       }
       case rosidl_typesupport_introspection_cpp::ROS_TYPE_INT16: {
         if (verbose)
           log(s_indent + MAGENTA + ">> ROS_TYPE_INT16: ", false, false);
-        int16_t *v = new int16_t();
+        int16_t v;
         if (index > -1) {
-          member->fetch_function(field_ptr, index, v);
+          member->fetch_function(field_ptr, index, &v);
         } else {
-          *v = *static_cast<const int16_t *>(field_ptr);
+          v = *static_cast<const int16_t *>(field_ptr);
         }
         if (verbose)
-          log(std::to_string(*v) + CLR);
-        res = sio::int_message::create(*v);
+          log(std::to_string(v) + CLR);
+        res = sio::int_message::create(v);
         break;
       }
       case rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT16: {
         if (verbose)
           log(s_indent + MAGENTA + ">> ROS_TYPE_UINT16: ", false, false);
-        uint16_t *v = new uint16_t();
+        uint16_t v;
         if (index > -1) {
-          member->fetch_function(field_ptr, index, v);
+          member->fetch_function(field_ptr, index, &v);
         } else {
-          *v = *static_cast<const uint16_t *>(field_ptr);
+          v = *static_cast<const uint16_t *>(field_ptr);
         }
         if (verbose)
-          log(std::to_string(*v) + CLR);
-        res = sio::int_message::create(*v);
+          log(std::to_string(v) + CLR);
+        res = sio::int_message::create(v);
         break;
       }
       case rosidl_typesupport_introspection_cpp::ROS_TYPE_INT32: {
         if (verbose)
           log(s_indent + MAGENTA + ">> ROS_TYPE_INT32: ", false, false);
-        int32_t *v = new int32_t();
+        int32_t v;
         if (index > -1) {
-          member->fetch_function(field_ptr, index, v);
+          member->fetch_function(field_ptr, index, &v);
         } else {
-          *v = *static_cast<const int32_t *>(field_ptr);
+          v = *static_cast<const int32_t *>(field_ptr);
         }
         if (verbose)
-          log(std::to_string(*v) + CLR);
-        res = sio::int_message::create(*v);
+          log(std::to_string(v) + CLR);
+        res = sio::int_message::create(v);
         break;
       }
       case rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT32: {
         if (verbose)
           log(s_indent + MAGENTA + ">> ROS_TYPE_UINT32: ", false, false);
-        uint32_t *v = new uint32_t();
+        uint32_t v;
         if (index > -1) {
-          member->fetch_function(field_ptr, index, v);
+          member->fetch_function(field_ptr, index, &v);
         } else {
-          *v = *static_cast<const uint32_t *>(field_ptr);
+          v = *static_cast<const uint32_t *>(field_ptr);
         }
         if (verbose)
-          log(std::to_string(*v) + CLR);
-        res = sio::int_message::create(*v);
+          log(std::to_string(v) + CLR);
+        res = sio::int_message::create(v);
         break;
       }
       case rosidl_typesupport_introspection_cpp::ROS_TYPE_INT64: {
         if (verbose)
           log(s_indent + MAGENTA + ">> ROS_TYPE_INT64: ", false, false);
-        int64_t *v = new int64_t();
+        int64_t v;
         if (index > -1) {
-          member->fetch_function(field_ptr, index, v);
+          member->fetch_function(field_ptr, index, &v);
         } else {
-          *v = *static_cast<const int64_t *>(field_ptr);
+          v = *static_cast<const int64_t *>(field_ptr);
         }
         if (verbose)
-          log(std::to_string(*v) + CLR);
-        res = sio::int_message::create(*v);
+          log(std::to_string(v) + CLR);
+        res = sio::int_message::create(v);
         break;
       }
       case rosidl_typesupport_introspection_cpp::ROS_TYPE_UINT64: {
         if (verbose)
           log(s_indent + MAGENTA + ">> ROS_TYPE_UINT64: ", false, false);
-        uint64_t *v = new uint64_t();
+        uint64_t v;
         if (index > -1) {
-          member->fetch_function(field_ptr, index, v);
+          member->fetch_function(field_ptr, index, &v);
         } else {
-          *v = *static_cast<const uint64_t *>(field_ptr);
+          v = *static_cast<const uint64_t *>(field_ptr);
         }
         if (verbose)
-          log(std::to_string(*v) + CLR);
-        res = sio::int_message::create(*v);
+          log(std::to_string(v) + CLR);
+        res = sio::int_message::create(v);
         break;
       }
       case rosidl_typesupport_introspection_cpp::ROS_TYPE_STRING: {
         if (verbose)
           log(s_indent + MAGENTA + ">> ROS_TYPE_STRING: ", false, false);
-        std::string *v = new std::string();
+        std::string v;
         if (index > -1) {
-          member->fetch_function(field_ptr, index, v);
+          member->fetch_function(field_ptr, index, &v);
         } else {
-          *v = *static_cast<const std::string *>(field_ptr);
+          v = *static_cast<const std::string *>(field_ptr);
         }
         if (verbose)
-          log(*v + CLR);
-        res = sio::string_message::create(*v);
+          log(v + CLR);
+        res = sio::string_message::create(v);
         break;
       }
       case rosidl_typesupport_introspection_cpp::ROS_TYPE_WSTRING: {
         std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> converter;
         if (verbose)
           log(s_indent + MAGENTA + ">> ROS_TYPE_WSTRING: ", false, false);
-        std::u16string *w = new std::u16string ();
+        std::u16string w;
         if (index > -1) {
-          member->fetch_function(field_ptr, index, w);
+          member->fetch_function(field_ptr, index, &w);
         } else {
-          *w = *static_cast<const std::u16string *>(field_ptr);
+          w = *static_cast<const std::u16string *>(field_ptr);
         }
-        std::string v = converter.to_bytes(*w);
+        std::string v = converter.to_bytes(w);
         if (verbose)
           log(v + CLR);
         res = sio::string_message::create(v);

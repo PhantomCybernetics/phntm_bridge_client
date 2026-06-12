@@ -11,7 +11,7 @@ Comes with Docker Container control for the host machine, CPU and Wi-Fi monitori
 - Fast H.264 video streaming (pre-encodeded FFmpeg frames)
 - Image & CompressesImage messages encoded and streamed as H.264 video (sw, cuda or vaapi encoding)
 - Docker container discovery and control
-- Reliable ROS2 Service calls via Socket.io
+- Reliable ROS2 Service & Action calls via Socket.io
 - ROS2 runtime Parameneters read/write API
 - Extra ROS2 packages can be easily included for custom message and service type support
 - Robot's Wi-Fi signal monitoring, scan & roaming (via Agent, requires wpa_supplicant on the host machine)
@@ -23,19 +23,21 @@ Comes with Docker Container control for the host machine, CPU and Wi-Fi monitori
 - Works with Rosbag and Sims such as Gazebo or Webots
 - Supported with ROS2 Humble and newer
 
-## Architecture
-![Infrastructure map](https://raw.githubusercontent.com/PhantomCybernetics/phntm_bridge_docs/refs/heads/main/img/Architecture_Client.svg)
+![UI](https://github.com/user-attachments/assets/40a1f45f-918c-41dc-b9a6-721a7c2a41f2)
+
+![Endpoint Badge](https://img.shields.io/endpoint?url=https%3A%2F%2Fphantomcybernetics.github.io%2Fphntm_bridge_client%2Fhumble-amd64.json) ![Endpoint Badge](https://img.shields.io/endpoint?url=https%3A%2F%2Fphantomcybernetics.github.io%2Fphntm_bridge_client%2Firon-amd64.json) ![Endpoint Badge](https://img.shields.io/endpoint?url=https%3A%2F%2Fphantomcybernetics.github.io%2Fphntm_bridge_client%2Fjazzy-amd64.json)  ![Endpoint Badge](https://img.shields.io/endpoint?url=https%3A%2F%2Fphantomcybernetics.github.io%2Fphntm_bridge_client%2Fkilted-amd64.json) ![Endpoint Badge](https://img.shields.io/endpoint?url=https%3A%2F%2Fphantomcybernetics.github.io%2Fphntm_bridge_client%2Flyrical-amd64.json) ![Endpoint Badge](https://img.shields.io/endpoint?url=https%3A%2F%2Fphantomcybernetics.github.io%2Fphntm_bridge_client%2Frolling-amd64.json) \
+![Endpoint Badge](https://img.shields.io/endpoint?url=https%3A%2F%2Fphantomcybernetics.github.io%2Fphntm_bridge_client%2Fhumble-arm64.json) ![Endpoint Badge](https://img.shields.io/endpoint?url=https%3A%2F%2Fphantomcybernetics.github.io%2Fphntm_bridge_client%2Firon-arm64.json) ![Endpoint Badge](https://img.shields.io/endpoint?url=https%3A%2F%2Fphantomcybernetics.github.io%2Fphntm_bridge_client%2Fjazzy-arm64.json) ![Endpoint Badge](https://img.shields.io/endpoint?url=https%3A%2F%2Fphantomcybernetics.github.io%2Fphntm_bridge_client%2Fkilted-arm64.json) ![Endpoint Badge](https://img.shields.io/endpoint?url=https%3A%2F%2Fphantomcybernetics.github.io%2Fphntm_bridge_client%2Flyrical-arm64.json) ![Endpoint Badge](https://img.shields.io/endpoint?url=https%3A%2F%2Fphantomcybernetics.github.io%2Fphntm_bridge_client%2Frolling-arm64.json)
 
 ## Install
 
-### Make sure your root SSL Certificates are up to date
+### 1) Make sure your root SSL Certificates are up to date
 
 ```bash
 sudo apt update
-sudo apt install ca-certificates
+sudo apt install ca-certificates curl
 ```
 
-### Install Docker, Docker Build & Docker Compose
+### 2) Install Docker, Docker Build & Docker Compose
 
 E.g. on Debian/Ubuntu follow [these instructions](https://docs.docker.com/engine/install/debian/). Then add the current user to the docker group:
 ```bash
@@ -43,24 +45,14 @@ sudo usermod -aG docker ${USER}
 # log out & back in
 ```
 
-### (Optional) Clone this repo and build the Docker image from source
-
-You can also use our pre-built Docker images, see [ghcr.io/phantomcybernetics/phntm_bridge_client](https://github.com/PhantomCybernetics/phntm_bridge_client/pkgs/container/phntm_bridge_client) for ROS distributions and architectures.
-
+### 3) Register a new Robot on the Bridge Server
+This registers a new robot on the Bridge Server and returns a default config file you can edit further. Unique ID_ROBOT and KEY pair are generated in this step.
 ```bash
-cd ~
-git clone git@github.com:PhantomCybernetics/phntm_bridge_client.git phntm_bridge_client
-cd phntm_bridge_client
-ROS_DISTRO=humble; docker build -f Dockerfile -t phntm/bridge:$ROS_DISTRO --build-arg ROS_DISTRO=$ROS_DISTRO .
+bash <(curl -s https://register.phntm.io/register.sh)
 ```
+Follow the instructions, a YAML configuration file will be generated and saved under the specified name (`phntm_bridge.yaml` is the default). Note that the default `register.phntm.io` hostname is geographically load-balanced and will return configuration with a Bridge Server instance nearest to you. You can switch to a different Bridge Server any time.
 
-### Register a new Robot on the Bridge Server
-This registers a new robot on the Bridge Server and returns default config file you can edit further. Unique ID_ROBOT and KEY pair are generated in this step.
-```bash
-wget -O ~/phntm_bridge.yaml 'https://register.phntm.io/robot?yaml'
-```
-
-### Examine and customize the config file
+### 4) Examine and customize the config file
 Below is an example of the config file generated in the previous step, e.g. `~/phntm_bridge.yaml`. \
 Full list of configuration options can be found [here](https://docs.phntm.io/bridge/basics/configuration).
 ```yaml
@@ -68,7 +60,7 @@ Full list of configuration options can be found [here](https://docs.phntm.io/bri
   ros__parameters:
     id_robot: '%ID_ROBOT%'
     key: '%SECRET_KEY%'
-    name: 'Unnamed Robot'
+    name: 'My Little Robot'
     maintainer_email: 'robot.master@example.com' # e-mail for service announcements
 
     bridge_server_address: https://us-ca.bridge.phntm.io
@@ -109,7 +101,6 @@ Full list of configuration options can be found [here](https://docs.phntm.io/bri
     ui_battery_topic: /battery # battery to show in the UI, '' to disable
 
     wifi_interface: 'wlan0'
-    wifi_monitor_topic: /iw_status # WiFi monitor topic to show in the UI (produced by the Agent)
     enable_wifi_scan: True
     enable_wifi_roam: False
 
@@ -122,7 +113,7 @@ Full list of configuration options can be found [here](https://docs.phntm.io/bri
     service_defaults: /ros2_ws/phntm_service_config.json # path to services config file as mapped inside the container
 ```
 
-### Add service to your compose.yaml
+### 5) Add service to your compose.yaml
 
 > [!IMPORTANT]
 > We recommend using Cyclone DDS with this Bridge as it offers a more predictable behavior,
@@ -130,11 +121,21 @@ Full list of configuration options can be found [here](https://docs.phntm.io/bri
 > Cyclone DDS is installed with our Docker image, and selected with the ``RMW_IMPLEMENTATION`` environmental variable.
 > All parts of your ROS2 system [should be using the same ROS version and the same RMW implementation](https://docs.ros.org/en/rolling/Concepts/Intermediate/About-Different-Middleware-Vendors.html).
 
-Add phntm_bridge service to your `~/compose.yaml` file with both `~/phntm_bridge.yaml` and `~/phntm_agent.yaml` mounted in the container as shown below:
+Add phntm_bridge service to your `~/compose.yaml` file with both `~/phntm_bridge.yaml` and `~/phntm_agent.yaml` mounted in the container as shown below.
+See available pre-built Docker images [here](https://ghcr.io/phantomcybernetics/phntm_bridge_client).
 ```yaml
 services:
   phntm_bridge:
-    image: ghcr.io/phantomcybernetics/phntm_bridge_client:main-jazzy # or phntm/bridge:$ROS_DISTRO if image is built locally
+
+    # select a pre-built image according to your ROS distro
+    image: ghcr.io/phantomcybernetics/phntm_bridge_client:main-humble
+    # image: ghcr.io/phantomcybernetics/phntm_bridge_client:main-iron
+    # image: ghcr.io/phantomcybernetics/phntm_bridge_client:main-jazzy
+    # image: ghcr.io/phantomcybernetics/phntm_bridge_client:main-kilted
+    # image: ghcr.io/phantomcybernetics/phntm_bridge_client:main-lyrical
+    # image: ghcr.io/phantomcybernetics/phntm_bridge_client:main-rolling
+    # or use phntm/bridge:$ROS_DISTRO if building from source (see below)
+
     container_name: phntm-bridge
     hostname: phntm-bridge.local
     restart: unless-stopped # restarts after first run
@@ -157,28 +158,44 @@ services:
       ros2 launch phntm_bridge client_agent_launch.py # launches Bridge Client and Agent together
 ```
 
-### Launch
+### 6) Launch
 ```bash
 docker compose up phntm_bridge # launches Bridge Client & Agent in one container
 ```
 
-### Open the Web UI
-Navigate to `https://bridge.phntm.io/%YOUR_ID_ROBOT%` in a web browser. The exact link can be found at the top of the generated Bridge config file (e.g. your `~/phntm_bridge.yaml`). If you provided maintainer's e-mail in the config, it will be also e-mailed to you for your reference after the first Bridge Client launch.
+### 7) Open the Web UI
+Navigate to `https://bridge.phntm.io/%YOUR_ID_ROBOT%` in a web browser. The exact URL will be printed out by the Registration Utility, also it can be found at the top of the generated Bridge config file (e.g. your `~/phntm_bridge.yaml`). It will be also e-mailed to maintainer's address for your reference.
+
+## (Optional) Build the Docker Image from Source
+
+In the above example we've used a pre-built Docker image [provided by Phantom Cybernetics](https://ghcr.io/phantomcybernetics/phntm_bridge_client), but you can also build your own from source:
+
+```bash
+cd ~
+git clone git@github.com:PhantomCybernetics/phntm_bridge_client.git phntm_bridge_client
+cd phntm_bridge_client
+ROS_DISTRO=humble; docker build -f Dockerfile -t phntm/bridge:$ROS_DISTRO --build-arg ROS_DISTRO=$ROS_DISTRO .
+# then use "image: phntm/bridge:$ROS_DISTRO" in your ~/compose.yaml
+```
 
 ## Upgrading
-```bash
-# Remove previous version
-docker stop phntm-bridge && docker rm phntm-bridge && docker image rm phntm/bridge:humble
+You may want to check out and/or follow our [Bluesky account](https://bsky.app/profile/phntm.io) for updates and service announcements. Significant milestones and interesting new features will be also e-mailed to the maintainer's e-mail address.
 
-# if using an image
+```bash
+# Stop and remove the current Docker Container
+docker stop phntm-bridge && docker rm phntm-bridge
+
+# If using pre-built Docker Images, run:
+docker image rm ghcr.io/phantomcybernetics/phntm_bridge_client:main-humble
 docker compose pull phntm_bridge
 
-# or update & rebuild from source
+# If building from source:
+docker image rm phntm/bridge:humble
 cd ~/phntm_bridge_client
 git pull
 ROS_DISTRO=humble; docker build -f Dockerfile -t phntm/bridge:$ROS_DISTRO --build-arg ROS_DISTRO=$ROS_DISTRO .
 
-# Launch
+# All done, relaunch
 docker compose up phntm_bridge
 ```
 

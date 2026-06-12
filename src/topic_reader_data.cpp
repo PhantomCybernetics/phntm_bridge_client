@@ -3,6 +3,7 @@
 #include "phntm_bridge/topic_reader_data.hpp"
 #include "phntm_bridge/wrtc_peer.hpp"
 #include "rtc/peerconnection.hpp"
+#include "std_msgs/msg/string.hpp"
 #include <stdexcept>
 #include <string>
 
@@ -39,7 +40,9 @@ namespace phntm {
         }
     }
 
-    TopicReaderData::TopicReaderData(std::string topic, std::string msg_type, std::shared_ptr<PhntmBridge> bridge_node, rclcpp::QoS qos) : topic(topic), msg_type(msg_type), bridge_node(bridge_node), qos(qos) {
+    TopicReaderData::TopicReaderData(std::string topic, std::string msg_type, std::shared_ptr<PhntmBridge> bridge_node, rclcpp::QoS qos)
+        : topic(topic), msg_type(msg_type), bridge_node(bridge_node), qos(qos) {
+        //this->callback_group = bridge_node->data_callback_group;
         this->is_reliable = qos.reliability() == rclcpp::ReliabilityPolicy::Reliable;
     }
 
@@ -111,8 +114,8 @@ namespace phntm {
             }
         }
     }
-
-    void TopicReaderData::onData(std::shared_ptr<rclcpp::SerializedMessage> data) {
+    
+    void TopicReaderData::onData(std::shared_ptr<const rclcpp::SerializedMessage> data) {
 
         // save local copy
         const auto& msg = data->get_rcl_serialized_message();
@@ -223,12 +226,17 @@ namespace phntm {
         if (this->sub != nullptr)
             return;
         try {
+            // rclcpp::SubscriptionOptions options;
+            // options.callback_group = this->bridge_node->data_callback_group;
             this->sub = this->bridge_node->create_generic_subscription(
                 this->topic,
                 this->msg_type,
                 this->qos,
-                std::bind(&TopicReaderData::onData, this, std::placeholders::_1));
+                std::bind(&TopicReaderData::onData, this, std::placeholders::_1)
+                //, options
+            );
             log(GREEN + "[" + this->topic + "] Created subscriber" + CLR);
+
         } catch(const std::runtime_error & ex) {
             this->sub = nullptr;
             log("Error creating subscriber for " + this->topic + " {"+ this->msg_type +"}: " + ex.what(), true);
