@@ -186,7 +186,7 @@ namespace phntm {
             this->declare_parameter("sio_path", "/robot/socket.io/"); // needs to end with /
         } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         try {
-            this->declare_parameter("sio_connection_retry_sec", 2.0);
+            this->declare_parameter("sio_connection_retry_sec", 0.5);
         } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
         try {
             this->declare_parameter("sio_ssl_verify", true);
