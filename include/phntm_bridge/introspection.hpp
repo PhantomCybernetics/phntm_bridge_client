@@ -6,6 +6,7 @@
 #include "phntm_interfaces/msg/docker_status.hpp"
 #include <rclcpp/qos.hpp>
 #include <rclcpp/timer.hpp>
+#include "phntm_bridge/sio.hpp"
 
 namespace phntm {
 
@@ -18,7 +19,7 @@ namespace phntm {
             static void init(std::shared_ptr<PhntmBridge> node, std::shared_ptr<BridgeConfig> config);
             static void start();
             static void stop();
-            static void report();
+            static void returnReport(sio::event const& ev);
             static bool isRunning() { return Introspection::instance != nullptr && Introspection::instance->running; };
             static std::string getService(std::string service); //srv type empty
             static std::string getTopic(std::string topic); //msg type or empty 
@@ -39,10 +40,10 @@ namespace phntm {
 
             std::map<std::string, phntm_interfaces::msg::DockerStatus>discovered_docker_containers;
 
-            void reportDocker();
-            void reportIDLs();
-            void reportNodes();
-            void reportRunningState();
+            void reportDocker(sio::message::ptr out_msg);
+            void reportIDLs(sio::message::ptr out_msg);
+            void reportNodes(sio::message::ptr out_msg);
+            void reportRunningState(sio::message::ptr out_msg);
 
             void onDockerMonitorMessage(phntm_interfaces::msg::DockerStatus const & msg);
             std::shared_ptr<rclcpp::Subscription<phntm_interfaces::msg::DockerStatus>> docker_sub;
