@@ -33,6 +33,7 @@ namespace phntm {
         this->client.set_reconnect_delay(reconnect_ms);
         this->client.set_reconnect_delay_max(reconnect_ms);
         this->client.set_reconnect_attempts(10000000);
+
         this->client.set_open_listener(std::bind(&BridgeSocket::onConnected, this));
         this->client.set_disconnect_listener(std::bind(&BridgeSocket::onDisconnected, this));
         this->client.set_close_listener(std::bind(&BridgeSocket::onClosed, this, std::placeholders::_1));
@@ -95,7 +96,7 @@ namespace phntm {
             instance->auth_data->get_map()["ui_custom_includes_css"] = custom_includes_css;
         }
         instance->auth_data->get_map()["ui_background_disconnect_sec"] = sio::double_message::create(instance->config->ui_background_disconnect_sec);
-
+        
         instance->handled_events.emplace("ice-servers", std::bind(&BridgeSocket::onIceServers, instance, std::placeholders::_1));
         instance->handled_events.emplace("peer", std::bind(&BridgeSocket::onPeerConnected, instance, std::placeholders::_1));
         instance->handled_events.emplace("peer:wrtc-info", std::bind(&BridgeSocket::onPeerWRTCInfo, instance, std::placeholders::_1));
@@ -118,7 +119,7 @@ namespace phntm {
     void BridgeSocket::emit(std::string const& name, sio::message::list const& msglist, std::function<void (sio::message::list const&)> const& ack) {
         auto instance = BridgeSocket::instance;
         if (instance == nullptr || !instance->connected) {
-            log("Socket.io not connected, ignoring \"" + name + "\"");
+            log("Socket.io not connected, not emitting \"" + name + "\"");
             return;
         }
         if (instance->config->sio_verbose)
@@ -157,7 +158,6 @@ namespace phntm {
         log(GREEN + "Socket.io auth successful for #" + this->config->id_robot + CLR);
         this->connected = true;
         ConnLED::on();
-        Introspection::report();
     }
 
     void BridgeSocket::onDisconnected() {
@@ -168,17 +168,16 @@ namespace phntm {
     }
 
     void BridgeSocket::onIceServers(sio::event const& ev) {
-        if (!this->config->use_cloud_ice_config) {
-            log(msgDebugHeader(ev) + "Got ICE server config (ignoring)");
-            return;
-        }
 
         if (this->config->sio_verbose) {
-            log(msgDebugHeader(ev) + "Got cloud ICE server config:");
+            log(msgDebugHeader(ev) + (!this->config->use_cloud_ice_config?"[Ignored] ":"") + "Got cloud ICE server config:");
             log(printMessage(ev.get_message()));
         } else {
-            log(msgDebugHeader(ev) + "Got cloud ICE server config");
+            log(msgDebugHeader(ev) + (!this->config->use_cloud_ice_config?"[Ignored] ":"") + "x`Got cloud ICE server config");
         }
+
+        if (!this->config->use_cloud_ice_config)
+            return;
 
         this->config->ice_servers.clear();
         // first add custom
@@ -199,6 +198,8 @@ namespace phntm {
                 log("    " + one);
             }
         }
+
+        Introspection::returnReport(ev); // connection is open, return introspection stuffs
     }
 
 
@@ -560,7 +561,7 @@ namespace phntm {
     }
 
     void BridgeSocket::onReconnect(uint attemptCount, uint delay) {
-        log("Socket.io client reconnected after " + std::to_string(attemptCount) + " attempts. Next attempt in " + std::to_string(delay) + "ms");
+        log("Socket.io client will try to reconnected in " + std::to_string(delay) + "ms (attempt" + std::to_string(attemptCount) + ")");
     }
 
     void BridgeSocket::onSocketClose() {

@@ -1,6 +1,5 @@
 #include "phntm_bridge/introspection.hpp"
 #include "phntm_bridge/lib.hpp"
-#include "phntm_bridge/sio.hpp"
 #include "phntm_bridge/wrtc_peer.hpp"
 #include "sio_message.h"
 #include <mutex>
@@ -10,9 +9,20 @@
 #include <rclcpp/duration.hpp>
 #include <rclcpp/logging.hpp>
 #include <rclcpp/qos.hpp>
-// #include <ament_index_cpp/has_resource.hpp>
-// JAZZY:
+
+#if __has_include(<ament_index_cpp/version.h>)
+    #include <ament_index_cpp/version.h>
+    #if AMENT_INDEX_CPP_VERSION_GTE(1,8,3)
+        #define AMENT_INDEX_CPP_NEW_API true
+    #else
+        #define AMENT_INDEX_CPP_NEW_API false
+    #endif        
+#else
+    #define AMENT_INDEX_CPP_NEW_API false
+#endif
+
 #include <ament_index_cpp/has_resource.hpp>
+
 #include <string>
 #include <filesystem>
 #include <fstream>
@@ -58,7 +68,7 @@ namespace phntm {
 
         instance->running = true;
         RCLCPP_WARN(instance->node->get_logger(), "%s Introspection starting...", L.c_str());
-        instance->reportRunningState();
+        instance->reportRunningState(nullptr);
         
         instance->start_time = instance->node->now();
         instance->introspection_in_progress = false;
@@ -78,7 +88,7 @@ namespace phntm {
         RCLCPP_WARN(instance->node->get_logger(), "%s Introspection stopped", L.c_str());
 
         instance->timer->cancel();
-        instance->reportRunningState();
+        instance->reportRunningState(nullptr);
     }
 
     void Introspection::runIntrospection() {
@@ -442,11 +452,11 @@ namespace phntm {
         }
 
         if (idls_changed) {
-            this->reportIDLs(); // report defs before others
+            this->reportIDLs(nullptr); // report defs before others
         }
 
         if (nodes_changed || topics_changed || services_changed) {
-            this->reportNodes();
+            this->reportNodes(nullptr);
         }
 
         if (topics_changed) {
@@ -521,11 +531,21 @@ namespace phntm {
             RCLCPP_WARN(this->node->get_logger(), "%s[IDL] Invalid name '%s'. Must not contain '..'", Introspection::L.c_str(), interface_name.c_str());
             return "";
         }
+
         std::string prefix_path;
-        if (!ament_index_cpp::has_resource("packages", parts[0], &prefix_path)) {
-            RCLCPP_WARN(this->node->get_logger(), "%s[IDL] Unknown package '%s'", Introspection::L.c_str(), parts[0].c_str());
-            return "";
-        }
+        #if AMENT_INDEX_CPP_NEW_API
+            auto prefix = ament_index_cpp::is_resource_available("packages", parts[0]);
+            if (!prefix) {
+                RCLCPP_WARN(this->node->get_logger(), "%s[IDL] Unknown package '%s'", Introspection::L.c_str(), parts[0].c_str());
+                return "";
+            }
+            prefix_path = prefix->string();
+        #else
+            if (!ament_index_cpp::has_resource("packages", parts[0], &prefix_path)) {
+                RCLCPP_WARN(this->node->get_logger(), "%s[IDL] Unknown package '%s'", Introspection::L.c_str(), parts[0].c_str());
+                return "";
+            }
+        #endif
 
         auto fname = interface_name;
 
@@ -642,7 +662,7 @@ namespace phntm {
         this->discovered_docker_containers.insert_or_assign(host, msg);
 
         if (docker_containers_changed) {
-            this->reportDocker();
+            this->reportDocker(nullptr);
 
             if (!this->running) {
                 Introspection::start();
@@ -650,15 +670,20 @@ namespace phntm {
         }
     }
 
-    void Introspection::report() {
+    void Introspection::returnReport(sio::event const& ev) {
         auto instance = Introspection::instance;
-        instance->reportIDLs(); // report defs before others
-        instance->reportNodes();
-        instance->reportDocker();
-        instance->reportRunningState();
+
+        auto report_msg = sio::object_message::create();
+
+        instance->reportIDLs(report_msg); // report defs before others
+        instance->reportNodes(report_msg);
+        instance->reportDocker(report_msg);
+        instance->reportRunningState(report_msg);
+
+        BridgeSocket::ack(ev.get_msgId(), {report_msg});
     }
 
-    void Introspection::reportIDLs() {
+    void Introspection::reportIDLs(sio::message::ptr out_msg) {
         auto msg = sio::object_message::create();
 
         for (auto &idl : this->discovered_idls) {
@@ -669,7 +694,11 @@ namespace phntm {
         log(GRAY + L + "Reporting " + std::to_string(this->discovered_idls.size()) + " IDLs" + CLR);
         if (this->config->introspection_verbose)
             log(GRAY + BridgeSocket::printMessage(msg) + CLR);
-        BridgeSocket::emit("idls", { msg } , nullptr);
+
+        if (out_msg == nullptr)
+            BridgeSocket::emit("idls", { msg } , nullptr);
+        else
+            out_msg->get_map().emplace("idls", msg);
     }
 
     sio::message::ptr createQoSMessage(rclcpp::QoS qos) {
@@ -685,7 +714,7 @@ namespace phntm {
         return qos_msg;
     }
 
-    void Introspection::reportNodes() {
+    void Introspection::reportNodes(sio::message::ptr out_msg) {
 
         auto msg = sio::object_message::create();
 
@@ -742,10 +771,14 @@ namespace phntm {
         } else {
             log(GRAY + L + "Reporting empty nodes" + CLR);
         }
-        BridgeSocket::emit("nodes", { msg }, nullptr);
+
+        if (out_msg == nullptr)
+            BridgeSocket::emit("nodes", { msg }, nullptr);
+        else 
+            out_msg->get_map().emplace("nodes", msg);
     }
 
-    void Introspection::reportDocker() {
+    void Introspection::reportDocker(sio::message::ptr out_msg) {
         auto msg = sio::object_message::create();
         std::vector<std::string> hosts;
 
@@ -786,12 +819,20 @@ namespace phntm {
         } else {
             log(GRAY + L + "Reporting empty Docker containers" + CLR);
         }
-        BridgeSocket::emit("docker", { msg }, nullptr);
+       
+        if (out_msg == nullptr)
+            BridgeSocket::emit("docker", { msg }, nullptr);
+        else 
+            out_msg->get_map().emplace("docker", msg);
     }
 
-    void Introspection::reportRunningState() {
+    void Introspection::reportRunningState(sio::message::ptr out_msg) {
         auto msg = sio::bool_message::create(this->running);
-        BridgeSocket::emit("introspection", { msg }, nullptr);
+
+        if (out_msg == nullptr)
+            BridgeSocket::emit("introspection", { msg }, nullptr);
+        else 
+            out_msg->get_map().emplace("introspection", msg);
     }
 
     std::string Introspection::getService(std::string service) {
