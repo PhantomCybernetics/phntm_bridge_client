@@ -9,9 +9,11 @@
 #include <rclcpp/duration.hpp>
 #include <rclcpp/logging.hpp>
 #include <rclcpp/qos.hpp>
-// #include <ament_index_cpp/has_resource.hpp>
+
 // JAZZY:
+#include <ament_index_cpp/version.h>
 #include <ament_index_cpp/has_resource.hpp>
+
 #include <string>
 #include <filesystem>
 #include <fstream>
@@ -520,11 +522,21 @@ namespace phntm {
             RCLCPP_WARN(this->node->get_logger(), "%s[IDL] Invalid name '%s'. Must not contain '..'", Introspection::L.c_str(), interface_name.c_str());
             return "";
         }
+
         std::string prefix_path;
-        if (!ament_index_cpp::has_resource("packages", parts[0], &prefix_path)) {
-            RCLCPP_WARN(this->node->get_logger(), "%s[IDL] Unknown package '%s'", Introspection::L.c_str(), parts[0].c_str());
-            return "";
-        }
+        #if AMENT_INDEX_CPP_VERSION_GTE(1,8,3)
+            auto prefix = ament_index_cpp::is_resource_available("packages", parts[0]);
+            if (!prefix) {
+                RCLCPP_WARN(this->node->get_logger(), "%s[IDL] Unknown package '%s'", Introspection::L.c_str(), parts[0].c_str());
+                return "";
+            }
+            prefix_path = prefix->string();
+        #else
+            if (!ament_index_cpp::has_resource("packages", parts[0], &prefix_path)) {
+                RCLCPP_WARN(this->node->get_logger(), "%s[IDL] Unknown package '%s'", Introspection::L.c_str(), parts[0].c_str());
+                return "";
+            }
+        #endif
 
         auto fname = interface_name;
 
