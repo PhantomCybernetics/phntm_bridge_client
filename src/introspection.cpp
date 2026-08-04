@@ -12,9 +12,13 @@
 
 #if __has_include(<ament_index_cpp/version.h>)
     #include <ament_index_cpp/version.h>
-    #define AMENT_INDEX_CPP_VERSION_AVAILABLE true
+    #if AMENT_INDEX_CPP_VERSION_GTE(1,8,3)
+        #define AMENT_INDEX_CPP_NEW_API true
+    #else
+        #define AMENT_INDEX_CPP_NEW_API false
+    #endif        
 #else
-    #define AMENT_INDEX_CPP_VERSION_AVAILABLE false
+    #define AMENT_INDEX_CPP_NEW_API false
 #endif
 
 #include <ament_index_cpp/has_resource.hpp>
@@ -529,7 +533,7 @@ namespace phntm {
         }
 
         std::string prefix_path;
-        #if AMENT_INDEX_CPP_VERSION_AVAILABLE && AMENT_INDEX_CPP_VERSION_GTE(1,8,3)
+        #if AMENT_INDEX_CPP_NEW_API
             auto prefix = ament_index_cpp::is_resource_available("packages", parts[0]);
             if (!prefix) {
                 RCLCPP_WARN(this->node->get_logger(), "%s[IDL] Unknown package '%s'", Introspection::L.c_str(), parts[0].c_str());
