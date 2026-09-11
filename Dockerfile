@@ -142,8 +142,11 @@ RUN echo 'export PYTHONPATH="/root/ros2_py_venv/lib/python${PYTHON_VERSION_VENV}
 # Agent python deps and ROS python libs (used when building packages)
 RUN . /root/ros2_py_venv/bin/activate && \
     pip install iwlib && \
-    pip install numpy lark && \
+    pip install empy numpy lark && \
+    pip install --only-binary ':all:' sdbus-networkmanager && \
     deactivate
+RUN apt-get install -y python3-gi python3-gi-cairo gir1.2-modemmanager-1.0
+ENV DBUS_SYSTEM_BUS_ADDRESS=unix:path=/host_run/dbus/system_bus_socket
 
 # video enc
 RUN apt-get install -y libopencv-dev

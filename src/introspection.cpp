@@ -49,7 +49,7 @@ namespace phntm {
             // rclcpp::SubscriptionOptions options;
             // options.callback_group = my_callback_group;
             log(L + "Subscribing to " + this->config->docker_monitor_topic);
-            this->docker_sub = this->node->create_subscription<phntm_interfaces::msg::DockerStatus>(this->config->docker_monitor_topic, qos,
+            this->docker_sub = this->node->create_subscription<phntm_interfaces::msg::DockerHostContainers>(this->config->docker_monitor_topic, qos,
                 std::bind(&Introspection::onDockerMonitorMessage, this, std::placeholders::_1));
         }
     }
@@ -616,9 +616,9 @@ namespace phntm {
         return true;
     }
 
-    void Introspection::onDockerMonitorMessage(phntm_interfaces::msg::DockerStatus const & msg) {
+    void Introspection::onDockerMonitorMessage(phntm_interfaces::msg::DockerHostContainers const & msg) {
 
-        auto host = !msg.header.frame_id.empty() ? "phntm_agent_" + msg.header.frame_id : "phntm_agent"; // # default frame id is empty
+        auto host = msg.header.frame_id; // frame_id is agent node name / host
         auto docker_containers_changed = false;
 
         if (this->discovered_docker_containers.find(host) == this->discovered_docker_containers.end()) { // new host reporting
@@ -793,7 +793,8 @@ namespace phntm {
             stamp->get_map().emplace("sec", sio::int_message::create(p.second.header.stamp.sec));
             stamp->get_map().emplace("nanosec", sio::int_message::create(p.second.header.stamp.nanosec));
             header->get_map().emplace("stamp", stamp);
-            host_msg->get_map().emplace("header", header);
+            host_msg->get_map().emplace("header", header); // frame_id = agent's host_name
+            host_msg->get_map().emplace("agent", sio::string_message::create(p.second.agent));
 
             auto containers = sio::array_message::create();
             for (size_t i = 0; i < p.second.containers.size(); i++) {

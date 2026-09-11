@@ -14,7 +14,7 @@ Comes with Docker Container control for the host machine, CPU and Wi-Fi monitori
 - Reliable ROS2 Service & Action calls via Socket.io
 - ROS2 runtime Parameneters read/write API
 - Extra ROS2 packages can be easily included for custom message and service type support
-- Robot's Wi-Fi signal monitoring, scan & roaming (via Agent, requires wpa_supplicant on the host machine)
+- Robot's Wi-Fi/Cellular signal monitoring, scan & roaming (via Agent, requires wpa_supplicant on the host machine)
 - File retreival from any running Docker container (such as URDF meshes, via Agent) 
 - System load and Docker stats monitoring (via Agent)
 - Connects P2P or via a TURN server when P2P link is not possible
@@ -100,7 +100,7 @@ Full list of configuration options can be found [here](https://docs.phntm.io/bri
 
     ui_battery_topic: /battery # battery to show in the UI, '' to disable
 
-    wifi_interface: 'wlan0'
+    net_interface: 'wlan0' # for cellular use the control iface (e.g. 'cdc-wdm0')
     enable_wifi_scan: True
     enable_wifi_roam: False
 
@@ -148,7 +148,7 @@ services:
     volumes:
       - ~/phntm_bridge.yaml:/ros2_ws/phntm_bridge_params.yaml # bridge config goes here
       - ~/phntm_bridge.yaml:/ros2_ws/phntm_agent_params.yaml # agent config goes here, can be shared with the bridge client config
-      - /var/run:/host_run # docker file extractor and wifi control need this
+      - /var/run:/host_run # docker file extractor and wifi/cellular control need this
       - /tmp:/tmp # wifi control needs this
     devices:
       - /dev:/dev # LED control needs this

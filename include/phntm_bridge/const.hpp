@@ -134,6 +134,7 @@ namespace phntm {
         "video_topics_default_reliability",
         "webrtc_debug",
         "webrtc_verbose",
-        "wifi_interface"
+        "wifi_interface",
+        "net_interface"
     };
 }

@@ -865,7 +865,7 @@ namespace phntm {
         ui_config->get_map().emplace("introspection_control", sio::bool_message::create(config->stop_discovery_after_sec > 0.0f)); // don't show introspection icon if continuous
         ui_config->get_map().emplace("battery_topic", sio::string_message::create(config->battery_topic));
 
-        ui_config->get_map().emplace("wifi_monitor_topic", sio::string_message::create(config->wifi_monitor_topic));
+        ui_config->get_map().emplace("net_monitor_topic", sio::string_message::create(config->net_monitor_topic));
         ui_config->get_map().emplace("enable_wifi_scan", sio::bool_message::create(config->enable_wifi_scan));
         ui_config->get_map().emplace("enable_wifi_roam", sio::bool_message::create(config->enable_wifi_roam));
 

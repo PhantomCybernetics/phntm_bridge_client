@@ -39,7 +39,7 @@ namespace phntm {
             int conn_led_pin, data_led_pin;
 
             std::vector<std::string> collapse_services;
-            std::string battery_topic, wifi_monitor_topic, docker_monitor_topic;
+            std::string battery_topic, net_monitor_topic, docker_monitor_topic;
             bool docker_control_enabled, enable_wifi_scan, enable_wifi_roam, collapse_unhandled_services;
             float default_service_timeout_sec;
 

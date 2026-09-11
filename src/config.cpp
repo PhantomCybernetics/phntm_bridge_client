@@ -413,9 +413,9 @@ namespace phntm {
 
         // wifi monitoring + scan
         try {
-            this->declare_parameter("wifi_monitor_topic", "/iw_status"); // Agent writes here
+            this->declare_parameter("net_monitor_topic", "/net_status"); // Agent writes here
         } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }
-        config->wifi_monitor_topic = this->get_parameter("wifi_monitor_topic").as_string();
+        config->net_monitor_topic = this->get_parameter("net_monitor_topic").as_string();
         try {
             this->declare_parameter("enable_wifi_scan", true); // enables scan without roaming
         } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException & ex) { }

@@ -3,7 +3,7 @@
 #include "const.hpp"
 #include "config.hpp"
 #include "rclcpp/rclcpp.hpp"
-#include "phntm_interfaces/msg/docker_status.hpp"
+#include "phntm_interfaces/msg/docker_host_containers.hpp"
 #include <rclcpp/qos.hpp>
 #include <rclcpp/timer.hpp>
 #include "phntm_bridge/sio.hpp"
@@ -38,15 +38,15 @@ namespace phntm {
             std::shared_ptr<PhntmBridge> node;
             std::shared_ptr<BridgeConfig> config;
 
-            std::map<std::string, phntm_interfaces::msg::DockerStatus>discovered_docker_containers;
+            std::map<std::string, phntm_interfaces::msg::DockerHostContainers>discovered_docker_containers;
 
             void reportDocker(sio::message::ptr out_msg);
             void reportIDLs(sio::message::ptr out_msg);
             void reportNodes(sio::message::ptr out_msg);
             void reportRunningState(sio::message::ptr out_msg);
 
-            void onDockerMonitorMessage(phntm_interfaces::msg::DockerStatus const & msg);
-            std::shared_ptr<rclcpp::Subscription<phntm_interfaces::msg::DockerStatus>> docker_sub;
+            void onDockerMonitorMessage(phntm_interfaces::msg::DockerHostContainers const & msg);
+            std::shared_ptr<rclcpp::Subscription<phntm_interfaces::msg::DockerHostContainers>> docker_sub;
 
             void runIntrospection();
             rclcpp::TimerBase::SharedPtr timer;

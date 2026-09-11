@@ -81,7 +81,7 @@ namespace phntm {
 
         auto req = FileExtractor::file_requests_in_progresss[res.path];
         auto success = res.result == phntm_interfaces::msg::FileExtractionResult::RESULT_UPLOADED;
-        
+
         if (req.agent_replies.find(res.agent) != req.agent_replies.end()) {
             req.agent_replies[res.agent] = res.result;
         }
@@ -115,7 +115,7 @@ namespace phntm {
                 log("FileExtractor got invalid robot for '" + res.path + "' from " + res.agent);
                 break;
             default:
-                log("FileExtractor result for '" + res.path + "' from " + res.agent + ", invalid state", true);
+                log("FileExtractor result for '" + res.path + "' from " + res.agent + ", invalid result state", true);
                 req.agent_messages.emplace(res.agent, "Produced errord");
                 break;
         }
