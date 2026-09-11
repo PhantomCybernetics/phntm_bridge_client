@@ -5,7 +5,7 @@
 #include <mutex>
 #include <ostream>
 #include <iostream>
-#include <phntm_interfaces/msg/detail/docker_status__struct.hpp>
+#include <phntm_interfaces/msg/detail/docker_host_containers__struct.hpp>
 #include <rclcpp/duration.hpp>
 #include <rclcpp/logging.hpp>
 #include <rclcpp/qos.hpp>
