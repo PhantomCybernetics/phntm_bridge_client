@@ -14,14 +14,19 @@ Comes with Docker Container control for the host machine, CPU and Wi-Fi monitori
 - Reliable ROS2 Service & Action calls via Socket.io
 - ROS2 runtime Parameneters read/write API
 - Extra ROS2 packages can be easily included for custom message and service type support
-- Robot's Wi-Fi/Cellular signal monitoring, scan & roaming (via Agent, requires wpa_supplicant on the host machine)
-- File retreival from any running Docker container (such as URDF meshes, via Agent) 
+- Robot's Wi-Fi/Cellular signal monitoring, Wi-Fi scanning & AP roaming (via Agent)
+- File retreival from any running Docker container (such as URDF meshes, via Agent & Bridge Server) 
 - System load and Docker stats monitoring (via Agent)
 - Connects P2P or via a TURN server when P2P link is not possible
 - Multiple peers can connect to the same machine at a very low extra CPU cost
-- ~5-10ms RTT on local network, 50ms+ RTT remote operation via a TURN server
 - Works with Rosbag and Sims such as Gazebo or Webots
 - Supported with ROS2 Humble and newer
+
+## Performance
+- ~5-10ms RTT on local Wi-Fi network
+- ~50ms RTT remote operation via a TURN server
+- ~60ms RTT over LTE (robot on 4G, operator on Wi-Fi)
+- ~120ms RTT over LTE (both robot and operator on 4G, different cell tower)
 
 ![UI](https://github.com/user-attachments/assets/40a1f45f-918c-41dc-b9a6-721a7c2a41f2)
 
