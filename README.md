@@ -22,12 +22,6 @@ Comes with Docker Container control for the host machine, CPU and Wi-Fi monitori
 - Works with Rosbag and Sims such as Gazebo or Webots
 - Supported with ROS2 Humble and newer
 
-## Performance
-- ~5-10ms RTT on local Wi-Fi network
-- ~50ms RTT remote operation via a TURN server
-- ~60ms RTT over LTE (robot on 4G, operator on Wi-Fi)
-- ~120ms RTT over LTE (both robot and operator on 4G, different cell tower)
-
 ![UI](https://github.com/user-attachments/assets/40a1f45f-918c-41dc-b9a6-721a7c2a41f2)
 
 ![Endpoint Badge](https://img.shields.io/endpoint?url=https%3A%2F%2Fphantomcybernetics.github.io%2Fphntm_bridge_client%2Fhumble-amd64.json) ![Endpoint Badge](https://img.shields.io/endpoint?url=https%3A%2F%2Fphantomcybernetics.github.io%2Fphntm_bridge_client%2Firon-amd64.json) ![Endpoint Badge](https://img.shields.io/endpoint?url=https%3A%2F%2Fphantomcybernetics.github.io%2Fphntm_bridge_client%2Fjazzy-amd64.json)  ![Endpoint Badge](https://img.shields.io/endpoint?url=https%3A%2F%2Fphantomcybernetics.github.io%2Fphntm_bridge_client%2Fkilted-amd64.json) ![Endpoint Badge](https://img.shields.io/endpoint?url=https%3A%2F%2Fphantomcybernetics.github.io%2Fphntm_bridge_client%2Flyrical-amd64.json) ![Endpoint Badge](https://img.shields.io/endpoint?url=https%3A%2F%2Fphantomcybernetics.github.io%2Fphntm_bridge_client%2Frolling-amd64.json) \
@@ -203,6 +197,12 @@ ROS_DISTRO=humble; docker build -f Dockerfile -t phntm/bridge:$ROS_DISTRO --buil
 # All done, relaunch
 docker compose up phntm_bridge
 ```
+
+## Performance benchmarks
+- ~5-10ms RTT over local Wi-Fi network
+- ~50ms RTT remote teleoperation via a TURN server
+- ~60ms RTT robot on 4G LTE, operator on Wi-Fi
+- ~120ms RTT both robot and operator on 4G LTE (different cell towers)
 
 ## See also
 - [Documentation](https://docs.phntm.io/bridge) Full Phantom Bridge documentation
