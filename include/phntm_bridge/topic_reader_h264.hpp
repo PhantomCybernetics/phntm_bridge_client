@@ -36,7 +36,7 @@ namespace phntm {
     class TopicReaderH264 {
 
         public:
-            static std::shared_ptr<TopicReaderH264> getForTopic(std::string topic, std::string msg_type, rclcpp::QoS qos, std::shared_ptr<rclcpp::Node> node, rclcpp::CallbackGroup::SharedPtr callback_group, BridgeConfig::MediaTopicConfig topic_conf);
+            static std::shared_ptr<TopicReaderH264> getForTopic(std::string topic, std::string msg_type, rclcpp::QoS qos, std::shared_ptr<rclcpp::Node> node, std::string base_node_name, rclcpp::CallbackGroup::SharedPtr callback_group, BridgeConfig::MediaTopicConfig topic_conf);
             static std::shared_ptr<TopicReaderH264> getForTopic(std::string topic); // does not create a new one
             static void destroy(std::string topic);
 
@@ -51,6 +51,7 @@ namespace phntm {
             };
             bool addOutput(std::shared_ptr<MediaTrackInfo> track_info, std::shared_ptr<WRTCPeer> peer);
             bool removeOutput(std::shared_ptr<MediaTrackInfo> track_info);
+            std::string base_node_name;
             uint media_reader_node_no = 0;
 
             // static void onDCOpen(std::shared_ptr<rtc::DataChannel> dc, std::shared_ptr<rtc::PeerConnection> pc);
@@ -59,7 +60,7 @@ namespace phntm {
             static std::string openMediaTrackForTopic(std::string topic, std::shared_ptr<WRTCPeer> peer);
             static void closeMediaTrackForTopic(std::string topic, std::shared_ptr<WRTCPeer> peer);
 
-            TopicReaderH264(std::string topic, std::string msg_type, rclcpp::QoS qos, std::shared_ptr<rclcpp::Node> node, rclcpp::CallbackGroup::SharedPtr callback_group, BridgeConfig::MediaTopicConfig topic_conf);
+            TopicReaderH264(std::string topic, std::string msg_type, rclcpp::QoS qos, std::shared_ptr<rclcpp::Node> node, std::string base_node_name, rclcpp::CallbackGroup::SharedPtr callback_group, BridgeConfig::MediaTopicConfig topic_conf);
             ~TopicReaderH264();
 
             struct OutputMsg {

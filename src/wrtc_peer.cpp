@@ -796,6 +796,7 @@ namespace phntm {
         if (isImageOrVideoType(msg_type)) {
             auto topic_reader = TopicReaderH264::getForTopic(topic, msg_type,qos,
                                         topic_conf.create_node ? nullptr : this->node,
+                                        this->node->get_name(),
                                         nullptr,
                                         topic_conf
                                         );

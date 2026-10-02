@@ -34,12 +34,12 @@ namespace phntm {
     std::map<std::string, std::shared_ptr<TopicReaderH264>> TopicReaderH264::readers;
     std::mutex TopicReaderH264::readers_mutex;
 
-    std::shared_ptr<TopicReaderH264> TopicReaderH264::getForTopic(std::string topic, std::string msg_type, rclcpp::QoS qos, std::shared_ptr<rclcpp::Node> node, rclcpp::CallbackGroup::SharedPtr callback_group,  BridgeConfig::MediaTopicConfig topic_conf) {
+    std::shared_ptr<TopicReaderH264> TopicReaderH264::getForTopic(std::string topic, std::string msg_type, rclcpp::QoS qos, std::shared_ptr<rclcpp::Node> node, std::string base_node_name, rclcpp::CallbackGroup::SharedPtr callback_group,  BridgeConfig::MediaTopicConfig topic_conf) {
         std::lock_guard<std::mutex> lock(readers_mutex);
         if (readers.find(topic) != readers.end()) {
             return readers.at(topic);
         } else { // create subscriber
-            auto tr = std::make_shared<TopicReaderH264>(topic, msg_type, qos, node, callback_group, topic_conf);
+            auto tr = std::make_shared<TopicReaderH264>(topic, msg_type, qos, node, base_node_name, callback_group, topic_conf);
             readers.emplace(topic, tr);
             return tr;
         }
@@ -54,8 +54,8 @@ namespace phntm {
         }
     }
 
-    TopicReaderH264::TopicReaderH264(std::string topic, std::string msg_type, rclcpp::QoS qos, std::shared_ptr<rclcpp::Node> node, rclcpp::CallbackGroup::SharedPtr callback_group, BridgeConfig::MediaTopicConfig topic_conf)
-        : topic(topic), msg_type(msg_type), qos(qos), node(node), callback_group(callback_group), topic_conf(topic_conf) {
+    TopicReaderH264::TopicReaderH264(std::string topic, std::string msg_type, rclcpp::QoS qos, std::shared_ptr<rclcpp::Node> node, std::string base_node_name, rclcpp::CallbackGroup::SharedPtr callback_group, BridgeConfig::MediaTopicConfig topic_conf)
+        : base_node_name(base_node_name), topic(topic), msg_type(msg_type), qos(qos), node(node), callback_group(callback_group), topic_conf(topic_conf) {
         
         this->debug_num_frames = topic_conf.debug_num_frames;
         this->create_node = node == nullptr; //make a node if none provided
@@ -560,7 +560,7 @@ namespace phntm {
                         highest_reader_no = r.second->media_reader_node_no+1;
                 }
                 this->media_reader_node_no = highest_reader_no;
-                this->node = std::make_shared<rclcpp::Node>("phntm_media_"+std::to_string(this->media_reader_node_no));
+                this->node = std::make_shared<rclcpp::Node>(this->base_node_name + "_media_" + std::to_string(this->media_reader_node_no));
 
                 log(GRAY + "[" + getThreadId() + "] Making executor " + this->topic + CLR);
                 this->executor = std::make_shared<rclcpp::executors::SingleThreadedExecutor>();
